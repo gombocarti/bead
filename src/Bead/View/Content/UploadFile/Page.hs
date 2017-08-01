@@ -48,9 +48,11 @@ successCata
     StoryError    msg -> storyError    msg
     Success           -> success
 
+isSuccess :: Success -> Bool
 isSuccess Success = True
 isSuccess _       = False
 
+isFailure :: Success -> Bool
 isFailure = not . isSuccess
 
 -- NOTE: This content handler a bit special case. As in out model, we use
@@ -59,35 +61,28 @@ isFailure = not . isSuccess
 -- after the given 'parts' handlers are run. In our model, this is not an option. In this special
 -- case we run the saveUsersFile story manually.
 postUploadFile :: POSTContentHandler
-postUploadFile =
-  join $ lift $ do
+postUploadFile = do
+  results <- lift $ do
     cfg <- getConfiguration
     let sizeLimit = (fromIntegral $ maxUploadSizeInKb cfg) * 1024
     let perPartUploadPolicy = const $ allowWithMaximumSize sizeLimit
     let uploadPolicy = setMaximumFormInputSize sizeLimit defaultUploadPolicy
     tmpDir <- getTempDirectory
-    handleFileUploads tmpDir uploadPolicy perPartUploadPolicy $ \parts -> do
-      case parts of
-        [] -> return . return . StatusMessage $ msg_UploadFile_NoFileReceived "No file was received."
-        [part] -> do result <- handlePart part
-                     return . return . StatusMessage $ successCata
-                       (const $ msg_UploadFile_PolicyFailure "Upload policy violation.")
-                       (msg_UploadFile_UnnamedFile "No file was chosen.")
-                       (const $ msg_UploadFile_InternalError "Internal error happened during upload.")
-                       (msg_UploadFile_Successful "File upload was sucessful.")
-                       result
-        _ -> do results <- mapM handlePart parts
-                return . return . StatusMessage $ if (null $ filter isFailure results)
-                  then (msg_UploadFile_Successful "File upload was sucessful.")
-                  else (msg_UploadFile_ErrorInManyUploads "An error occured uploading one or more files.")
+    successes <- handleFileUploads tmpDir uploadPolicy perPartUploadPolicy $ \partInfo part -> return (handlePart partInfo part)
+    sequence successes
+  return . StatusMessage $
+    if (null $ filter isFailure results)
+      then (msg_UploadFile_Successful "File upload was sucessful.")
+      else (msg_UploadFile_ErrorInManyUploads "An error occured uploading one or more files.")
   where
-
-    handlePart (_partInfo, Left exception) = return . PolicyFailure . T.unpack $ policyViolationExceptionReason exception
-    handlePart (partInfo, Right filePath) =
+    handlePart :: PartInfo -> Either PolicyViolationException FilePath -> Handler BeadContext BeadContext Success
+    handlePart _partInfo (Left exception) = return . PolicyFailure . T.unpack $ policyViolationExceptionReason exception
+    handlePart partInfo (Right filePath) =  
       case (partFileName partInfo) of
         Just fp | not (B.null fp) -> saveFile fp
         _                         -> return UnnamedFile
       where
+        saveFile :: B.ByteString -> Handler BeadContext BeadContext Success
         saveFile name = do
           i18n <- i18nH
           r <- runStory $ Story.saveUsersFile filePath (UsersPublicFile $ unpack name)

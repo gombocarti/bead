@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE OverloadedStrings, Rank2Types, TypeFamilies, FlexibleInstances, FlexibleContexts #-}
+
 module Bead.Persistence.SQL.MySQL where
 
 import           Control.Exception
@@ -92,10 +92,9 @@ createPersistInterpreter :: Config -> IO Interpreter
 createPersistInterpreter config = do
   let connectInfo = configToConnectInfo config
   pool <- runResourceT . runNoLoggingT $ createMySQLPool connectInfo 100
-  let run query = do
-        result <- trySomeEx $ runMySql pool query
-        return $! either (Left . show) Right result
-  return $! Interpreter run
+  return $! Interpreter (\query -> do
+    result <- trySomeEx $ runMySql pool query
+    return $! either (Left . show) Right result)
   where
     trySomeEx :: IO a -> IO (Either SomeException a)
     trySomeEx = try

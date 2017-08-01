@@ -8,9 +8,9 @@ services:
 before_install:
   - grep '\(MemTotal\|SwapTotal\)' /proc/meminfo
   - git show | head -1  # (for matching against commit hash given on the travis log web page)
-  - docker pull andorp/bead
+  - docker pull poora/bead
 
 script:
   - mkdir server
-  - docker run --rm -it -v `pwd`:/development/bead -v `pwd`/server:/bead-server andorp/bead
+  - docker run --rm -it -v `pwd`:/development/bead -v `pwd`/server:/bead-server poora/bead
     /bin/sh -c "/development/bead/docker/travis-test.sh"

@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts #-}
+
 module Bead.Persistence.SQL.Notification where
 
 import Control.Applicative ((<$>))

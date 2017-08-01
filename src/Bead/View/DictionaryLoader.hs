@@ -25,6 +25,7 @@ import           DynFlags
 import           GHC
 import           GHC.Paths
 import           Linker
+import           HscTypes
 import           MonadUtils
 import           Packages
 
@@ -131,7 +132,8 @@ loadDictionary path = do
                             }
       _ <- setSessionDynFlags dflags1
       (dflags2,_) <- liftIO $ initPackages dflags1
-      liftIO $ unload dflags2 []
+      session <- getSession
+      liftIO $ unload (session { hsc_dflags = dflags2 }) []
       t <- guessTarget path Nothing
       setTargets [t]
       ok <- load LoadAllTargets

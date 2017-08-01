@@ -17,6 +17,7 @@ import           Bead.Domain.Entities (Language(..))
 import           Bead.Domain.Types (readMaybe)
 import           Bead.View.BeadContext
 import           Bead.View.Content hiding (BlazeTemplate, template)
+import           Bead.View.Headers (getHeaders)
 import           Bead.View.Session (setLanguageInSession)
 
 #ifdef TEST
@@ -25,10 +26,11 @@ import           Test.Tasty.TestSet
 
 setLanguageFromAcceptLanguage :: BeadHandler' b ()
 setLanguageFromAcceptLanguage = do
-  acceptLanguages <- getHeaders "Accept-Language" <$> getRequest
+  acceptLanguages <- getHeader "Accept-Language" <$> getRequest
   case acceptLanguages of
     Nothing -> return ()
-    Just ls -> do
+    Just val -> do
+      let ls = BS.split ',' val
       let languages = nub . map acceptLanguageToLanguage
                           . concat
                           $ map (parseAcceptLanguageLine . BS.unpack) ls

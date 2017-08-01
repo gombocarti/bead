@@ -2,6 +2,7 @@ module Bead.View.RequestParams where
 
 import Control.Monad (join)
 import Data.String (IsString(..))
+
 import Bead.Domain.Entities (Username(..))
 import Bead.Domain.Relationships
 import Bead.View.Dictionary (Language, languageCata)
@@ -117,3 +118,4 @@ instance ReqParamValue Language where
 
 instance RequestParam Language where
   requestParam l = ReqParam (languageParamName, paramValue l)
+

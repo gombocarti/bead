@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, TypeFamilies, FlexibleInstances #-}
 module Bead.Persistence.SQL.Submission where
 
 import           Control.Applicative

@@ -5,7 +5,6 @@ import Data.ByteString.Char8 (pack)
 
 import System.FilePath (dropFileName)
 import System.Directory (createDirectoryIfMissing)
-import System.Locale (defaultTimeLocale)
 
 import qualified System.FastLogger       as S
 import qualified Bead.Controller.Logging as L

@@ -95,7 +95,7 @@ createTimeZoneConverter dir = do
 
 
 
--- | Exlpores the TimeZoneName subdirectories and load the TimeZoneSeries
+-- | Explores the TimeZoneName subdirectories and load the TimeZoneSeries
 -- from the disk
 exploreTimeZoneNames :: FilePath -> IO [(TimeZoneName, TimeZoneSeries)]
 exploreTimeZoneNames dir = exploreDirectory onFile combine dir

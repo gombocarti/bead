@@ -1,27 +1,27 @@
-FROM ubuntu:14.04
+FROM debian:stretch-slim
 
-# Set locale
-RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+# Do not ask input during package install,
+# specifically when installing mysql
 ENV DEBIAN_FRONTEND noninteractive
 
-# Download GHC and cabal
+# Download locales, GHC, stack, cabal and necessary GHC tools
 RUN apt-get update && \
-    apt-get install -y software-properties-common && \
-    add-apt-repository -y ppa:hvr/ghc && \
-    apt-get update && \
-    apt-get install -y cabal-install-1.18 ghc-7.8.3 cpphs && \
-    apt-get install -y libpcre3 libpcre3-dev mysql-server \
-                       libmysqlclient-dev screen && \
-    service mysql start && \
-    mysqladmin -u root password password
-ENV PATH /opt/ghc/7.8.3/bin:/opt/cabal/1.18/bin:$PATH
+    apt-get install -y --no-install-recommends \
+                       cabal-install locales \
+                       ghc cpphs haskell-stack \
+                       happy alex \
+                       libpcre3 libpcre3-dev mysql-server \
+                       default-libmysqlclient-dev screen \
+                       netbase pkg-config
 
-# Install necessary GHC tools
-RUN apt-get install -y happy-1.19.4 alex-3.1.3
-ENV PATH /opt/alex/3.1.3/bin:/opt/happy/1.19.4/bin:$PATH
+# Set locale
+RUN echo en_US.UTF-8 UTF-8 >> /etc/locale.gen && \
+    locale-gen
+ENV LC_ALL en_US.UTF-8
+
+# Set up mysql
+RUN service mysql start && \
+    mysqladmin -u root password password
 
 # Create development dirs
 RUN mkdir /development && \
@@ -31,11 +31,13 @@ RUN mkdir /development && \
 
 # Copy cabal file and install dependencies
 COPY "./Bead.cabal" "/development/init/Bead.cabal"
-COPY "./docker/container-script/dev-env-setup.sh" "/development/init/dev-env-setup.sh"
-RUN apt-get install -y zlib1g-dev libncurses5-dev && \
-    cd development/init && \
-    cabal update && \
-    cabal install -j1 --only-dependencies --reorder-goals
+COPY "./stack.yaml" "/development/init/stack.yaml"
+RUN cd development/init && \
+    stack build --only-dependencies
+
+# Convenience scripts for development
+COPY "./container-script/build.sh" "/usr/local/bin/build"
+COPY "./container-script/dev-env-setup.sh" "/development/init/dev-env-setup.sh"
 
 # Directory for sources
 VOLUME "/development/bead"

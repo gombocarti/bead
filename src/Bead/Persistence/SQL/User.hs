@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts #-}
+
 module Bead.Persistence.SQL.User where
 
 import           Control.Applicative

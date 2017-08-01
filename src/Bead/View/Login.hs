@@ -6,10 +6,11 @@ module Bead.View.Login (
   , changeLanguage
   ) where
 
-import           Data.ByteString.Char8 hiding (index, putStrLn)
+import           Data.ByteString.Char8 as B hiding (index, putStrLn)
 import           Data.Char
 import           Data.Either (isLeft)
 import           Data.Maybe
+import           Data.String (fromString)
 import qualified Data.Text as Text
 import           Prelude as P
 import           Text.Printf
@@ -30,6 +31,7 @@ import           Bead.View.Common
 import           Bead.View.Content hiding (BlazeTemplate, template)
 import qualified Bead.View.Content.Public.Login as View
 import           Bead.View.ContentHandler
+import           Bead.View.Headers (getHeaders)
 import           Bead.View.Headers.AcceptLanguage
 import           Bead.View.ErrorPage
 import           Bead.View.Session
@@ -61,13 +63,13 @@ loginSubmit = withTop auth $ handleError $ runErrorT $ do
       else do
         headers <- getHeaders "X-Forwarded-User" <$> getRequest
         case headers of
-          Just [hs] -> return (Username $ toUpper <$> unpack hs)
+          [hs] -> return (Username $ toUpper <$> unpack hs)
           other     -> do
             lift $ logMessage ERROR $ join ["[FORWARDED USER] Forwarded user is not unique, but: ", reason]
             i18n <- lift i18nH
             throwError . strMsg $ i18n $ msg_Login_Error_NoUser "User is unknown"
             where
-              reason = maybe "nothing found" show other
+              reason = if P.null other then "nothing found" else show other
 
   lResult <- lift $ ldapQuery username
   ldapResult

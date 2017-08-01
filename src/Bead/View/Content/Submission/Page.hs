@@ -75,15 +75,13 @@ submissionPage = do
 
 submissionPostHandler :: POSTContentHandler
 submissionPostHandler = do
-  uploadResult <- join $ lift $ do
+  uploadResult <- lift $ do
     tmpDir <- getTempDirectory
     size <- maxUploadSizeInKb <$> getConfiguration
     let maxSize = fromIntegral (size * 1024)
     let uploadPolicy = setMaximumFormInputSize maxSize defaultUploadPolicy
     let perPartUploadPolicy = const $ allowWithMaximumSize maxSize
-    handleFileUploads tmpDir uploadPolicy perPartUploadPolicy $ \parts -> do
-      results <- mapM handlePart parts
-      return . return $ results
+    handleFileUploads tmpDir uploadPolicy perPartUploadPolicy handlePart
   ak <- getParameter assignmentKeyPrm
   (_desc,asg) <- userStory $ Story.userAssignmentForSubmission ak
   -- Assignment is for the user
@@ -126,8 +124,8 @@ submissionPostHandler = do
          isFile (File _ _) = True
          isFile _          = False
 
-    handlePart (_partInfo, Left _exception) = return PolicyFailure
-    handlePart (partInfo, Right filePath) =
+    handlePart _partInfo (Left _exception) = return PolicyFailure
+    handlePart partInfo (Right filePath) =
       case (partFileName partInfo) of
         Just fp | not (B.null fp) -> do
           contents <- liftIO $ do

@@ -130,14 +130,14 @@ Flag SSO
 
 Library
   HS-Source-Dirs: src, snaplets/fay/src
-  GHC-Options: -threaded -with-rtsopts=-N2 -O2
+  GHC-Options: -O2
 
   if flag(MySQL)
     CPP-Options: -DMYSQL
 
     Build-Depends:
-      persistent-mysql >= 2.3 && < 2.4,
-      persistent-template >= 2.1 && < 2.2,
+      persistent-mysql,
+      persistent-template,
       resourcet
 
     Exposed-Modules:
@@ -180,8 +180,8 @@ Library
     CPP-Options: -DSSO
 
     Build-Depends:
-      base64-bytestring >= 1.0.0.1 && < 2,
-      either >= 4.3 && < 5
+      base64-bytestring,
+      either
 
     Exposed-Modules:
       Bead.Daemon.LDAP
@@ -196,66 +196,65 @@ Library
       Bead.View.ResetPassword
 
   Build-Depends:
-    aeson >=0.8 && <0.9,
-    async >=2.0,
-    base >=4.7 && <4.8,
-    blaze-html >=0.8 && <0.9,
-    blaze-markup >=0.7 && <0.8,
-    bytestring >=0.10 && <0.11,
-    clientsession >=0.9 && <0.10,
-    containers >=0.5 && <0.6,
-    cpphs >=1.19 && <1.20,
-    deepseq >=1.3 && <1.4,
-    directory >=1.2 && <1.3,
+    aeson,
+    async,
+    base,
+    blaze-html,
+    blaze-markup,
+    bytestring,
+    clientsession,
+    containers,
+    cpphs,
+    deepseq,
+    directory,
     ghc,
     ghc-paths,
-    hashable >=1.2 && <1.3,
-    haskell-src-exts >=1.16 && <1.17,
-    HUnit >=1.2 && <1.3,
-    fay >=0.23 && <0.24,
-    fay-jquery >=0.6.1 && <0.7,
-    fay-text >=0.3.2 && <0.3.3,
-    filepath >=1.3 && <1.4,
-    hastache >=0.6 && <0.7,
-    json >=0.9 && <0.10,
-    lens >=4.12 && <4.13,
-    mime-mail >=0.4.9 && <0.4.10,
-    MissingH >=1.3 && <1.4,
-    MonadCatchIO-transformers >=0.3.1 && <0.3.2,
-    monad-logger >=0.3.13 && <0.4,
-    mtl >=2.0 && <2.4,
-    old-locale == 1.0.0.6,
-    pandoc >=1.14 && <1.16,
-    persistent >=2.2 && <2.3,
-    persistent-mysql >=2.3 && <2.4,
-    persistent-template >=2.1 && <2.2,
-    pqueue >=1.2.0 && <2.0,
-    process >=1.2.0 && <2.0,
-    random == 1.1,
+    hashable,
+    haskell-src-exts,
+    HUnit,
+    fay,
+    fay-jquery,
+    fay-text,
+    filepath,
+    hastache,
+    json,
+    lens,
+    mime-mail,
+    MissingH,
+    monad-logger,
+    mtl,
+    old-locale,
+    pandoc,
+    persistent,
+    persistent-mysql,
+    persistent-template,
+    pqueue,
+    process,
+    random,
     resourcet,
-    regex-tdfa == 1.2.0,
-    snap >=0.14 && <0.15,
-    snap-core >=0.9 && <0.10,
-    snap-server >=0.9 && <0.10,
-    snap-blaze >=0.2 && <0.3,
-    snaplet-fay >=0.3.3 && <0.3.4,
-    stm == 2.4.4,
-    syb >=0.5 && <0.6,
-    template-haskell >=2.9 && <3.0,
-    temporary == 1.2.0.3,
-    text >=1.2 && <1.3,
-    time == 1.4.2,
-    timezone-olson >=0.1.7 && <0.1.8,
-    timezone-series >=0.1.5 && <0.1.6,
-    transformers >=0.3.0.0 && <0.5,
-    tasty >=0.10 && <0.11,
-    tasty-hunit >=0.9 && <0.10,
-    tasty-quickcheck >=0.8 && <0.9,
-    QuickCheck >=2.8 && <2.9,
-    xmlhtml == 0.2.3.4,
-    utf8-string >=1 && <2,
-    unix == 2.7.0.1,
-    yaml >=0.8 && <0.9
+    regex-tdfa,
+    snap,
+    snap-core,
+    snap-server,
+    snap-blaze,
+    snaplet-fay,
+    stm,
+    syb,
+    template-haskell,
+    temporary,
+    text,
+    time,
+    timezone-olson,
+    timezone-series,
+    transformers,
+    tasty,
+    tasty-hunit,
+    tasty-quickcheck,
+    QuickCheck,
+    xmlhtml,
+    utf8-string,
+    unix,
+    yaml
 
   Exposed-Modules:
     AdminMain
@@ -343,6 +342,7 @@ Library
     Bead.View.DataDir
     Bead.View.DictionaryLoader
     Bead.View.ErrorPage
+    Bead.View.Headers
     Bead.View.Headers.AcceptLanguage
     Bead.View.Fay.Hooks
     Bead.View.Fay.HookIds
@@ -376,6 +376,7 @@ Executable Bead
   Main-is:          Main.hs
   HS-Source-Dirs:   main
   Buildable:        True
+  GHC-Options:      -threaded -with-rtsopts=-N2 -O2
 
 Executable BeadAdmin
   Build-Depends:    base, Bead
@@ -386,23 +387,23 @@ Executable BeadAdmin
   else
     Buildable:      True
 
-executable BeadTest
+Executable BeadTest
   Build-Depends:
-    base == 4.7.0.1,
-    Bead == 3000,
-    bytestring >=0.10 && <0.11,
-    containers == 0.5.5.1,
-    directory == 1.2.1.0,
-    filepath == 1.3.0.2,
-    HUnit == 1.2.5.2,
-    mtl >= 2.1 && <2.3,
-    QuickCheck >=2.8 && <2.9,
-    tasty >=0.10 && <0.11,
-    tasty-hunit >=0.9 && <0.10,
-    tasty-quickcheck >=0.8 && <0.9,
-    temporary == 1.2.0.3,
-    time == 1.4.2,
-    transformers >=0.3 && <0.5
+    base,
+    Bead,
+    bytestring,
+    containers,
+    directory,
+    filepath,
+    HUnit,
+    mtl,
+    QuickCheck,
+    tasty,
+    tasty-hunit,
+    tasty-quickcheck,
+    temporary,
+    time,
+    transformers
   if flag(SSO)
     CPP-Options: -DSSO -DTEST
   else
@@ -410,13 +411,23 @@ executable BeadTest
   if flag(MySQL)
     CPP-Options: -DTEST -DMYSQL
     Build-Depends:
-      persistent-mysql >=2.3 && <2.4,
-      persistent-template >=2.1 && <2.2,
+      persistent-mysql,
+      persistent-template,
       resourcet
   else
     CPP-Options: -DTEST
   HS-Source-Dirs: test
   Main-is: TestMain.hs
+
+  Other-modules:
+    Test.Model.UserStory
+    Test.Property.EntityGen
+    Test.Property.Persistence
+    Test.Regression.UserStory
+    Test.Unit.Module
+    Test.Unit.Persistence
+    Test.Unit.UserStory
+
   if flag(Tests)
     Buildable:      True
   else

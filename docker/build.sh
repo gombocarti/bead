@@ -1,4 +1,4 @@
 #!/bin/sh
 
 # Build image
-docker build -t="andorp/bead" .
+docker build -t="poora/bead" .

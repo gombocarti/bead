@@ -113,9 +113,8 @@ import           Control.Applicative
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Data
 import           Data.List (findIndex, sortBy)
-import           Data.Time (UTCTime(..), LocalTime)
+import           Data.Time (UTCTime(..), LocalTime, defaultTimeLocale)
 import           Data.Time.Format (formatTime)
-import           System.Locale (defaultTimeLocale)
 
 import           Bead.Domain.Entity.Assessment
 import           Bead.Domain.Entity.Assignment

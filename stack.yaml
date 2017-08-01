@@ -1,0 +1,9 @@
+extra-package-dbs: []
+packages:
+- '.'
+extra-deps:
+  - heist-1.0.1.0
+  - map-syntax-0.2.0.2
+  - snap-1.0.0.1
+  - snaplet-fay-0.3.3.14
+resolver: lts-7.24

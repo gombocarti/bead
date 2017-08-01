@@ -76,7 +76,7 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
   copyDataContext
 
   sm <- nestSnaplet "session" sessionManager $
-          initCookieSessionManager "cookie" "session" (Just (sessionTimeout config))
+          initCookieSessionManager "cookie" "session" Nothing (Just (sessionTimeout config)) -- TODO cookie domain
 
   as <- nestSnaplet "auth" auth $
           initSafeJsonFileAuthManager defAuthSettings sessionManager usersJson

@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, TypeFamilies, FlexibleContexts #-}
 module Bead.Persistence.SQL.Group where
 
 import           Control.Applicative
@@ -52,7 +52,7 @@ courseOfGroup key = do
 
 -- Lists all the groups from the database that satisfies the given predicate
 filterGroups :: (Domain.GroupKey -> Domain.Group -> Bool) -> Persist [(Domain.GroupKey, Domain.Group)]
-filterGroups pred = (filter (uncurry pred) . map toDomainGroupPair) <$> selectList [] []
+filterGroups pred = (filter (uncurry pred) . map toDomainGroupPair) <$> selectList [] ([] :: [SelectOpt Group])
   where
     toDomainGroupPair e = (toDomainKey $ entityKey e, toDomainValue $ entityVal e)
 

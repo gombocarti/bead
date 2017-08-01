@@ -211,19 +211,17 @@ fillNewGroupAssessmentPreviewPage = do
 
 uploadFile :: ContentHandler [UploadResult]
 uploadFile = do
-  results <- join . lift $ do
+  results <- lift $ do
     tmpDir <- getTempDirectory
     size <- maxUploadSizeInKb <$> getConfiguration
     let maxSize = fromIntegral (size * 1024)
     let uploadPolicy = setMaximumFormInputSize maxSize defaultUploadPolicy
     let perPartUploadPolicy = const $ allowWithMaximumSize maxSize
-    handleFileUploads tmpDir uploadPolicy perPartUploadPolicy $ \parts -> do
-      results <- mapM handlePart parts
-      return . return $ results
+    handleFileUploads tmpDir uploadPolicy perPartUploadPolicy handlePart
   return $ filter isFile results
         where
-          handlePart (_partInfo, Left _exception) = return PolicyFailure
-          handlePart (partInfo, Right filePath) =
+          handlePart _partInfo (Left _exception) = return PolicyFailure
+          handlePart partInfo (Right filePath) =
             case (partFileName partInfo) of
               Just fp | not (B.null fp) -> do
                 contents <- liftIO $ do
