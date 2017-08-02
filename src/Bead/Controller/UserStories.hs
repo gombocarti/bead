@@ -23,9 +23,8 @@ import           Control.Lens (_1, view)
 import           Control.Applicative
 import           Control.Exception
 import           Control.Monad hiding (guard)
-import           Control.Monad.Error (Error(..))
 import qualified Control.Monad.State  as CMS
-import qualified Control.Monad.Error  as CME
+import qualified Control.Monad.Except as CME
 import qualified Control.Monad.Reader as CMR
 import           Control.Monad.Trans
 import           Prelude hiding (log, userError)
@@ -72,9 +71,11 @@ userPrm3Error t p1 p2 p3 = UserError (TransPrm3Msg t p1 p2 p3)
 translateUserError :: (Translation String -> String) -> UserError -> String
 translateUserError = userErrorCata . translateMessage
 
-instance Error UserError where
-  noMsg    = userError (msg_UserStoryError_UnknownError "Unknown Error: No message.")
-  strMsg m = userParamError (msg_UserStoryError_Message "Some error happened: %s") m
+userErrorNoMsg :: UserError
+userErrorNoMsg = userError (msg_UserStoryError_UnknownError "Unknown Error: No message.")
+
+userErrorWithMsg :: String -> UserError
+userErrorWithMsg msg = userParamError (msg_UserStoryError_Message "Some error happened: %s") msg
 
 -- The User Story Context contains a service context and the localization transformation.
 -- The service context is used for user manipulation.
@@ -83,7 +84,7 @@ instance Error UserError where
 type UserStoryContext = (ServiceContext, I18N)
 
 newtype UserStory a = UserStory {
-    unStory :: CMR.ReaderT UserStoryContext (CMS.StateT UserState (CME.ErrorT UserError IO)) a
+    unStory :: CMR.ReaderT UserStoryContext (CMS.StateT UserState (CME.ExceptT UserError IO)) a
   } deriving (Monad, CMS.MonadState UserState
                    , CME.MonadError UserError
                    , CMR.MonadReader UserStoryContext
@@ -98,7 +99,7 @@ runUserStory
   -> UserStory a
   -> IO (Either UserError (a, UserState))
 runUserStory context i18n userState
-  = CME.runErrorT
+  = CME.runExceptT
   . flip CMS.runStateT userState
   . flip CMR.runReaderT (context,i18n)
   . unStory
@@ -1453,7 +1454,7 @@ modifyEvaluation ek e = logAction INFO ("modifies evaluation " ++ show ek) $ do
     sbk <- Persist.submissionOfEvaluation ek
     sck <- Persist.scoreOfEvaluation ek
     case (sbk, sck) of
-      (Just _, Just _) -> return . errorPage $ strMsg "Impossible, submission and score have the same evaluation"
+      (Just _, Just _) -> return . errorPage $ userErrorWithMsg "Impossible, submission and score have the same evaluation"
       (Nothing, Just sk) -> do
         let admined = True
         if admined

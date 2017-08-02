@@ -107,10 +107,6 @@ data RegError
   = RegError LogLevel String
   | RegErrorUserExist Username
 
-instance Error RegError where
-  noMsg      = RegError DEBUG ""
-  strMsg msg = RegError DEBUG msg
-
 readParameter :: (MonadSnap m) => Parameter a -> m (Maybe a)
 readParameter param = do
   reqParam <- getParam . B.pack . DataBridge.name $ param

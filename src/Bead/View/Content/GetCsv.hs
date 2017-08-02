@@ -53,11 +53,13 @@ getCourseCsv = DataHandler $ do
       downloadFile filename (csvEmpty msg users)
 
 downloadFile :: FilePath -> String -> ContentHandler ()
-downloadFile filename content = do
-  modifyResponse $
-    addHeader "Content-Disposition" (fromString . concat $ ["attachment; filename=\"",filename,"\""])
-  downloadPlain
+downloadFile filename content =
+  lift $ do
+    modifyResponse $
+      addHeader "Content-Disposition" (fromString . concat $ ["attachment; filename=\"",filename,"\""])
+    downloadPlain
   where
+    downloadPlain :: MonadSnap m => m ()
     downloadPlain = do
       modifyResponse $ setContentType "text/plain; charset=\"UTF-8\""
       writeBS (BsUTF8.fromString content)

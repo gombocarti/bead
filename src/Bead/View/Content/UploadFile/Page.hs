@@ -3,7 +3,7 @@ module Bead.View.Content.UploadFile.Page (
     uploadFile
   ) where
 
-import           Control.Monad.Error
+import           Control.Monad.Trans (lift)
 import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as B

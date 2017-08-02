@@ -55,19 +55,19 @@ login authError = do
 
 loginSubmit :: BeadHandler' b ()
 #ifdef SSO
-loginSubmit = withTop auth $ handleError $ runErrorT $ do
+loginSubmit = withTop auth $ handleError $ runExceptT $ do
   cfg <- lift getConfiguration
   username <-
     if (Config.sSODeveloperMode $ Config.loginConfig cfg)
       then getParameter loginUsernamePrm
       else do
-        headers <- getHeaders "X-Forwarded-User" <$> getRequest
+        headers <- lift $ getHeaders "X-Forwarded-User" <$> getRequest
         case headers of
           [hs] -> return (Username $ toUpper <$> unpack hs)
           other     -> do
             lift $ logMessage ERROR $ join ["[FORWARDED USER] Forwarded user is not unique, but: ", reason]
             i18n <- lift i18nH
-            throwError . strMsg $ i18n $ msg_Login_Error_NoUser "User is unknown"
+            throwError $ contentHandlerError $ i18n $ msg_Login_Error_NoUser "User is unknown"
             where
               reason = if P.null other then "nothing found" else show other
 
@@ -84,9 +84,10 @@ loginSubmit = withTop auth $ handleError $ runErrorT $ do
       lift $ withBackend $ \r -> liftIO $ lookupByLogin r (usernameCata Text.pack username)
 
     -- Looks up the user in the auth module and throws an error it the user is not found
+    lookupUser :: Username -> String -> ContentHandler' (AuthManager BeadContext) Auth.AuthUser
     lookupUser username errorMsg = do
       authUser <- lookupUserInAuth username
-      when (isNothing authUser) . throwError . strMsg $ errorMsg
+      when (isNothing authUser) . throwError . contentHandlerError $ errorMsg
       return $ fromJust authUser
 
     -- Saves the user to the user database
@@ -150,6 +151,8 @@ loginSubmit = withTop auth $ handleError $ runErrorT $ do
       beadLogin username
 
     -- Tries to make log in the user with the given password in the snap auth module and in the service context
+    beadLogin :: Username
+              -> ContentHandler' (AuthManager BeadContext) ()
     beadLogin username = do
       -- Force login on the user
       i18n <- lift i18nH
@@ -158,7 +161,7 @@ loginSubmit = withTop auth $ handleError $ runErrorT $ do
         (usernameCata id username)
       result <- lift $ forceLogin authUser
       case result of
-        Left fail -> throwError . strMsg $ join [usernameCata id username, ": ", show fail]
+        Left fail -> throwError . contentHandlerError $ join [usernameCata id username, ": ", show fail]
         _         -> return ()
       context <- lift $ getServiceContext
       token   <- lift $ sessionToken
@@ -194,25 +197,29 @@ loginSubmit = withTop auth $ handleError $ runErrorT $ do
 
     -- Create user in Snap auth, checks if the password was
     -- set correctly
+    createUserInAuth :: Username -> B.ByteString -> ContentHandler' (AuthManager BeadContext) ()
     createUserInAuth username pwd = do
       result <- lift $ createUser (usernameCata Text.pack username) pwd
-      when (isLeft result) . throwError . strMsg . show $ fromLeft result
+      when (isLeft result) . throwError . contentHandlerError . show $ fromLeft result
       i18n <- lift i18nH
       snapAuthUser <- lookupUser username $
         printf (i18n $ msg_Login_Error_NoSnapCache "User %s could not be cached by Snap")
                (usernameCata id username)
-      when (isNothing . passwordFromAuthUser $ snapAuthUser) . throwError . strMsg $ "No password is created in the Snap Auth module"
+      when (isNothing . passwordFromAuthUser $ snapAuthUser) . throwError . contentHandlerError $ "No password is created in the Snap Auth module"
       let usernameStr = usernameCata id username
       lift $ logMessage INFO $ join [usernameStr, " is registered in Auth."]
 
     -- Checks if the result of a story is failure, in the case of failure
     -- it throws an exception, otherwise lift's the result into the monadic
     -- calculation
-    checkFailure (Left _)  = throwError $ strMsg "User story failed"
+    checkFailure :: Either e a -> ContentHandler' c a
+    checkFailure (Left _)  = throwError $ contentHandlerError "User story failed"
     checkFailure (Right x) = return x
 
     -- The error is logged, but it is not disposed to the user, instead
     -- a false incorrect login is rendered.
+    handleError :: BeadHandler' (AuthManager BeadContext) (Either ContentError a)
+                -> BeadHandler' (AuthManager BeadContext) ()
     handleError m =
       m >>= (either (\msg -> do logMessage ERROR $ join ["Error during login: ", contentErrorMsg msg]
                                 login $ Just $ AuthError $ contentErrorMsg msg)

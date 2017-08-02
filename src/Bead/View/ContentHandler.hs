@@ -30,6 +30,7 @@ module Bead.View.ContentHandler (
   , foundTimeZones
   , logout
   , ContentHandler
+  , ContentHandler'
   , ContentError
   , contentError
   , UserTimeConverter
@@ -37,11 +38,11 @@ module Bead.View.ContentHandler (
   , contentHandlerErrorMap
   , contentHandlerErrorMsg
   , module Bead.Controller.Logging
-  , module Control.Monad.Error
+  , module Control.Monad.Except
   ) where
 
 import           Control.Applicative
-import           Control.Monad.Error
+import           Control.Monad.Except
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.UTF8  as BU
 import qualified Data.Map as Map (lookup)
@@ -89,10 +90,6 @@ contentError
     (ContentError Nothing)    -> nothing
     (ContentError (Just msg)) -> msg
 
-instance Error ContentError where
-  noMsg  = ContentError Nothing
-  strMsg = ContentError . Just
-
 contentHandlerError :: String -> ContentError
 contentHandlerError = ContentError . Just
 
@@ -101,7 +98,7 @@ contentHandlerErrorMap f (ContentError x) = f x
 
 contentHandlerErrorMsg = contentHandlerErrorMap (maybe "Unknown message" id)
 
-type ContentHandler' b c = ErrorT ContentError (BeadHandler' b) c
+type ContentHandler' b c = ExceptT ContentError (BeadHandler' b) c
 
 -- ContentHandler is a handler for render Bead pages or information to the client
 -- also equiped with error handling, mainly used for render inner pages.
@@ -124,14 +121,14 @@ userState = do
   case mUsername of
     Nothing -> do
       lift $ logMessage ERROR "User is not logged in the session"
-      throwError . strMsg $ "User is not logged in the session"
+      throwError . contentHandlerError $ "User is not logged in the session"
     Just user -> do
       let users = userContainer context
       userData <- liftIO $ users `userData` (userToken (user, token))
       case userData of
         Nothing -> do
           lift $ logMessage ERROR "No data found for the user"
-          throwError . strMsg $ "No data found for the user"
+          throwError . contentHandlerError $ "No data found for the user"
         Just ud -> return ud
 
 -- Produces a handler that returns the user's actual time zone
@@ -164,7 +161,7 @@ foundTimeZones = zoneInfos <$> getTimeZoneConverter
 i18nE :: (IsString s) => ContentHandler (Translation String -> s)
 i18nE = do
   lang <- lift languageFromSession
-  when (isNothing lang) . throwError . strMsg $ "Language was not defined in session"
+  when (isNothing lang) . throwError . contentHandlerError $ "Language was not defined in session"
   -- If the dictionary is not found for the language stored in session
   -- the identical dictionary is returned. The fromString is necessary
   -- for the Attribute names and values used in html templating engines
@@ -178,7 +175,7 @@ i18nH = do
   return $ maybe trans unDictionary t
 
 blazeI18n :: (I18N -> Html) -> ContentHandler ()
-blazeI18n h = i18nE >>= blaze . h
+blazeI18n h = i18nE >>= lift . blaze . h
 
 -- Renders a Page from the given IHtml function which
 -- needs the session timeout seconds
@@ -187,7 +184,7 @@ renderBootstrapPage page = do
   state <- userState
   secs <- fmap sessionTimeout $ lift getConfiguration
   notifs <- userStory S.noOfUnseenNotifications
-  i18nE >>= blaze . (runBootstrapPage state (bootstrapUserFrame state page secs notifs))
+  i18nE >>= lift . blaze . (runBootstrapPage state (bootstrapUserFrame state page secs notifs))
 
 -- Renders the public page selecting the I18N translation based on the
 -- language stored in the session, if there is no such value, the
@@ -215,7 +212,7 @@ withUserState = (userState >>=)
 getParameterOrError :: Parameter a -> BeadHandler' b (Either String a)
 getParameterOrError param
   = either (Left . contentHandlerErrorMsg) (Right . id)
-     <$> (runErrorT $ getParameter param)
+     <$> (runExceptT $ getParameter param)
 
 -- Tries to decode the given value with the parameter description, if
 -- fails throws an error, otherwise returns the value
@@ -224,23 +221,23 @@ decodeParamValue param value = do
   let v = T.unpack $ TE.decodeUtf8 value
       decoded = decode param v
   maybe
-    (throwError . strMsg . decodeError param $ v)
+    (throwError . contentHandlerError . decodeError param $ v)
     return
     decoded
 
 getParameter :: Parameter a -> ContentHandler' b a
 getParameter param = do
-  reqParam <- getParam . B.pack . name $ param
+  reqParam <- lift . getParam . B.pack . name $ param
   maybe
-    (throwError . strMsg $ notFound param) -- TODO: I18N
+    (throwError . contentHandlerError $ notFound param) -- TODO: I18N
     (decodeParamValue param)
     reqParam
 
 getParameterWithDefault :: a -> Parameter a -> ContentHandler' b a
 getParameterWithDefault defValue param = do
-  reqParam <- getParam . B.pack . name $ param
+  reqParam <- lift . getParam . B.pack . name $ param
   maybe
-    (throwError . strMsg $ notFound param) -- TODO: I18N
+    (throwError . contentHandlerError $ notFound param) -- TODO: I18N
     (\bs -> if (B.null bs)
               then return defValue
               else (decodeParamValue param bs))
@@ -252,10 +249,10 @@ getParameterWithDefault defValue param = do
 -- returns a list of the decoded values
 getParameterValues :: Parameter a -> ContentHandler' b [a]
 getParameterValues param = do
-  params <- getParams
+  params <- lift getParams
   let paramName = name param
   maybe
-    (throwError . strMsg $ notFound param) -- TODO: I18N
+    (throwError . contentHandlerError $ notFound param) -- TODO: I18N
     (mapM (decodeParamValue param))
     (Map.lookup (fromString paramName) params)
 
@@ -264,37 +261,37 @@ getParameterValues param = do
 -- calculates Nothing, if decoding fails, throws an Error
 getOptionalParameter :: Parameter a -> ContentHandler' b (Maybe a)
 getOptionalParameter param = do
-  params <- getParams
+  params <- lift getParams
   let paramName = name param
   case Map.lookup (fromString paramName) params of
     Nothing  -> return Nothing
-    Just []  -> throwError . strMsg $ concat [paramName, " contains zero values."] -- TODO: I18N
+    Just []  -> throwError . contentHandlerError $ concat [paramName, " contains zero values."] -- TODO: I18N
     Just [x] -> Just <$> decodeParamValue param x
-    Just (_:_) -> throwError . strMsg $ concat [paramName, " has more than one value."] -- TODO: I18N
+    Just (_:_) -> throwError . contentHandlerError $ concat [paramName, " has more than one value."] -- TODO: I18N
 
 -- Calculates a Just value named and decoded by the given paramater,
 -- supposing that the parameter are optional, if it not presented
 -- calculates Nothing, if decoding fails, throws an Error
 getOptionalOrNonEmptyParameter :: Parameter a -> ContentHandler' b (Maybe a)
 getOptionalOrNonEmptyParameter param = do
-  params <- getParams
+  params <- lift getParams
   let paramName = name param
   case Map.lookup (fromString paramName) params of
     Nothing  -> return Nothing
-    Just []  -> throwError . strMsg $ concat [paramName, " contains zero values."] -- TODO: I18N
+    Just []  -> throwError . contentHandlerError $ concat [paramName, " contains zero values."] -- TODO: I18N
     Just [x] -> case B.null x of
                   True  -> return Nothing
                   False -> Just <$> decodeParamValue param x
-    Just (_:_) -> throwError . strMsg $ concat [paramName, " has more than one value."] -- TODO: I18N
+    Just (_:_) -> throwError . contentHandlerError $ concat [paramName, " has more than one value."] -- TODO: I18N
 
 
 getJSONParam :: (Data a) => String -> String -> ContentHandler a
 getJSONParam param msg = do
-  x <- getParam . B.pack $ param
+  x <- lift . getParam . B.pack $ param
   case x of
-    Nothing -> throwError . strMsg $ msg
+    Nothing -> throwError . contentHandlerError $ msg
     Just y  -> case decodeFromFay . B.unpack $ y of
-      Nothing -> throwError . strMsg $ "Decoding error"
+      Nothing -> throwError . contentHandlerError $ "Decoding error"
       Just z  -> return z
 
 -- Decode multiple values for the given parameter names.
@@ -302,16 +299,17 @@ getJSONParam param msg = do
 -- If no parameter is found in the request, an empty list is returned.
 getJSONParameters :: (Data a, Show a) => String -> String -> ContentHandler [a]
 getJSONParameters param msg = do
-  params <- getParams
+  params <- lift getParams
   case Map.lookup (fromString param) params of
     Nothing -> return []
     Just [] -> return []
     Just vs -> mapM decodePrm vs
   where
+    decodePrm :: Data a => B.ByteString -> ContentHandler a
     decodePrm v =
       let v' = B.unpack v
       in case decodeFromFay v' of
-           Nothing -> throwError . strMsg $ concat ["Decoding error:", v', " ", msg]
+           Nothing -> throwError . contentHandlerError $ concat ["Decoding error:", v', " ", msg]
            Just  x -> return x
 
 -- Computes a list that contains language and dictionary info pairs
@@ -333,7 +331,7 @@ userStory story = do
   i18n <- lift i18nH
   x <- lift . runStory $ story
   case x of
-    Left e  -> throwError . strMsg . S.translateUserError i18n $ e
+    Left e  -> throwError . contentHandlerError . S.translateUserError i18n $ e
     Right y -> return y
 
 -- Runs a UserStory in the registration context
@@ -353,7 +351,7 @@ runStory story = do
       let usrToken = userToken (unameFromAuth, token)
       ustate <- liftIO $ userData users usrToken
       case ustate of
-        Nothing -> return . Left . strMsg $ "The user is timed out: " ++ show unameFromAuth
+        Nothing -> return . Left . S.userErrorWithMsg $ "The user is timed out: " ++ show unameFromAuth
         Just state -> do
           liftIO $ do
             now <- Time.getCurrentTime
@@ -367,7 +365,7 @@ runStory story = do
               refreshSession
               return $ Right a
   case result of
-    Left msg -> return . Left . strMsg . show $ msg
+    Left e -> return . Left . S.userErrorWithMsg $ e
     Right x -> return x
 
   where

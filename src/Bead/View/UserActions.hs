@@ -111,7 +111,5 @@ userStoryFor (ChangeUserDetails n t l) =
   do Story.changeUserDetails n t l
      Story.setTimeZone t
      Story.putStatusMessage $ msg_UserActions_ChangedUserDetails "The user's settings has been changed."
-
 userStoryFor NoUserAction = return ()
-userStoryFor _            = Story.logMessage L.DEBUG "No story was selected"
 -- etc ...

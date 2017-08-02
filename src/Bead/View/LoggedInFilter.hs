@@ -1,13 +1,14 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Bead.View.LoggedInFilter (
     userIsLoggedInFilter
   , HandlerResult(..)
   ) where
 
 import qualified Control.Exception as CE
-import qualified Control.Monad.Error as CME
+import qualified Control.Monad.Except as CME
 import           Data.Maybe
 import           Prelude hiding (id)
 import qualified Prelude as P
@@ -32,7 +33,8 @@ import           Bead.View.Session
 -- If the authentication is done, the 'inside' method is computed and the
 -- result is propagated in (Just x) otherwise the whole computation returns Nothing
 userIsLoggedInFilter
-  :: BeadHandler' b (HandlerResult a)
+  :: forall a b .
+     BeadHandler' b (HandlerResult a)
   -> BeadHandler' b ()
   -> (String -> BeadHandler' b ())
   -> BeadHandler' b (Maybe a)
@@ -43,12 +45,13 @@ userIsLoggedInFilter inside outside onError = do
     Nothing -> onError "Session timed out." >> return Nothing
     -- Active session
     Just _ -> do
-      e <- CME.runErrorT loggedInFilter
+      e <- CME.runExceptT loggedInFilter
       case e of
         Right x -> return x
         Left e' -> errorHappened . show $ e' 
 
   where
+    errorHappened :: String -> BeadHandler' b (Maybe a)
     errorHappened e = do
       logMessage ERROR e
       outside
@@ -59,21 +62,22 @@ userIsLoggedInFilter inside outside onError = do
       logMessage ERROR $ "Exception occured, redirecting to error page. " ++ show e
       onError $ show e
 
+    loggedInFilter :: ContentHandler' b (Maybe a)
     loggedInFilter = do
       -- Authenticated user information
       serverSideUser <- lift currentUserTop
       sessionVer     <- lift getSessionVersion
 
       -- Guards: invalid session version or invalid user
-      when (sessionVer /= (Just sessionVersion)) . CME.throwError . strMsg $ "Invalid session version"
-      when (isNothing serverSideUser)            . CME.throwError . strMsg $ "Unknown user"
+      when (sessionVer /= (Just sessionVersion)) . CME.throwError . contentHandlerError $ "Invalid session version"
+      when (isNothing serverSideUser)            . CME.throwError . contentHandlerError $ "Unknown user"
 
       -- Username and page from session
       let unameFromAuth = usernameFromAuthUser . fromJust $ serverSideUser
       usernameFromSession <- lift usernameFromSession
 
       -- Guard: invalid user in session
-      when (usernameFromSession /= (Just unameFromAuth)) . CME.throwError . strMsg $
+      when (usernameFromSession /= (Just unameFromAuth)) . CME.throwError . contentHandlerError $
         printf "Invalid user in the session: %s, %s" (show unameFromAuth) (show usernameFromSession)
 
       -- Guard: Is user logged in?
@@ -82,7 +86,7 @@ userIsLoggedInFilter inside outside onError = do
       let users = userContainer context
           usrToken = userToken (unameFromAuth, tkn)
       isLoggedIn <- lift (liftIO $ users `isUserLoggedIn` usrToken)
-      unless (isLoggedIn) . CME.throwError . strMsg  $ "This user is not logged into the server"
+      unless (isLoggedIn) . CME.throwError . contentHandlerError $ "This user is not logged into the server"
 
       -- Correct user is logged in, run the handler and save the data
       result <- lift inside

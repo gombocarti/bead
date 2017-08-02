@@ -9,14 +9,16 @@ module Bead.View.Content.Assignment.Page (
   , modifyAssignmentPreview
   ) where
 
-import           Control.Monad.Error
+import           Control.Monad.Except (throwError)
+import           Control.Monad.Trans (lift, liftIO)
+import           Control.Monad (when)
 import qualified Data.Map as Map
 import           Data.Time (getCurrentTime)
 
 import qualified Bead.Controller.UserStories as S
 import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Content
-import           Bead.View.ContentHandler (getJSONParameters)
+import           Bead.View.ContentHandler (getJSONParameters, contentHandlerError)
 import           Bead.View.RequestParams
 
 import           Bead.View.Content.Assignment.Data
@@ -78,7 +80,7 @@ readTCCreation :: ContentHandler TCCreation
 readTCCreation = do
   (mTestScript, mZippedTestCaseName, mPlainTestCase) <- readTCCreationParameters
   case tcCreation mTestScript mZippedTestCaseName mPlainTestCase of
-    Left  e  -> throwError . strMsg $ "Some error in test case parameters " ++ e
+    Left  e  -> throwError . contentHandlerError $ "Some error in test case parameters " ++ e
     Right tc -> return tc
 
 readTCCreationParameters :: ContentHandler TCCreationParameters
@@ -106,7 +108,7 @@ readTCModification :: ContentHandler TCModification
 readTCModification = do
   (mTestScript,mZippedTestCaseName,mPlainTestCase) <- readTCModificationParameters
   case tcModification mTestScript mZippedTestCaseName mPlainTestCase of
-    Nothing -> throwError $ strMsg "Some error in test case parameters"
+    Nothing -> throwError . contentHandlerError $ "Some error in test case parameters"
     Just tm -> return tm
 
 tcModification :: Maybe (Maybe TestScriptKey) -> Maybe (Either () UsersFile) -> Maybe String -> Maybe TCModification
@@ -220,7 +222,7 @@ getAssignment = do
   converter <- userTimeZoneToUTCTimeConverter
   startDate <- converter <$> getParameter assignmentStartPrm
   endDate   <- converter <$> getParameter assignmentEndPrm
-  when (endDate < startDate) . throwError $ strMsg "The assignment starts later than it ends"
+  when (endDate < startDate) . throwError $ contentHandlerError "The assignment starts later than it ends"
   pwd <- getParameter (stringParameter (fieldName assignmentPwdField) "Password")
   noOfTries <- getParameter (stringParameter (fieldName assignmentNoOfTriesField) "Number of tries")
   asp <- Assignment.aspectsFromList <$> getJSONParameters (fieldName assignmentAspectField) "Aspect parameter"

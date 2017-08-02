@@ -118,7 +118,7 @@ index =
 
 -- Redirects to the parent page of the given page
 redirectToParentPage :: P.PageDesc -> ContentHandler ()
-redirectToParentPage = maybe (return ()) (redirect . routeOf) . P.parentPage
+redirectToParentPage = maybe (return ()) (lift . redirect . routeOf) . P.parentPage
 
 hfailure :: BeadHandler' a b -> BeadHandler' a (HandlerResult b)
 hfailure h = h >> (return HFailure)
@@ -129,7 +129,7 @@ evalHandlerError
   -> ContentHandler c
   -> BeadHandler a
 evalHandlerError onError onSuccess h = do
-  x <- runErrorT h
+  x <- runExceptT h
   case x of
     Left e  -> onError e
     Right s -> onSuccess s

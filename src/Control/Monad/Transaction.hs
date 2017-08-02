@@ -9,7 +9,7 @@ module Control.Monad.Transaction (
   ) where
 
 import           Control.Applicative
-import qualified Control.Monad.Error as CME
+import qualified Control.Monad.Except as CME
 import           Control.Monad.IO.Class
 import qualified Control.Monad.State as CMS
 import           Control.Monad.Trans
@@ -23,7 +23,7 @@ run (Rollback ms) = foldr1 (>>) ms
 
 -- * Transaction Monad
 
-type TransCMES e m a = CME.ErrorT e (CMS.StateT (Rollback m) m) a
+type TransCMES e m a = CME.ExceptT e (CMS.StateT (Rollback m) m) a
 
 newtype Transaction e m a = Transaction {
     unTrans :: TransCMES e m a
@@ -31,10 +31,10 @@ newtype Transaction e m a = Transaction {
               CMS.MonadState (Rollback m),
               CME.MonadError e)
 
-runTransaction :: (CME.Error e, Monad m) => Transaction e m a -> m (Either e a, Rollback m)
+runTransaction :: Monad m => Transaction e m a -> m (Either e a, Rollback m)
 runTransaction
   = startStateFrom emptyUndo
-  . CME.runErrorT
+  . CME.runExceptT
   . unTrans
 
 startStateFrom :: (Monad m) => s -> CMS.StateT s m a -> m (a,s)
@@ -50,16 +50,16 @@ addUndo s (Rollback m) = Rollback (s:m)
 
 -- * Transaction helpers
 
-eitherStep :: (CME.Error e, Monad m) => Either e a -> TransCMES e m a
+eitherStep :: Monad m => Either e a -> TransCMES e m a
 eitherStep (Left e)  = CME.throwError e
 eitherStep (Right v) = return v
 
-transactionStep :: (CME.Error e, Monad m) => CME.ErrorT e m a -> Transaction e m a
+transactionStep :: Monad m => CME.ExceptT e m a -> Transaction e m a
 transactionStep m = Transaction $ do
-  mex <- lift . lift . CME.runErrorT $ m
+  mex <- lift . lift . CME.runExceptT $ m
   eitherStep mex
 
-transactionStepEither :: (CME.Error e, Monad m) => m (Either e a) -> Transaction e m a
+transactionStepEither :: Monad m => m (Either e a) -> Transaction e m a
 transactionStepEither m = Transaction $ do
   mex <- lift . lift $ m
   eitherStep mex
@@ -69,14 +69,14 @@ transactionStepEither m = Transaction $ do
 -- | A transactional step contains a step that can produce an error or calculate
 --   a value and a reverse operation for that step. If an @e@ exception occurs
 --   it will be undo
-stepEither :: (CME.Error e, Monad m) => m (Either e a) -> m () -> Transaction e m a
+stepEither :: Monad m => m (Either e a) -> m () -> Transaction e m a
 stepEither m inverse = do
   CMS.modify (addUndo inverse)
   transactionStepEither m
 
 -- | The inverse step of the transactional step, can be calculated when the
 --   operational step is done
-stepEitherM :: (CME.Error e, Monad m) => m (Either e a) -> m () -> (a -> m ()) -> Transaction e m a
+stepEitherM :: Monad m => m (Either e a) -> m () -> (a -> m ()) -> Transaction e m a
 stepEitherM m inverseBefore inverseAfter = do
   CMS.modify (addUndo inverseBefore)
   x <- transactionStepEither m
@@ -86,7 +86,7 @@ stepEitherM m inverseBefore inverseAfter = do
 -- | A transactional step contains a step that can produce an error or calculate
 --   a value and a reverse operation for that step. If an @e@ exception occurs
 --   it will be undone.
-step :: (CME.Error e, Monad m) => CME.ErrorT e m a -> m () -> Transaction e m a
+step :: Monad m => CME.ExceptT e m a -> m () -> Transaction e m a
 step m inverse = do
   CMS.modify (addUndo inverse)
   transactionStep m
@@ -95,7 +95,7 @@ step m inverse = do
 
 -- | It runs atomically a transactional operation. If an exception occurs
 --   the rollback steps will be executed in reverse order.
-atomically :: (CME.Error e, Monad m) => Transaction e m a -> m (Either e a)
+atomically :: Monad m => Transaction e m a -> m (Either e a)
 atomically t = do
   x <- runTransaction t
   case x of
