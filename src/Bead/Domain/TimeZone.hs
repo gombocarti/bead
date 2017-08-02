@@ -19,12 +19,14 @@ TimeZones are handled by the olson library.
 
 import           Control.Exception
 import           Control.Monad
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import           Data.Time hiding (timeZoneName)
 import qualified Data.Time.LocalTime as Local (utc)
 import           System.FilePath
 import           System.Directory
+import qualified System.IO as IO
 
 import           Data.Time.LocalTime.TimeZone.Olson
 import           Data.Time.LocalTime.TimeZone.Series
@@ -102,10 +104,21 @@ exploreTimeZoneNames dir = exploreDirectory onFile combine dir
   where
     l = length dir + 1
 
+    onFile :: FilePath -> IO [(TimeZoneName, TimeZoneSeries)]
     onFile path = catch
-      (do series <- getTimeZoneSeriesFromOlsonFile path
-          return [(TimeZoneName (drop l  path), series)])
+      (do isTimeZoneFile <- IO.withBinaryFile path IO.ReadMode $ \h -> do
+            initial <- BC.hGet h 4
+            return (initial == timeZoneSignature)
+          if isTimeZoneFile
+            then do
+              series <- getTimeZoneSeriesFromOlsonFile path
+              return [(TimeZoneName (drop l  path), series)]
+            else
+              return [])
       emptyList
+
+    timeZoneSignature :: BC.ByteString
+    timeZoneSignature = BC.pack "TZif"
 
     combine [] = return []
     combine xs = return $ foldl1 (++) xs
