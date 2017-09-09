@@ -21,6 +21,8 @@ module Bead.View.ContentHandler (
   , renderBootstrapPublicPage
   , renderPublicPage
   , setInSessionE
+  , downloadFile
+  , Mime(..)
   , setReqParamInSession
   , sessionToken
   , userState
@@ -45,6 +47,7 @@ import           Control.Applicative
 import           Control.Monad.Except
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.UTF8  as BU
+import qualified Data.ByteString.Lazy  as LB
 import qualified Data.Map as Map (lookup)
 import           Data.Maybe (isNothing, fromJust)
 import           Data.String (IsString(..))
@@ -322,6 +325,36 @@ setReqParamInSession (ReqParam (k,v)) = setInSessionE k v
 setInSessionE :: String -> String -> ContentHandler ()
 setInSessionE k v
   = lift $ setInSessionTop (T.pack k) (T.pack v)
+
+downloadFile :: String -> LB.ByteString -> Mime -> ContentHandler ()
+downloadFile fname contents mime = lift $ do
+  modifyResponse $
+    setHeader "Content-Disposition" (fromString $ concat ["attachment; filename=\"", escapeQuotes fname,"\""])
+  modifyResponse $
+    setHeader "Content-Type" (fromString contentType)
+  writeLBS contents
+  where
+    contentType :: String
+    contentType = mimeCata
+      "application/zip, application/octet-stream"
+      "text/plain; charset=\"UTF-8\""
+      mime
+
+    escapeQuotes :: String -> String
+    escapeQuotes = concatMap escape
+      where
+        escape :: Char -> String
+        escape '\"' = "\\\""
+        escape c    = [c]
+
+data Mime =
+    MimeZip
+  | MimePlainText
+
+mimeCata zip plainText mime =
+  case mime of
+    MimeZip -> zip
+    MimePlainText -> plainText
 
 -- Runs a user story within a service context where the user is logged in
 -- and throws a handler error if the story has failed

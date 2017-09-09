@@ -254,7 +254,8 @@ Library
     xmlhtml,
     utf8-string,
     unix,
-    yaml
+    yaml,
+    zip-archive
 
   Exposed-Modules:
     AdminMain
@@ -330,6 +331,7 @@ Library
     Bead.View.Content.All
     Bead.View.Content.Bootstrap
     Bead.View.Content.Comments
+    Bead.View.Content.ExportSubmissions
     Bead.View.Content.GetSubmission
     Bead.View.Content.GetCsv
     Bead.View.Content.ScoreInfo

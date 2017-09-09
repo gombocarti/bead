@@ -821,6 +821,10 @@ loadAssignment k = logAction INFO ("loads assignment " ++ show k) $ do
   authorize P_Open P_Assignment
   persistence $ Persist.loadAssignment k
 
+courseOrGroupOfAssignment :: AssignmentKey -> UserStory (Either CourseKey GroupKey)
+courseOrGroupOfAssignment ak = logAction INFO ("gets course key or group key of assignment " ++ show ak) $
+  persistence (Persist.courseOrGroupOfAssignment ak)
+
 createGroupAssessment :: GroupKey -> Assessment -> UserStory AssessmentKey
 createGroupAssessment gk a = logAction INFO ("creates assessment for group " ++ show gk) $ do
   authorize P_Open P_Group
@@ -1262,6 +1266,20 @@ userSubmissionKeys ak = logAction INFO msg $ do
   where
     msg = "lists the submissions for assignment " ++ show ak
 
+lastSubmission :: AssignmentKey -> Username -> UserStory (Maybe SubmissionKey)
+lastSubmission ak u = logAction INFO ("loads a last submission for assignment " ++ show ak) $ do
+  authorize P_Open P_Assignment
+  authorize P_Open P_Submission
+  persistence $ Persist.lastSubmission ak u
+
+lastSubmissions :: AssignmentKey -> UserStory [SubmissionKey]
+lastSubmissions ak = logAction INFO ("loads last submissions of users for assignment " ++ show ak) $ do
+  authorize P_Open P_Assignment
+  authorize P_Open P_Submission
+  key <- persistence $ Persist.courseOrGroupOfAssignment ak
+  usernames <- either subscribedToCourse subscribedToGroup key
+  catMaybes <$> mapM (lastSubmission ak) usernames
+
 submissionDetailsDesc :: SubmissionKey -> UserStory SubmissionDetailsDesc
 submissionDetailsDesc sk = logAction INFO msg $ do
   authPerms submissionDetailsDescPermissions
@@ -1607,15 +1625,19 @@ noOfUnseenNotifications :: UserStory Int
 noOfUnseenNotifications = do
   withUserAndPersist $ Persist.noOfUnseenNotifications . u_username
 
--- Helper function: checks if there at least one submission for the given
-isThereSubmissionPersist = fmap (not . null) . Persist.submissionsForAssignment
+submissionsForAssignment :: AssignmentKey -> UserStory [SubmissionKey]
+submissionsForAssignment ak = logAction INFO ("gets all the submission keys for assignment " ++ show ak) $ do
+  authorize P_Open P_Assignment
+  authorize P_Open P_Submission
+  isAdministratedAssignment ak
+  persistence $ Persist.submissionsForAssignment ak
 
 -- | Checks if there is at least one submission for the given assignment
 isThereASubmission :: AssignmentKey -> UserStory Bool
 isThereASubmission ak = logAction INFO ("" ++ show ak) $ do
   authorize P_Open P_Assignment
   isAdministratedAssignment ak
-  persistence $ isThereSubmissionPersist ak
+  fmap (not . null) $ submissionsForAssignment ak
 
 -- | Modify the given assignment but keeps the evaluation type if there is
 -- a submission for the given assignment, also shows a warning message if the
@@ -1623,75 +1645,70 @@ isThereASubmission ak = logAction INFO ("" ++ show ak) $ do
 modifyAssignment :: AssignmentKey -> Assignment -> TCModification -> UserStory ()
 modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ do
   authorize P_Modify P_Assignment
+  isAdministratedAssignment ak
+  hasSubmission <- isThereASubmission ak
   join . withUserAndPersist $ \u -> do
     let user = u_username u
-    admined <- Persist.isAdministratedAssignment user ak
-    if admined
-      then do hasSubmission <- isThereSubmissionPersist ak
-              new <- if hasSubmission
-                       then do -- Overwrite the assignment type with the old one
-                               -- if there is submission for the given assignment
-                               ev <- Assignment.evType <$> Persist.loadAssignment ak
-                               return (a { Assignment.evType = ev })
-                       else return a
-              Persist.modifyAssignment ak new
-              testCaseModificationForAssignment user ak tc
-              now <- liftIO getCurrentTime
-              let msg = Notification.NE_AssignmentUpdated (u_name u) (Assignment.name a)
-              mck <- Persist.courseOfAssignment ak
-              mgk <- Persist.groupOfAssignment ak
-              affected <- case (mck, mgk) of
-                            (Just ck, _) -> do
-                              cas <- Persist.courseAdmins ck
-                              gks <- Persist.groupKeysOfCourse ck
-                              gas <- concat <$> mapM Persist.groupAdmins gks
-                              return $ nub (cas ++ gas) \\ [user]
-                            (_, Just gk) -> do
-                              gas <- Persist.groupAdmins gk
-                              return $ nub gas \\ [user]
-                            _            -> return []
-              Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
-              if (Assignment.start a <= now)
-                then do
-                  affected <- case (mck, mgk) of
-                                (Just ck, _) -> do
-                                  cas <- Persist.courseAdmins ck
-                                  gks <- Persist.groupKeysOfCourse ck
-                                  gas <- concat <$> mapM Persist.groupAdmins gks
-                                  sbs <- Persist.subscribedToCourse ck
-                                  return $ nub (sbs \\ (cas ++ gas ++ [user]))
-                                (_, Just gk) -> do
-                                  gas <- Persist.groupAdmins gk
-                                  sbs <- Persist.subscribedToGroup gk
-                                  return $ nub (sbs \\ (gas ++ [user]))
-                                _            -> return []
-                  Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
-                else do
-                  nks <- Persist.notificationsOfAssignment ak
-                  forM_ nks $ \nk -> do
-                    mNot <- do
-                      nt <- Persist.loadNotification nk
-                      case (mck, mgk, Notification.notifEvent nt) of
-                        (Just ck, _, Notification.NE_CourseAssignmentCreated _ _ _)  -> return $ Just nt
-                        (_, Just gk, Notification.NE_GroupAssignmentCreated _ _ _ _) -> return $ Just nt
-                        _ -> return Nothing
-                    case mNot of
-                      Just n -> do
-                        let newDate = Assignment.start a
-                        let n' = n { Notification.notifDate = newDate }
-                        Persist.updateNotification nk n'
-                        Persist.updateUserNotification nk newDate
-                      _ -> return ()
-              if and [hasSubmission, Assignment.evType a /= Assignment.evType new]
-                then return . putStatusMessage . msg_UserStory_EvalTypeWarning $ concat
-                  [ "The evaluation type of the assignment is not modified. "
-                  , "A solution is submitted already."
-                  ]
-                else (return (return ()))
-      else return $ do
-             logMessage INFO . violation $ printf "User tries to modify the assignment: (%s)" (assignmentKeyMap id ak)
-             errorPage $ userError nonAdministratedAssignment
-
+    new <- if hasSubmission
+             then do -- Overwrite the assignment type with the old one
+                     -- if there is submission for the given assignment
+                ev <- Assignment.evType <$> Persist.loadAssignment ak
+                return (a { Assignment.evType = ev })
+             else return a
+    Persist.modifyAssignment ak new
+    testCaseModificationForAssignment user ak tc
+    now <- liftIO getCurrentTime
+    let msg = Notification.NE_AssignmentUpdated (u_name u) (Assignment.name a)
+    mck <- Persist.courseOfAssignment ak
+    mgk <- Persist.groupOfAssignment ak
+    affected <- case (mck, mgk) of
+                  (Just ck, _) -> do
+                    cas <- Persist.courseAdmins ck
+                    gks <- Persist.groupKeysOfCourse ck
+                    gas <- concat <$> mapM Persist.groupAdmins gks
+                    return $ nub (cas ++ gas) \\ [user]
+                  (_, Just gk) -> do
+                    gas <- Persist.groupAdmins gk
+                    return $ nub gas \\ [user]
+                  _            -> return []
+    Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
+    if (Assignment.start a <= now)
+      then do
+        affected <- case (mck, mgk) of
+                      (Just ck, _) -> do
+                        cas <- Persist.courseAdmins ck
+                        gks <- Persist.groupKeysOfCourse ck
+                        gas <- concat <$> mapM Persist.groupAdmins gks
+                        sbs <- Persist.subscribedToCourse ck
+                        return $ nub (sbs \\ (cas ++ gas ++ [user]))
+                      (_, Just gk) -> do
+                        gas <- Persist.groupAdmins gk
+                        sbs <- Persist.subscribedToGroup gk
+                        return $ nub (sbs \\ (gas ++ [user]))
+                      _            -> return []
+        Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
+      else do
+        nks <- Persist.notificationsOfAssignment ak
+        forM_ nks $ \nk -> do
+          mNot <- do
+            nt <- Persist.loadNotification nk
+            case (mck, mgk, Notification.notifEvent nt) of
+              (Just ck, _, Notification.NE_CourseAssignmentCreated _ _ _)  -> return $ Just nt
+              (_, Just gk, Notification.NE_GroupAssignmentCreated _ _ _ _) -> return $ Just nt
+              _ -> return Nothing
+          case mNot of
+            Just n -> do
+              let newDate = Assignment.start a
+              let n' = n { Notification.notifDate = newDate }
+              Persist.updateNotification nk n'
+              Persist.updateUserNotification nk newDate
+            _ -> return ()
+    if and [hasSubmission, Assignment.evType a /= Assignment.evType new]
+      then return . putStatusMessage . msg_UserStory_EvalTypeWarning $ concat
+        [ "The evaluation type of the assignment is not modified. "
+        , "A solution is submitted already."
+        ]
+      else (return (return ()))
 -- * Guards
 
 -- Checks with the given guard function if the user has passed the guard,
@@ -1729,6 +1746,15 @@ isAdministratedGroup = guard
   Persist.isAdministratedGroup
   "The user tries to access a group (%s) which is not administrated by him."
   (userError nonAdministratedGroup)
+
+-- Produces a list of groupkeys, each of them represents a group of
+-- the given course and is administrated by the current user.
+administratedGroupsOfCourse :: CourseKey -> UserStory [GroupKey]
+administratedGroupsOfCourse ck = do
+  authorize P_Open P_Course
+  withUserAndPersist $ \u -> do
+    gks <- Persist.groupKeysOfCourse ck
+    filterM (Persist.isAdministratedGroup (u_username u)) gks
 
 -- Checks if the given assignment is administrated by the actual user and
 -- throws redirects to the error page if not, otherwise do nothing

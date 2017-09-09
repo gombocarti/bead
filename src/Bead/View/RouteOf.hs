@@ -56,6 +56,9 @@ module Bead.View.RouteOf (
   , deleteUsersFromGroupPath
   , unsubscribeFromCoursePath
   , pageRoutePath
+  , exportSubmissionsPath
+  , exportSubmissionsOfGroupsPath
+  , exportSubmissionsOfOneGroupPath
   , getSubmissionPath
   , getCourseCsvPath
   , getGroupCsvPath
@@ -221,6 +224,15 @@ deleteUsersFromGroupPath = "/delete-users-from-group"
 unsubscribeFromCoursePath :: RoutePath
 unsubscribeFromCoursePath = "/unsubscribe-from-course"
 
+exportSubmissionsPath :: RoutePath
+exportSubmissionsPath = "/export-submissions"
+
+exportSubmissionsOfGroupsPath :: RoutePath
+exportSubmissionsOfGroupsPath = "/export-submissions-of-groups"
+
+exportSubmissionsOfOneGroupPath :: RoutePath
+exportSubmissionsOfOneGroupPath = "/export-submissions-of-one-group"
+
 getSubmissionPath :: RoutePath
 getSubmissionPath = "/get-submission"
 
@@ -303,6 +315,9 @@ pageRoutePath = pfmap id id id id id . r where
     deleteUsersFromCoursePath
     deleteUsersFromGroupPath
     unsubscribeFromCoursePath
+    exportSubmissionsPath
+    exportSubmissionsOfGroupsPath
+    exportSubmissionsOfOneGroupPath
     getSubmissionPath
     getCourseCsvPath
     getGroupCsvPath
@@ -360,6 +375,9 @@ pageRequestParams = liftsP
   (\ck _ -> [requestParam ck]) -- deleteUsersFromCourse
   (\gk _ -> [requestParam gk]) -- deleteUsersFromGroup
   (\gk _ -> [requestParam gk]) -- unsubscribeFromCourse
+  (\ak _ -> [requestParam ak]) -- exportSubmissions
+  (\ak u _ -> [requestParam ak, requestParam u])   -- exportSubmissionsOfGroups
+  (\ak gk _ -> [requestParam ak, requestParam gk]) -- exportSubmissionsOfOneGroup
   (\sk _ -> [requestParam sk]) -- getSubmission
   (\ck _ -> [requestParam ck]) -- getCourseCsv
   (\gk _ -> [requestParam gk]) -- getGroupCsv

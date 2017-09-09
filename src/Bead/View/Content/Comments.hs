@@ -6,6 +6,10 @@ module Bead.View.Content.Comments (
   , commentsToCFs
   , commentsDiv
   , commentPostForm
+  , commentOrFeedbackTime
+  , commentOrFeedbackText
+  , commentOrFeedbackAuthor
+  , sortDecreasingTime
   , feedbacksToCFs
   , forStudentCFs
   ) where
@@ -82,70 +86,15 @@ commentsDiv id_ t cs = do
 
 commentPar :: I18N -> String -> UserTimeConverter -> (Int, CommentOrFeedback) -> Html
 commentPar i18n id_ t (n, c) = do
-  let comment = commentText c
-  let badge = concat [showDate . t $ commentOrFeedbackTime c, " ", commentAuthor c]
+  let comment = commentOrFeedbackText i18n c
+  let badge = concat [showDate . t $ commentOrFeedbackTime c, " ", commentOrFeedbackAuthor i18n c]
   let commentId = fromString $ id_ ++ show n
-  seeMoreComment commentId i18n maxLength maxLines (badge, style) (anchorValue c) (commentText c)
+  seeMoreComment commentId i18n maxLength maxLines (badge, style) (anchorValue c) (commentOrFeedbackText i18n c)
   where
     anchorValue =
       commentOrFeedback
         (Just . fst)
         (const Nothing)
-
-    commentText =
-      commentOrFeedback
-        ((commentCata $ \comment _author _date _type -> comment) . snd)
-        (feedback
-           (feedbackInfo
-             (bool testsPassed testsFailed) -- result
-             id   -- comment
-             id   -- comment
-             evaluationText) -- evaluation
-           p_1_2)
-      where
-        testsPassed = i18n $ msg_Comments_TestPassed "The submission has passed the tests."
-        testsFailed = i18n $ msg_Comments_TestFailed "The submission has failed the tests."
-
-        bool true false x = if x then true else false
-
-        evaluationText result comment _author =
-          withEvResult result
-            (\b -> join [comment, "\n\n", translateMessage i18n (binaryResult b)])
-            (const $ join [comment, "\n\n", translateMessage i18n (pctResult result)])
-            (\(FreeForm msg) -> join [comment, "\n\n", msg])
-
-        binaryResult (Binary b) =
-          TransMsg $ resultCata (msg_Comments_BinaryResultPassed "The submission is accepted.")
-                                (msg_Comments_BinaryResultFailed "The submission is rejected.")
-                                b
-
-        pctResult p = TransPrmMsg
-          (msg_Comments_PercentageResult "The percentage of the evaluation: %s")
-          (maybe "ERROR: Invalid percentage value! Please contact with the administrations"
-                 doubleToPercentageStr $ percentValue p)
-          where
-            doubleToPercentageStr = printf "%.0f%%" . (100 *)
-
-    commentAuthor =
-      commentOrFeedback
-        ((commentCata $ \_comment author _date ->
-           commentTypeCata
-             author -- student
-             author -- groupAdmin
-             author -- courseAdmin
-             author) . snd)-- admin
-        (feedback
-          (feedbackInfo
-            (const result) -- result
-            (const testScript) -- student
-            (const adminTestScript) -- admin
-            (\_result _comment author -> author)) -- evaluation
-          p_1_2)
-      where
-        adminTestScript = i18n $ msg_Comments_AuthorTestScript_Private "Test Script (seen by only admins)"
-        testScript = i18n $ msg_Comments_AuthorTestScript_Public "Test Script"
-        result = testScript
-
 
     style =
       commentOrFeedback
@@ -161,6 +110,63 @@ commentPar i18n id_ t (n, c) = do
 
     maxLength = 100
     maxLines = 5
+
+commentOrFeedbackText :: I18N -> CommentOrFeedback -> String
+commentOrFeedbackText i18n =
+  commentOrFeedback
+    ((commentCata $ \comment _author _date _type -> comment) . snd)
+    (feedback
+       (feedbackInfo
+         (bool testsPassed testsFailed) -- result
+         id   -- comment
+         id   -- comment
+         evaluationText) -- evaluation
+       p_1_2)
+  where
+     testsPassed = i18n $ msg_Comments_TestPassed "The submission has passed the tests."
+     testsFailed = i18n $ msg_Comments_TestFailed "The submission has failed the tests."
+
+     bool true false x = if x then true else false
+
+     evaluationText result comment _author =
+      withEvResult result
+        (\b -> join [comment, "\n\n", translateMessage i18n (binaryResult b)])
+        (const $ join [comment, "\n\n", translateMessage i18n (pctResult result)])
+        (\(FreeForm msg) -> join [comment, "\n\n", msg])
+
+     binaryResult (Binary b) =
+      TransMsg $ resultCata (msg_Comments_BinaryResultPassed "The submission is accepted.")
+                            (msg_Comments_BinaryResultFailed "The submission is rejected.")
+                            b
+
+     pctResult p = TransPrmMsg
+      (msg_Comments_PercentageResult "The percentage of the evaluation: %s")
+      (maybe "ERROR: Invalid percentage value! Please contact with the administrations"
+             doubleToPercentageStr $ percentValue p)
+      where
+        doubleToPercentageStr = printf "%.0f%%" . (100 *)
+
+commentOrFeedbackAuthor :: I18N -> CommentOrFeedback -> String
+commentOrFeedbackAuthor i18n =
+  commentOrFeedback
+    ((commentCata $ \_comment author _date ->
+       commentTypeCata
+         author -- student
+         author -- groupAdmin
+         author -- courseAdmin
+         author) . snd)-- admin
+    (feedback
+      (feedbackInfo
+        (const result) -- result
+        (const testScript) -- student
+        (const adminTestScript) -- admin
+        (\_result _comment author -> author)) -- evaluation
+      p_1_2)
+  where
+    adminTestScript = i18n $ msg_Comments_AuthorTestScript_Private "Test Script (seen by only admins)"
+    testScript = i18n $ msg_Comments_AuthorTestScript_Public "Test Script"
+    result = testScript
+
 
 -- Creates a post form for the given route assignment key and submission key, where
 -- a comment can be placed and the result is submitted to the given page, which is

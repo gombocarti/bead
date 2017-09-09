@@ -76,7 +76,7 @@ acceptLanguageToLanguage = acceptLanguage
 
 
 #ifdef TEST
-acceptLanguageTests = group "accpetLanguage" $ do
+acceptLanguageTests = group "acceptLanguage" $ do
   group "parse" $ do
     eqPartitions parseAcceptLangValue
       [ Partition "accept language parse empty string" "" Nothing "Empty string is parsed"

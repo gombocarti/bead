@@ -1,35 +1,37 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Bead.View.Content.GetSubmission (
     getSubmission
+  , submissionFilename
   ) where
 
 import           Control.Monad.Trans (lift)
 import           Data.String (fromString)
-import qualified Data.ByteString as B
-import qualified Data.ByteString.UTF8 as BsUTF8 (fromString)
+import qualified Data.ByteString.Lazy as LBs
+import qualified Data.ByteString.Lazy.UTF8 as LBsUTF8 (fromString)
+import           System.FilePath ((<.>))
 
+import           Bead.Domain.Entities (usernameCata)
+import qualified Bead.Domain.Entity.Assignment as Assignment
 import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content
+import qualified Bead.View.ContentHandler as CH
 
 getSubmission :: DataHandler
 getSubmission = DataHandler $ do
   sk <- getParameter submissionKeyPrm
   (s, description) <- userStory (Story.getSubmission sk)
   let submission = solution s
-  let basename = concat [uid id $ eUid description, "_", submissionKeyMap id sk]
-  let fname = submissionValue (const (++ ".txt")) (const (++ ".zip")) submission basename
-  lift . modifyResponse $
-    setHeader "Content-Disposition" (fromString $ concat ["attachment; filename=\"",fname,"\""])
-  lift $ submissionValue downloadPlain downloadZipped submission
-  where
-    downloadPlain :: MonadSnap m => String -> m ()
-    downloadPlain text = do
-      modifyResponse
-        $ setHeader "Content-Type" "text/plain; charset=\"UTF-8\""
-      writeBS (BsUTF8.fromString text)
+      (fname, ext) = submissionFilename description
+      downloadFile = CH.downloadFile (fname <.> ext)
+  submissionValue
+    (\s -> downloadFile (LBsUTF8.fromString s) CH.MimePlainText)
+    (\s -> downloadFile (LBs.fromStrict s) CH.MimeZip)
+    submission
 
-    downloadZipped :: MonadSnap m => B.ByteString -> m ()
-    downloadZipped zip = do
-      modifyResponse
-        $ setHeader "Content-Type" "application/zip, application/octet-stream"
-      writeBS zip
+-- | Returns a pair of filename and extension from a `SubmissionDesc`.
+submissionFilename :: SubmissionDesc -> (String, String)
+submissionFilename desc = (basename, ext)
+    where
+      basename = concat [eStudent desc, " (", uid id $ eUid desc, ")"]
+      ext = if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ desc) then "zip" else "txt"
+

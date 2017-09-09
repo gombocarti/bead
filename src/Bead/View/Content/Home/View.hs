@@ -154,10 +154,9 @@ htmlAssessmentTable board
           forM_ (sortBy (compareHun `on` ud_fullname) (sbUsers board)) (userLine msg)
       where
         assessmentViewButton :: I18N -> ((AssessmentKey,Assessment),Int) -> Html
-        assessmentViewButton msg ((ak,as),n) = H.td $ Bootstrap.customButtonLink style modifyLink assessmentName (prefix ++ show n)
+        assessmentViewButton msg ((ak,as),n) = H.td $ Bootstrap.customButtonLink style modifyLink assessmentName (show n)
             where
               style = [fst ST.groupButtonStyle]
-              prefix = msg $ msg_Home_GroupAssessmentIDPrefix "A"
               modifyLink = routeOf $ Pages.modifyAssessment ak ()
               assessmentName = assessment (\title _desc _creation _cfg -> title) as
 
@@ -329,11 +328,9 @@ availableAssessment msg (c, assessments) | null assessments = mempty
       header assessments = H.th mempty >> mapM_ (H.td . assessmentLabel) (zip [assessment | (_ak,assessment,_sk,_si) <- assessments] [1..])
           where
             assessmentLabel :: (Assessment, Int) -> Html
-            assessmentLabel (as,n) = Bootstrap.grayLabel (prefix ++ show n) ! tooltip
+            assessmentLabel (as,n) = Bootstrap.grayLabel (show n) ! tooltip
                 where aTitle = assessment (\title _desc _creation _cfg -> title) as
                       tooltip = A.title . fromString $ aTitle
-
-            prefix = msg $ msg_Home_GroupAssessmentIDPrefix "A"
 
       evaluationViewButton :: ((Maybe ScoreKey, ScoreInfo),Int) -> Html
       evaluationViewButton ((Just sk,info),n) = H.td $ scoreInfoToIconLink msg "" viewScoreLink info

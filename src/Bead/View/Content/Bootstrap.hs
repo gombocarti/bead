@@ -13,6 +13,7 @@ import           Data.Maybe (fromMaybe)
 import           Data.Monoid
 import           Data.String
 
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 hiding (map)
 import qualified Text.Blaze.Html5 as H hiding (map)
 import           Text.Blaze.Html5.Attributes
@@ -171,12 +172,18 @@ dateTimePickerScript pickerId = script . fromString $ concat
   , "});"
   ]
 
+link ref text =
+  a ! href (fromString ref)
+    $ (fromString text)
+
 -- | Creates a dropdown button
-dropdownButton text =
+customDropdownButton custom text =
   button ! type_ "button"
-         ! class_ "btn btn-default dropdown-toggle"
+         ! class_ (fromString $ unwords $ "btn" : "dropdown-toggle" : custom)
          ! dataAttribute "toggle" "dropdown"
          $ do (fromString text); caret
+
+dropdownButton text = customDropdownButton ["btn-default"] text
 
 -- | Creates a list of dropdown menu items
 dropdownMenu items = H.ul ! class_ "dropdown-menu" ! customAttribute "role" "menu" $ mapM_ li items
@@ -185,6 +192,24 @@ dropdownMenu items = H.ul ! class_ "dropdown-menu" ! customAttribute "role" "men
 dropdown text items = buttonGroup $ do
   dropdownButton text
   dropdownMenu items
+
+customSplitButton custom ref ttl text items = buttonGroup ! A.style "display:flex" $ do
+  customButtonLink custom ref ttl text
+  customDropdownButton custom ""
+  dropdownMenu items
+
+splitButton ref text items = customSplitButton ["btn-default"] ref "" text items
+
+customButtonWithDropdown custom ref ttl text items = buttonGroup ! showOnMouseEnter ! hideOnMouseOut $ do
+  customButtonLink custom ref ttl text 
+  dropdownButton "" ! A.style "display:none"
+  dropdownMenu items
+  where
+    showOnMouseEnter :: B.Attribute
+    showOnMouseEnter = B.customAttribute "onmouseenter" "childNodes[1].click()"
+
+    hideOnMouseOut :: B.Attribute
+    hideOnMouseOut = A.onmouseout "childNodes[1].click()"
 
 -- | Creates a paragrapth that represents a help block from a given text
 helpBlock text = p ! class_ "help-block" $ fromString text

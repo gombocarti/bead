@@ -39,7 +39,6 @@ import           Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 
-
 type AdministratedCourses = Map CourseKey E.Course
 
 type AdministratedGroups  = Map GroupKey  (E.Group, String)
@@ -47,21 +46,24 @@ type AdministratedGroups  = Map GroupKey  (E.Group, String)
 type CourseTestScriptInfos = Map CourseKey [(TestScriptKey, TestScriptInfo)]
 
 data SubmissionTableContext = SubmissionTableContext {
-    stcAdminCourses :: AdministratedCourses
+    stcUsername     :: Username
+  , stcAdminCourses :: AdministratedCourses
   , stcAdminGroups  :: AdministratedGroups
   , stcCourseTestScriptInfos :: CourseTestScriptInfos
   }
 
-submissionTableContextCata f (SubmissionTableContext courses groups testscripts)
-  = f courses groups testscripts
+submissionTableContextCata f (SubmissionTableContext username courses groups testscripts)
+  = f username courses groups testscripts
 
 submissionTableContext :: UserStory SubmissionTableContext
 submissionTableContext = do
+  u <- S.username
   ac <- S.administratedCourses
   ag <- S.administratedGroups
   ts <- Map.fromList <$> mapM (testScriptForCourse . fst) ac
   return $! SubmissionTableContext {
-      stcAdminCourses = adminCourseMap ac
+      stcUsername     = u
+    , stcAdminCourses = adminCourseMap ac
     , stcAdminGroups  = adminGroupMap ag
     , stcCourseTestScriptInfos = ts
     }
@@ -76,7 +78,7 @@ submissionTableContext = do
 
 submissionTable :: String -> UTCTime -> SubmissionTableContext -> SubmissionTableInfo -> IHtml
 submissionTable tableId now stb table = submissionTableContextCata html stb where
-  html courses groups testscripts = do
+  html _username courses groups testscripts = do
     msg <- getI18N
     return $ do
       H.h4 . H.b $ fromString $ stiCourse table ++ userCountText msg
@@ -164,45 +166,79 @@ submissionTablePart tableId now ctx s = do
         assignmentLinks = submissionTableInfoCata course group s
 
         course _name _users as _ulines _anames _key =
-          mapM_ (modifyAssignmentLink courseButtonStyle "") $ zip [1..] as
+          mapM_ (\(i, ak) -> modifyAssignmentLink msg courseButtonStyle (i, ak) (exportLinksCoursePage ak)) $ zip [1..] as
 
-        group  _name _users cgas _ulines _anames ckey _gkey = do
-          let as = reverse . snd $ foldl numbering ((1,1),[]) cgas
-          mapM_ header as
+        group  _name _users cgas _ulines _anames ckey gkey = do
+          mapM_ header (zip [1..] cgas)
           where
-            numbering ((c,g),as) = cgInfoCata
-              (\ak -> ((c+1,g),(CourseInfo (c,ak):as)))
-              (\ak -> ((c,g+1),(GroupInfo  (g,ak):as)))
+            header :: (Int, CGInfo AssignmentKey) -> H.Html
+            header (i, cga) = cgInfoCata
+              (\ak -> viewAssignmentLink msg courseButtonStyle ckey (i, ak) (if isAdminedCourse ckey then exportLinksHomeForCourseAdmin ak gkey else exportLinksHomeForGroupAdmin ak gkey))
+              (\ak -> modifyAssignmentLink msg groupButtonStyle (i, ak) (exportLinksGroupAssignment ak gkey))
+              cga
 
-            header = cgInfoCata
-              (viewAssignmentLink courseButtonStyle ckey (msg $ msg_Home_CourseAssignmentIDPreffix "C"))
-              (modifyAssignmentLink groupButtonStyle (msg $ msg_Home_GroupAssignmentIDPreffix "G"))
+        exportLinksCoursePage :: AssignmentKey -> [H.Html]
+        exportLinksCoursePage ak = [ exportSubmissionsOfGroups ak (stcUsername ctx)
+                                   , exportSubmissions ak
+                                   ]
+
+        exportLinksHomeForCourseAdmin :: AssignmentKey -> GroupKey -> [H.Html]
+        exportLinksHomeForCourseAdmin ak gk = exportSubmissionsOfOneGroup ak gk : exportLinksCoursePage ak
+
+        exportLinksHomeForGroupAdmin :: AssignmentKey -> GroupKey -> [H.Html]
+        exportLinksHomeForGroupAdmin ak gk = [ exportSubmissionsOfOneGroup ak gk
+                                             , exportSubmissionsOfGroups ak (stcUsername ctx)
+                                          ]
+
+        exportLinksGroupAssignment :: AssignmentKey -> GroupKey -> [H.Html]
+        exportLinksGroupAssignment ak gk = [exportSubmissions ak]
+
+        exportSubmissions :: AssignmentKey -> H.Html
+        exportSubmissions ak = Bootstrap.link (routeOf page) (msg $ linkText page)
+          where page = Pages.exportSubmissions ak ()
+
+        exportSubmissionsOfGroups :: AssignmentKey -> Username -> H.Html
+        exportSubmissionsOfGroups ak u = Bootstrap.link (routeOf page) (msg $ linkText page)
+          where page = Pages.exportSubmissionsOfGroups ak u ()
+
+        exportSubmissionsOfOneGroup :: AssignmentKey -> GroupKey -> H.Html
+        exportSubmissionsOfOneGroup ak gk = Bootstrap.link (routeOf page) (msg $ linkText page)
+          where page = Pages.exportSubmissionsOfOneGroup ak gk ()
+            
 
     assignmentName ak = maybe "" Assignment.name . Map.lookup ak $ stiAssignmentInfos s
 
     isActiveAssignment ak =
       maybe False (flip Assignment.isActive now) . Map.lookup ak $ stiAssignmentInfos s
 
-    modifyAssignmentLink _buttonStyle@(active, passive) pfx (i,ak) =
+    modifyAssignmentLink :: Show a => I18N -> (String, String) -> (a, AssignmentKey) -> [H.Html] -> H.Html
+    modifyAssignmentLink msg _buttonStyle@(active, passive) (i,ak) dropdownItems =
       -- If the assignment is active we render with active assignment button style,
       -- if not active the closed button style
-      H.td $ Bootstrap.customButtonLink
-        [if (isActiveAssignment ak) then active else passive]
-        (routeOf $ Pages.modifyAssignment ak ())
-        (assignmentName ak)
-        (concat [pfx, show i])
+      H.td $ Bootstrap.customSplitButton
+               [if (isActiveAssignment ak) then active else passive]
+               (routeOf $ Pages.modifyAssignment ak ())
+               (assignmentName ak)
+               (show i)
+               dropdownItems
 
-    viewAssignmentLink _buttonStyle@(active, passive) ck pfx (i,ak) =
-      H.td $ Bootstrap.customButtonLink
-        [if (isActiveAssignment ak) then active else passive]
-        (viewOrModifyAssignmentLink ck ak)
-        (assignmentName ak)
-        (concat [pfx, show i])
-      where
+    viewAssignmentLink :: Show a => I18N -> (String, String) -> CourseKey -> (a, AssignmentKey) -> [H.Html] -> H.Html
+    viewAssignmentLink msg _buttonStyle@(active, passive) ck (i,ak) dropdownItems =
+      H.td $ Bootstrap.customSplitButton
+               [if (isActiveAssignment ak) then active else passive]
+               (viewOrModifyAssignmentLink ck ak)
+               (assignmentName ak)
+               (show i)
+               dropdownItems
+
+        where
         viewOrModifyAssignmentLink ck ak =
           case Map.lookup ck (stcAdminCourses ctx) of
             Nothing -> routeOf $ Pages.viewAssignment ak ()
             Just _  -> routeOf $ Pages.modifyAssignment ak ()
+
+    isAdminedCourse :: CourseKey -> Bool
+    isAdminedCourse ck = Map.member ck (stcAdminCourses ctx)
 
     userLine msg s (u,_p,submissionInfoMap) = do
       H.tr $ do

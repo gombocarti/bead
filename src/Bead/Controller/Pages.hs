@@ -83,25 +83,43 @@ viewPageValue = viewPageCata
 -- Pages that extract information from the persistence
 -- and all the data will be rendered in the response
 data DataPage a
-  = GetSubmission SubmissionKey a
+  = ExportSubmissions AssignmentKey a
+  | ExportSubmissionsOfGroups AssignmentKey E.Username a
+  | ExportSubmissionsOfOneGroup AssignmentKey GroupKey a
+  | GetSubmission SubmissionKey a
   | GetCourseCsv CourseKey a
   | GetGroupCsv GroupKey a
   deriving (Eq, Ord, Show, Functor)
 
 dataPageCata
+  exportSubmissions
+  exportSubmissionsOfGroups
+  exportSubmissionsOfOneGroup
   getSubmission
   getCourseCsv
   getGroupCsv
   p = case p of
+    ExportSubmissions ak a -> exportSubmissions ak a
+    ExportSubmissionsOfGroups ak u a -> exportSubmissionsOfGroups ak u a
+    ExportSubmissionsOfOneGroup ak gk a -> exportSubmissionsOfOneGroup ak gk a
     GetSubmission sk a -> getSubmission sk a
     GetCourseCsv ck a -> getCourseCsv ck a
     GetGroupCsv gk a -> getGroupCsv gk a
 
 dataPageValue :: DataPage a -> a
 dataPageValue = dataPageCata
-  (const id) -- getSubmission
-  (const id)
-  (const id)
+  cid  -- exportSubmissions
+  c2id -- exportSubmissionsOfGroups
+  c2id -- exportSubmissionsOfOneGroup
+  cid  -- getSubmission
+  cid  -- getCourseCsv
+  cid  -- getGropCsv
+  where
+    cid :: b -> a -> a
+    cid = const id
+
+    c2id :: c -> b -> a -> a
+    c2id = const . cid
 
 -- User View pages are rendered using the data stored in the
 -- persistence and some temporary data given by the user. Mainly
@@ -350,9 +368,12 @@ viewAssessment ak       = View . ViewAssessment ak
 viewUserScore sk        = View . ViewUserScore sk
 notifications           = View . Notifications
 
-getSubmission sk        = Data . GetSubmission sk
-getCourseCsv ck         = Data . GetCourseCsv ck
-getGroupCsv gk          = Data . GetGroupCsv gk
+exportSubmissions ak              = Data . ExportSubmissions ak
+exportSubmissionsOfGroups ak u    = Data . ExportSubmissionsOfGroups ak u
+exportSubmissionsOfOneGroup ak gk = Data . ExportSubmissionsOfOneGroup ak gk
+getSubmission sk                  = Data . GetSubmission sk
+getCourseCsv ck                   = Data . GetCourseCsv ck
+getGroupCsv gk                    = Data . GetGroupCsv gk
 
 newGroupAssignmentPreview gk  = UserView . NewGroupAssignmentPreview gk
 newCourseAssignmentPreview ck = UserView . NewCourseAssignmentPreview ck
@@ -435,6 +456,9 @@ pageCata
   deleteUsersFromCourse
   deleteUsersFromGroup
   unsubscribeFromCourse
+  exportSubmissions
+  exportSubmissionsOfGroups
+  exportSubmissionsOfOneGroup
   getSubmission
   getCourseCsv
   getGroupCsv
@@ -487,6 +511,9 @@ pageCata
     (Modify (DeleteUsersFromCourse ck a)) -> deleteUsersFromCourse ck a
     (Modify (DeleteUsersFromGroup gk a)) -> deleteUsersFromGroup gk a
     (Modify (UnsubscribeFromCourse gk a)) -> unsubscribeFromCourse gk a
+    (Data (ExportSubmissions ak a)) -> exportSubmissions ak a
+    (Data (ExportSubmissionsOfGroups ak u a)) -> exportSubmissionsOfGroups ak u a
+    (Data (ExportSubmissionsOfOneGroup ak gk a)) -> exportSubmissionsOfOneGroup ak gk a
     (Data (GetSubmission sk a)) -> getSubmission sk a
     (Data (GetCourseCsv ck a)) -> getCourseCsv ck a
     (Data (GetGroupCsv gk a)) -> getGroupCsv gk a
@@ -541,6 +568,9 @@ constantsP
   deleteUsersFromCourse_
   deleteUsersFromGroup_
   unsubscribeFromCourse_
+  exportSubmissions_
+  exportSubmissionsOfGroups_
+  exportSubmissionsOfOneGroup_
   getSubmission_
   getCourseCsv_
   getGroupCsv_
@@ -593,6 +623,9 @@ constantsP
       (\ck _ -> deleteUsersFromCourse ck deleteUsersFromCourse_)
       (\gk _ -> deleteUsersFromGroup gk deleteUsersFromGroup_)
       (\gk _ -> unsubscribeFromCourse gk unsubscribeFromCourse_)
+      (\ak _ -> exportSubmissions ak exportSubmissions_)
+      (\ak u _ -> exportSubmissionsOfGroups ak u exportSubmissionsOfGroups_)
+      (\ak gk _ -> exportSubmissionsOfOneGroup ak gk exportSubmissionsOfOneGroup_)
       (\sk _ -> getSubmission sk getSubmission_)
       (\ck _ -> getCourseCsv ck getCourseCsv_)
       (\gk _ -> getGroupCsv gk getGroupCsv_)
@@ -649,6 +682,9 @@ liftsP
   deleteUsersFromCourse_
   deleteUsersFromGroup_
   unsubscribeFromCourse_
+  exportSubmissions_
+  exportSubmissionsOfGroups_
+  exportSubmissionsOfOneGroup_
   getSubmission_
   getCourseCsv_
   getGroupCsv_
@@ -701,6 +737,9 @@ liftsP
       (\ck a -> deleteUsersFromCourse ck (deleteUsersFromCourse_ ck a))
       (\gk a -> deleteUsersFromGroup gk (deleteUsersFromGroup_ gk a))
       (\gk a -> unsubscribeFromCourse gk (unsubscribeFromCourse_ gk a))
+      (\ak a -> exportSubmissions ak (exportSubmissions_ ak a))
+      (\ak u a -> exportSubmissionsOfGroups ak u (exportSubmissionsOfGroups_ ak u a))
+      (\ak gk a -> exportSubmissionsOfOneGroup ak gk (exportSubmissionsOfOneGroup_ ak gk a))
       (\sk a -> getSubmission sk (getSubmission_ sk a))
       (\ck a -> getCourseCsv ck (getCourseCsv_ ck a))
       (\gk a -> getGroupCsv gk (getGroupCsv_ gk a))
@@ -829,6 +868,15 @@ isDeleteUsersFromGroup _ = False
 isUnsubscribeFromCourse (Modify (UnsubscribeFromCourse _ _)) = True
 isUnsubscribeFromCourse _ = False
 
+isExportSubmissions (Data (ExportSubmissions _ _)) = True
+isExportSubmissions _ = False
+
+isExportSubmissionsOfGroups (Data (ExportSubmissionsOfGroups _ _ _)) = True
+isExportSubmissionsOfGroups _ = False
+
+isExportSubmissionsOfOneGroup (Data (ExportSubmissionsOfOneGroup _ _ _)) = True
+isExportSubmissionsOfOneGroup _ = False
+
 isGetSubmission (Data (GetSubmission _ _)) = True
 isGetSubmission _ = False
 
@@ -907,6 +955,9 @@ groupAdminPages = [
   , isFillNewGroupAssessmentPreview
   , isModifyAssessment
   , isModifyAssessmentPreview
+  , isExportSubmissions
+  , isExportSubmissionsOfGroups
+  , isExportSubmissionsOfOneGroup
   , isGetGroupCsv
   ]
 
@@ -940,6 +991,9 @@ courseAdminPages = [
   , isFillNewGroupAssessmentPreview
   , isModifyAssessment
   , isModifyAssessmentPreview
+  , isExportSubmissions
+  , isExportSubmissionsOfGroups
+  , isExportSubmissionsOfOneGroup
   , isGetCourseCsv
   , isGetGroupCsv
   ]
@@ -1132,6 +1186,9 @@ pageGen = oneof [
         , newGroupAssignmentPreview <$> groupKey <*> unit
         , modifyAssignmentPreview <$> assignmentKey <*> unit
         , getSubmission <$> submissionKey <*> unit
+        , exportSubmissions <$> assignmentKey <*> unit
+        , exportSubmissionsOfGroups <$> assignmentKey <*> username <*> unit
+        , exportSubmissionsOfOneGroup <$> assignmentKey <*> groupKey <*> unit
         , getCourseCsv <$> courseKey <*> unit
         , getGroupCsv <$> groupKey <*> unit
         , newGroupAssessment <$> groupKey <*> unit

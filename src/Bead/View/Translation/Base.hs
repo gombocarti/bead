@@ -431,7 +431,6 @@ labels =
  , "msg_Home_AssessmentTable_Assessments"
  , "msg_Home_AssessmentTable_StudentName"
  , "msg_Home_AssessmentTable_Username"
- , "msg_Home_GroupAssessmentIDPrefix"
 
  , "msg_Home_NonBinaryEvaluation"
  , "msg_Home_HasNoSummary"
@@ -441,8 +440,6 @@ labels =
  , "msg_Home_NotAdministratedTestScripts"
  , "msg_Home_NoTestScriptsWereDefined"
  , "msg_Home_ModifyTestScriptTable"
- , "msg_Home_CourseAssignmentIDPreffix"
- , "msg_Home_GroupAssignmentIDPreffix"
  , "msg_Home_ThereIsIsolatedAssignment"
 
  , "msg_NewUserScore_Course"
@@ -481,6 +478,8 @@ labels =
  , "msg_UploadFile_UnnamedFile"
  , "msg_UploadFile_InternalError"
  , "msg_UploadFile_ErrorInManyUploads"
+
+ , "msg_ExportSubmissions_Comments"
 
  , "msg_UserStory_SetTimeZone"
  , "msg_UserStory_ChangedUserDetails"
@@ -572,6 +571,9 @@ labels =
  , "msg_LinkText_DeleteUsersFromCourse"
  , "msg_LinkText_DeleteUsersFromGroup"
  , "msg_LinkText_UnsubscribeFromCourse"
+ , "msg_LinkText_ExportSubmissions"
+ , "msg_LinkText_ExportSubmissionsOfGroups"
+ , "msg_LinkText_ExportSubmissionsOfOneGroup"
  , "msg_LinkText_GetSubmission"
  , "msg_LinkText_GetCourseCsv"
  , "msg_LinkText_GetGroupCsv"

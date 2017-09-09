@@ -8,10 +8,11 @@ import           Bead.View.RequestParams (groupKeyParamName,courseKeyParamName)
 import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content
 import           Bead.View.Content.ScoreInfo (scoreInfoToRawText)
+import qualified Bead.View.ContentHandler as CH
 
 import           Control.Monad (forM)
 import           Control.Monad.Trans (lift)
-import qualified Data.ByteString.UTF8 as BsUTF8 (fromString)
+import qualified Data.ByteString.Lazy.UTF8 as LBsUTF8 (fromString)
 import           Data.Function (on)
 import           Data.String (fromString)
 import           Data.List (sortBy,intercalate)
@@ -53,16 +54,7 @@ getCourseCsv = DataHandler $ do
       downloadFile filename (csvEmpty msg users)
 
 downloadFile :: FilePath -> String -> ContentHandler ()
-downloadFile filename content =
-  lift $ do
-    modifyResponse $
-      addHeader "Content-Disposition" (fromString . concat $ ["attachment; filename=\"",filename,"\""])
-    downloadPlain
-  where
-    downloadPlain :: MonadSnap m => m ()
-    downloadPlain = do
-      modifyResponse $ setContentType "text/plain; charset=\"UTF-8\""
-      writeBS (BsUTF8.fromString content)
+downloadFile filename content = CH.downloadFile filename (LBsUTF8.fromString content) CH.MimePlainText
 
 csvEmpty :: I18N -> [UserDesc] -> String
 csvEmpty msg users = (information msg) ++ unlines (header : body)

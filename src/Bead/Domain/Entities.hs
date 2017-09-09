@@ -111,6 +111,7 @@ module Bead.Domain.Entities (
 
 import           Control.Applicative
 import           Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Char8 as BC
 import           Data.Data
 import           Data.List (findIndex, sortBy)
 import           Data.Time (UTCTime(..), LocalTime, defaultTimeLocale)
