@@ -32,7 +32,7 @@ dict = DictionaryFile {
     , msg_Routing_SessionTimedOut <| "Lejárt a munkamenet"
     , msg_ErrorPage_Title <| "Error"
     , msg_ErrorPage_GoBackToLogin <| "Vissza a bejelentkezéshez"
-    , msg_ErrorPage_Header <| "Valami hiba történt... :-)"
+    , msg_ErrorPage_Header <| "Valami hiba történt... :("
     , msg_Input_Group_Name <| "Név"
     , msg_Input_Group_Description <| "Leírás"
     , msg_Input_Group_Evaluation <| "Értékelés"
