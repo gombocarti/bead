@@ -108,7 +108,8 @@ postNewGroupAssessment = do
   description <- getParameter descriptionParam
   evalConfig <- getParameter evConfigParam
   now <- liftIO getCurrentTime
-  let a = Assessment title description now evalConfig
+  let visible = True
+      a = Assessment title description now evalConfig visible
   case uploadResult of
     [File _name contents] -> do
       users <- userStory $ do
@@ -136,7 +137,8 @@ postNewCourseAssessment = do
   description <- getParameter descriptionParam
   evalConfig <- getParameter evConfigParam
   now <- liftIO getCurrentTime
-  let a = Assessment title description now evalConfig
+  let visible = True
+      a = Assessment title description now evalConfig visible
   case uploadResult of
     [File _name contents] -> do
       users <- userStory $ do
@@ -304,8 +306,8 @@ fillAssessmentTemplate pdata = do
                             (\_ -> ("",""))
                             (\_ title description _ _ _ -> (title,description))
                             (\_ title description _ _ _ -> (title,description))
-                            (\_ as _ _ -> assessment (\title description _ _ -> (title,description)) as)
-                            (\_ as _ _ _ _ -> assessment (\title description _ _ -> (title,description)) as)
+                            (\_ as _ _ -> assessment (\title description _ _ _ -> (title,description)) as)
+                            (\_ as _ _ _ _ -> assessment (\title description _ _ _ -> (title,description)) as)
                             pdata
 
     preview = pageDataAlgebra
@@ -442,7 +444,7 @@ viewAssessmentContent aDesc = do
     where
       title, description :: String
       (title, description) = let assessment = adAssessment aDesc
-                             in withAssessment assessment (\title description _ _ -> (title, description))
+                             in withAssessment assessment (\title description _ _ _ -> (title, description))
 
 evTypeSelection :: I18N -> EvConfig -> H.Html
 evTypeSelection msg selected = Bootstrap.selectionWithLabel "evConfig" evalType (== selected) selection 
@@ -479,6 +481,7 @@ postModifyAssessment = do
           , description   = newDesc
           , evaluationCfg = selectedEvType
           , created       = now
+          , visible       = True
           }
   case uploadResult of
     [File _name contents] -> do

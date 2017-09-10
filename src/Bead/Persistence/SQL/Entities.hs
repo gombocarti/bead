@@ -33,6 +33,7 @@ Assessment
   description Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   created     UTCTime
   evalConfig  JSONText sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
+  visible     Bool
   deriving Show
 
 Assignment

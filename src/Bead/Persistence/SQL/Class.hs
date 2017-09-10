@@ -297,18 +297,20 @@ instance DomainValue Domain.Assessment where
   type EntityValue Domain.Assessment = Assessment
 
   fromDomainValue = Domain.assessment $
-    \title desc createdTime cfg -> Assessment
+    \title desc createdTime cfg visible -> Assessment
       (Text.pack title)
       (Text.pack desc)
       createdTime
       (encodeEvalConfig cfg)
+      visible
 
-  toDomainValue ent = Domain.Assessment title description createdTime evalConfig
+  toDomainValue ent = Domain.Assessment title description createdTime evalConfig visible
       where
         title = Text.unpack $ assessmentTitle ent
         description = Text.unpack $ assessmentDescription ent
         createdTime = assessmentCreated ent
         evalConfig = decodeEvalConfig $ assessmentEvalConfig ent
+        visible = assessmentVisible ent
 
 instance DomainKey Domain.ScoreKey where
   type EntityForKey Domain.ScoreKey = Score

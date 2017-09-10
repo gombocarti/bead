@@ -140,7 +140,7 @@ scoreContent pd = do
       aGroup = adGroup . pdAssessmentDesc $ pd
 
       aTitle,aDesc :: String
-      (aTitle,aDesc) = assessment (\title desc _creation _cfg -> (title,desc)) as
+      (aTitle,aDesc) = assessment (\title desc _creation _cfg _visible -> (title,desc)) as
 
       as :: Assessment
       as = adAssessment . pdAssessmentDesc $ pd
@@ -188,11 +188,11 @@ viewScoreContent sd = do
         (msg . msg_ViewUserScore_Description $ "Description:") .|. fromString aDesc
     Bootstrap.rowColMd12 . H.p . fromString . (scoreInfoToText "error" msg) $ scdScore sd
   where 
-    aTitle,aDesc :: String
-    (aTitle,aDesc) = assessment (\title desc _creation _cfg -> (title,desc)) (scdAssessment sd)
+    aTitle, aDesc :: String
+    (aTitle, aDesc) = assessment (\title desc _creation _cfg _visible -> (title,desc)) (scdAssessment sd)
 
 evConfig :: Assessment -> EvConfig
-evConfig = assessment (\_title _desc _creation cfg -> cfg)
+evConfig = assessment (\_title _desc _creation cfg _visible -> cfg)
 
 evaluationFrame :: EvConfig -> I18N -> Html -> Html
 evaluationFrame evConfig msg content = do

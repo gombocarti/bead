@@ -4,16 +4,17 @@ import Data.Time (UTCTime)
 
 import Bead.Domain.Shared.Evaluation
 
--- | Assesment for a student, without any submission
+-- | Assessment for a student, without any submission
 -- just an evaluation for it.
 data Assessment = Assessment {
     title         :: String
   , description   :: String
   , created       :: UTCTime
   , evaluationCfg :: EvConfig
+  , visible       :: Bool
   } deriving (Eq, Show)
 
-assessment f (Assessment title desc creation cfg) = f title desc creation cfg
+assessment f (Assessment title desc creation cfg visible) = f title desc creation cfg visible
 
 withAssessment a f = assessment f a
 

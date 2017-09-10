@@ -185,7 +185,7 @@ scores = arbitrary
 
 date = read "2016-01-22 14:41:26 UTC"
 
-assessments = Assessment <$> manyWords <*> manyWords <*> pure date <*> evalConfigs
+assessments = Assessment <$> manyWords <*> manyWords <*> pure date <*> evalConfigs <*> arbitrary
 
 notifEvents = oneof
   [ Notification.NE_CourseAdminCreated <$> manyWords

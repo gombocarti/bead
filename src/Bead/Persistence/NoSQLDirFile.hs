@@ -549,12 +549,13 @@ instance Save Feedback where
     fileSave d "date" $ show date
 
 instance Save Assessment where
-  save d = assessment $ \title desc created evalcfg -> do
+  save d = assessment $ \title desc created evalcfg visible -> do
     createStructureDirs d assessmentDirStructure
     fileSave d "title" title
     fileSave d "desc" desc
     saveCreatedTime d created
     fileSave d "cfg" $ encodeJSON evalcfg
+    fileSave d "visible" (show visible)
 
 instance Save Score where
   save d s = do
@@ -690,6 +691,7 @@ instance Load Assessment where
     <*> fileLoad d "desc" same
     <*> getCreatedTime d
     <*> fileLoad d "cfg"  maybeDecodeJSON
+    <*> fileLoad d "visible" readMaybe
 
 instance Load Score where
   load _d = return (Score ())
@@ -764,10 +766,11 @@ instance Update TestCase where
         fileUpdateBS d "value" value
 
 instance Update Assessment where
-  update d = assessment $ \title desc _created cfg -> do
+  update d = assessment $ \title desc _created cfg visible -> do
     fileUpdate d "title" title
     fileUpdate d "desc" desc
     fileUpdate d "cfg" $ encodeJSON cfg
+    fileUpdate d "visible" $ show visible
 
 -- * Dir Structures
 

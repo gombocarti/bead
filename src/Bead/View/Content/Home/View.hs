@@ -158,7 +158,7 @@ htmlAssessmentTable board
             where
               style = [fst ST.groupButtonStyle]
               modifyLink = routeOf $ Pages.modifyAssessment ak ()
-              assessmentName = assessment (\title _desc _creation _cfg -> title) as
+              assessmentName = assessment (\title _desc _creation _cfg _visible -> title) as
 
         userLine :: I18N -> UserDesc -> Html
         userLine msg userDesc = H.tr $ do
@@ -329,7 +329,7 @@ availableAssessment msg (c, assessments) | null assessments = mempty
           where
             assessmentLabel :: (Assessment, Int) -> Html
             assessmentLabel (as,n) = Bootstrap.grayLabel (show n) ! tooltip
-                where aTitle = assessment (\title _desc _creation _cfg -> title) as
+                where aTitle = assessment (\title _desc _creation _cfg _visible -> title) as
                       tooltip = A.title . fromString $ aTitle
 
       evaluationViewButton :: ((Maybe ScoreKey, ScoreInfo),Int) -> Html
