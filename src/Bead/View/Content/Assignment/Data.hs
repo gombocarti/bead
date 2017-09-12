@@ -12,21 +12,21 @@ data PageData
     , pdTime        :: UTCTime
     , pdCourse      :: (CourseKey, Course)
     , pdTestScripts :: Maybe [(TestScriptKey, TestScriptInfo)]
-    , pdUsersFile   :: [UsersFile]
+    , pdUsersFile   :: [UsersFile FilePath]
     }
   | PD_Group {
       pdTimeZone    :: UserTimeConverter
     , pdTime        :: UTCTime
     , pdGroup       :: (GroupKey, Group)
     , pdTestScripts :: Maybe [(TestScriptKey, TestScriptInfo)]
-    , pdUsersFile   :: [UsersFile]
+    , pdUsersFile   :: [UsersFile FilePath]
     }
   | PD_Assignment {
       pdTimeZone      :: UserTimeConverter
     , pdAssignmentKey :: AssignmentKey
     , pdAssignment    :: Assignment
     , pdTestScripts   :: Maybe [(TestScriptKey, TestScriptInfo)]
-    , pdUsersFile     :: [UsersFile]
+    , pdUsersFile     :: [UsersFile FilePath]
     , pdTestCase      :: Maybe (TestCaseKey, TestCase, TestScriptKey)
     , pdEvalTypeMod   :: Bool -- True, the evalution type can be modified
     }
@@ -42,7 +42,7 @@ data PageData
     , pdTime        :: UTCTime
     , pdCourse      :: (CourseKey, Course)
     , pdTestScripts :: Maybe [(TestScriptKey, TestScriptInfo)]
-    , pdUsersFile   :: [UsersFile]
+    , pdUsersFile   :: [UsersFile FilePath]
     , pdAssignmentPreview :: Assignment
     , pdTCCreationPreview :: TCCreationParameters
     }
@@ -51,7 +51,7 @@ data PageData
     , pdTime        :: UTCTime
     , pdGroup       :: (GroupKey, Group)
     , pdTestScripts :: Maybe [(TestScriptKey, TestScriptInfo)]
-    , pdUsersFile   :: [UsersFile]
+    , pdUsersFile   :: [UsersFile FilePath]
     , pdAssignmentPreview :: Assignment
     , pdTCCreationPreview :: TCCreationParameters
     }
@@ -60,19 +60,19 @@ data PageData
     , pdAssignmentKey :: AssignmentKey
     , pdAssignment    :: Assignment
     , pdTestScripts   :: Maybe [(TestScriptKey, TestScriptInfo)]
-    , pdUsersFile     :: [UsersFile]
+    , pdUsersFile     :: [UsersFile FilePath]
     , pdTestCase      :: Maybe (TestCaseKey, TestCase, TestScriptKey)
     , pdTCModificationPreview :: TCModificationParameters
     , pdEvalTypeMod   :: Bool -- True, the evalution type can be modified
     }
 
-type TCModificationParameters = (Maybe (Maybe TestScriptKey), Maybe (Either () UsersFile), Maybe String)
+type TCModificationParameters = (Maybe (Maybe TestScriptKey), Maybe (Either () (UsersFile FilePath)), Maybe String)
 
 tcmpTextTestCase (_,_,t) = t
 tcmpFileTestCase (_,t,_) = t
 tcmpTestScriptKey (k,_,_) = k
 
-type TCCreationParameters = (Maybe (Maybe TestScriptKey), Maybe UsersFile, Maybe String)
+type TCCreationParameters = (Maybe (Maybe TestScriptKey), Maybe (UsersFile FilePath), Maybe String)
 
 tccTestScriptKey (k,_,_) = k
 tccFileTestCase  (_,t,_) = t

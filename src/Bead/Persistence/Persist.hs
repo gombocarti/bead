@@ -25,6 +25,7 @@ module Bead.Persistence.Persist (
 
   -- Users file upload
   , copyFile  -- Copies the given file with the given filename to the users data directory
+  , saveFile  -- Saves a file with a given filename and contents in the users data directory
   , listFiles -- List all the user's files
   , getFile   -- Get the current path for the user's file
 
@@ -176,8 +177,10 @@ module Bead.Persistence.Persist (
 
 import           Control.Applicative
 import           Control.Monad
+import           Data.ByteString (ByteString)
 import           Data.Time (UTCTime)
 import           Data.Set (Set)
+import           System.FilePath (FilePath)
 
 import qualified Bead.Config as Config
 import           Bead.Domain.Types (Erroneous)
@@ -257,13 +260,17 @@ scoresOfUser = PersistImpl.scoresOfUser
 
 -- * Users file upload
 
-copyFile :: Username -> FilePath -> UsersFile -> Persist () -- Copies the given file with the given filename to the users data directory
+copyFile :: Username -> FilePath -> UsersFile FilePath -> Persist () -- Copies the given file with the given filename to the users data directory
 copyFile = PersistImpl.copyFile
 
-listFiles :: Username -> Persist [(UsersFile, FileInfo)] -- List all the user's files
+-- Saves a file with a given filename and contents in the users data directory
+saveFile :: Username -> FilePath -> UsersFile ByteString -> Persist () 
+saveFile = PersistImpl.saveFile
+
+listFiles :: Username -> Persist [(UsersFile FilePath, FileInfo)] -- List all the user's files
 listFiles = PersistImpl.listFiles
 
-getFile :: Username -> UsersFile -> Persist FilePath -- Get the current path for the user's file
+getFile :: Username -> UsersFile FilePath -> Persist FilePath -- Get the current path for the user's file
 getFile = PersistImpl.getFile
 
 #ifndef SSO
@@ -435,7 +442,7 @@ modifyTestCase = PersistImpl.modifyTestCase
 removeTestCaseAssignment :: TestCaseKey -> AssignmentKey -> Persist ()
 removeTestCaseAssignment = PersistImpl.removeTestCaseAssignment
 
-copyTestCaseFile :: TestCaseKey -> Username -> UsersFile -> Persist ()
+copyTestCaseFile :: TestCaseKey -> Username -> UsersFile FilePath -> Persist ()
 copyTestCaseFile = PersistImpl.copyTestCaseFile
 
 modifyTestScriptOfTestCase :: TestCaseKey -> TestScriptKey -> Persist ()

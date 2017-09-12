@@ -28,6 +28,7 @@ import qualified Control.Monad.Except as CME
 import qualified Control.Monad.Reader as CMR
 import           Control.Monad.Trans
 import           Prelude hiding (log, userError)
+import           Data.ByteString (ByteString)
 import           Data.Hashable
 import           Data.Function (on)
 import           Data.List (nub, sortBy, (\\))
@@ -202,21 +203,30 @@ currentUser = logAction INFO "Load the current user's data" $ do
   u <- user <$> userState
   persistence $ Persist.loadUser u
 
--- Saves (copies) a file to the actual directory from the given filepath
--- which will be determined. If the user has no permission for the uploading
--- an error is thrown
-saveUsersFile :: FilePath -> UsersFile -> UserStory ()
-saveUsersFile tempPath usersfile = logAction INFO logMessage $ do
+-- Saves (copies) a file to the user's directory from the given filepath.
+-- If the user has no permission for the uploading an error is thrown
+copyUsersFile :: FilePath -> UsersFile FilePath -> UserStory ()
+copyUsersFile tempPath usersfile = logAction INFO logMessage $ do
   authorize P_Create P_File
   u <- username
   persistence $ Persist.copyFile u tempPath usersfile
   where
-    msg u = " uploads a file " ++ show u
+    msg file = " uploads a file " ++ show file
     logMessage = usersFile msg msg usersfile
+
+-- Saves a file to the user's directory with given name and contents.
+-- If the user has no permission for the uploading an error is thrown
+saveUsersFile :: FilePath -> UsersFile ByteString -> UserStory ()
+saveUsersFile filename contents = logAction INFO logMessage $ do
+  authorize P_Create P_File
+  u <- username
+  persistence $ Persist.saveFile u filename contents
+  where
+    logMessage = " uploads a file " ++ filename
 
 -- List all the user's file. If the user has no permission for the listing
 -- of files an error is thrown
-listUsersFiles :: UserStory [(UsersFile, FileInfo)]
+listUsersFiles :: UserStory [(UsersFile FilePath, FileInfo)]
 listUsersFiles = logAction INFO " lists all his files" $ do
   authorize P_Open P_File
   u <- username
@@ -224,7 +234,7 @@ listUsersFiles = logAction INFO " lists all his files" $ do
 
 -- Returns the user's data file real path, for further processing, if
 -- the user has authentication, otherwise throws an error page
-getFilePath :: UsersFile -> UserStory FilePath
+getFilePath :: UsersFile FilePath -> UserStory FilePath
 getFilePath usersfile = logAction INFO logMessage $ do
   authorize P_Open P_File
   u <- username

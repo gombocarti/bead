@@ -1,3 +1,4 @@
+{-# LANGUAGE Rank2Types #-}
 module Test.Property.Persistence (
     tests
   , createTestData
@@ -916,8 +917,34 @@ createBeadTempDir = do
   tmp <- getTemporaryDirectory
   createTempDirectory tmp "bead."
 
+userFileSaveTest = test $ testCase "Save user's file" $ do
+  reinitPersistence
+  tmpDir <- createBeadTempDir
+  us <- users 100
+  quickWithCleanUp (removeDirectoryRecursive tmpDir) 1000 $ do
+    u <- pick $ elements us
+    fn <- pick $ vectorOf 8 $ elements ['a'..'z']
+    contents <- pick $ Gen.manyWords
+    ufs <- map fst <$> (runPersistCmd $ listFiles u)
+    saveFileTest u fn contents ufs UsersPublicFile
+    ufs2 <- map fst <$> (runPersistCmd $ listFiles u)
+    saveFileTest u fn contents ufs2 UsersPrivateFile
 
-userFileHandlingTest = test $ testCase "Copy, list, and get user's data file path" $ do
+  where
+    saveFileTest :: Username -> String -> String -> [UsersFile FilePath] -> (forall a. a -> UsersFile a) -> PropertyM IO ()
+    saveFileTest u fn contents ufs tag = join $ runPersistCmd $ do
+      saveFile u fn (tag (BS.pack contents))
+      ufs' <- map fst <$> listFiles u
+      path <- getFile u (tag fn)
+      contents' <- liftIO $ readFile path
+      return $ do
+        assertSetEquals (tag fn:ufs) ufs'
+          $ concat ["New file was not saved into the ", show u, " dir"]
+        assertTrue (length path > 0) "Invalid path"
+        assertEquals contents contents' "The file content changed during saving"
+
+
+userFileCopyTest = test $ testCase "Copy, list, and get user's data file path" $ do
   reinitPersistence
   tmpDir <- createBeadTempDir
   us <- users 100
@@ -927,20 +954,24 @@ userFileHandlingTest = test $ testCase "Copy, list, and get user's data file pat
     u <- pick $ elements us
     f <- pick $ elements fs
     fn <- pick $ oneof
-      [ t <$> (vectorOf 8 $ elements ['a'..'z']) | t <- userFileTypes ]
+      [ t <$> vectorOf 8 (elements ['a'..'z']) | t <- userFileTypes ]
     ufs <- map fst <$> (runPersistCmd $ listFiles u)
     join $ case fn `elem` ufs of
       True  -> testOverwriteFile u f fn ufs
-      False -> testNewFile u f fn ufs
+      False -> testCopyFile u f fn ufs
+
   where
-    testNewFile u f fn ufs = runPersistCmd $ do
+    testCopyFile u f fn ufs = runPersistCmd $ do
       copyFile u f fn
       ufs' <- map fst <$> listFiles u
       path <- getFile u fn
+      contents <- liftIO $ readFile f
+      contents' <- liftIO $ readFile path
       return $ do
         assertSetEquals (fn:ufs) ufs'
           $ concat ["New file was not copied into the ", show u, " dir"]
         assertTrue (length path > 0) "Invalid path"
+        assertEquals contents contents' "The file content changed during copying"
 
     testOverwriteFile u f fn ufs = runPersistCmd $ do
       path  <- getFile u fn
@@ -950,7 +981,7 @@ userFileHandlingTest = test $ testCase "Copy, list, and get user's data file pat
       content' <- liftIO $ readFile path'
       return $ do
         assertEquals path path' "The overwritted file path's has changed"
-        assertEquals content content' "The file content was not overwritted"
+        assertEquals content content' "The file content was not overwritten"
 
 userOverwriteFileTest = test $ testCase "Overwrite user's data file" $ do
   reinitPersistence
@@ -1538,7 +1569,8 @@ complexTests = group "Persistence Layer Complex tests" $ do
   unsubscribeFromSubscribedGroupsTest
   saveLoadAndModifyTestScriptsTest
   saveLoadAndModifyTestCasesTest
-  userFileHandlingTest
+  userFileSaveTest
+  userFileCopyTest
   userOverwriteFileTest
   testJobCreationTest
   incomingFeedbacksTest

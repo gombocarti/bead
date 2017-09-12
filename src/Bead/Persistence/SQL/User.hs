@@ -3,6 +3,7 @@
 module Bead.Persistence.SQL.User where
 
 import           Control.Applicative
+import           Data.ByteString (ByteString)
 import           Data.Maybe
 import qualified Data.Text as Text
 
@@ -118,15 +119,19 @@ administratedGroups username =
 -- * Users file upload
 
 -- Copies the given file with the given filename to the users data directory
-copyFile :: Domain.Username -> FilePath -> Domain.UsersFile -> Persist ()
+copyFile :: Domain.Username -> FilePath -> Domain.UsersFile FilePath -> Persist ()
 copyFile = FS.copyUsersFile
 
+-- Saves a file with the given filename and contents in the users data directory
+saveFile :: Domain.Username -> FilePath -> Domain.UsersFile ByteString -> Persist ()
+saveFile = FS.saveUsersFile
+
 -- List all the user's files
-listFiles :: Domain.Username -> Persist [(Domain.UsersFile, Domain.FileInfo)]
+listFiles :: Domain.Username -> Persist [(Domain.UsersFile FilePath, Domain.FileInfo)]
 listFiles = FS.listFiles
 
 -- Get the current path for the user's file
-getFile :: Domain.Username -> Domain.UsersFile -> Persist FilePath
+getFile :: Domain.Username -> Domain.UsersFile FilePath -> Persist FilePath
 getFile = FS.getFile
 
 -- Select all the existing usernames for the given user id list

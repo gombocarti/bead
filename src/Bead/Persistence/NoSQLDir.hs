@@ -24,6 +24,7 @@ module Bead.Persistence.NoSQLDir (
   , notificationsOfUser
 
   , copyFile
+  , saveFile
   , listFiles
   , getFile
 
@@ -173,6 +174,8 @@ import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
 import Control.Exception (IOException)
 import Control.Monad (join, liftM, filterM, when, unless, forM)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString as B
 import Data.Maybe (catMaybes)
 import System.FilePath
 import System.Directory hiding (copyFile)
@@ -283,28 +286,38 @@ checkIfUserDir username = do
   correct <- hasNoRollback $ isCorrectStructure dirname userDirStructure
   unless correct . throwEx . userError $ "User directory is not correct: " ++ show username
 
-copyFile :: Username -> FilePath -> UsersFile -> Persist ()
-copyFile username tmpPath userfile = do
+withUserDir :: Username -> (FilePath -> FilePath -> Persist a) -> Persist a
+withUserDir username action = do
   checkIfUserDir username
   let dirname = dirName username
-      datadir = dirname </> (usersFile (const "public-files") (const "private-files") userfile)
-  copy tmpPath (datadir </> usersFile id id userfile)
+      public  = dirname </> publicDir
+      private = dirname </> privateDir
+  action public private
+ 
+copyFile :: Username -> FilePath -> UsersFile FilePath -> Persist ()
+copyFile username tmpPath userfile =
+  withUserDir username $ \public private ->
+    copy tmpPath (usersFile (public </>) (private </>) userfile)
+
+saveFile :: Username -> FilePath -> UsersFile B.ByteString -> Persist ()
+saveFile username filename contents = 
+  withUserDir username $ \public private ->
+    liftIO $ usersFile (B.writeFile (public </> filename)) (B.writeFile (public </> filename)) contents
 
 -- Calculates the file modification time in UTC time from the File status
 fileModificationInUTCTime = posixSecondsToUTCTime . realToFrac . modificationTime
 
-listFiles :: Username -> Persist [(UsersFile, FileInfo)]
-listFiles username = do
-  checkIfUserDir username
-  let dirname = dirName username
-  publicPaths <- getFilesInFolder (dirname </> "public-files")
+listFiles :: Username -> Persist [(UsersFile FilePath, FileInfo)]
+listFiles username =
+  withUserDir username $ \public private -> do
+  publicPaths <- getFilesInFolder public
   publicFiles <- forM publicPaths $ \path -> do
     status <- hasNoRollback $ getFileStatus path
     let info = FileInfo
                  (fileOffsetToInt $ fileSize status)
                  (fileModificationInUTCTime status)
     return (UsersPublicFile $ takeFileName path, info)
-  privatePaths <- getFilesInFolder (dirname </> "private-files")
+  privatePaths <- getFilesInFolder private
   privateFiles <- forM privatePaths $ \path -> do
     status <- hasNoRollback $ getFileStatus path
     let info = FileInfo
@@ -315,12 +328,10 @@ listFiles username = do
   where
     fileOffsetToInt (COff x) = fromIntegral x
 
-getFile :: Username -> UsersFile -> Persist FilePath
-getFile username userfile = do
-  checkIfUserDir username
-  let dirname = dirName username
-      fname   = dirname </> (usersFile (const "public-files") (const "private-files") userfile)
-                        </> (usersFile id id userfile)
+getFile :: Username -> UsersFile FilePath -> Persist FilePath
+getFile username userfile =
+  withUserDir username $ \public private -> do
+  let fname = usersFile (public </>) (private </>) userfile
   exist <- hasNoRollback $ doesFileExist fname
   unless exist . throwEx . userError $ concat [
       "File (", fname, ") does not exist in users folder ("
@@ -1109,7 +1120,7 @@ modifyTestCase tk tc = do
   unless isTC . throwEx $ userError "Test Case does not exist"
   update p tc
 
-copyTestCaseFile :: TestCaseKey -> Username -> UsersFile -> Persist ()
+copyTestCaseFile :: TestCaseKey -> Username -> UsersFile FilePath -> Persist ()
 copyTestCaseFile tk u uf = do
   let p = testCaseDirPath tk
   isTC <- isTestCaseDir p

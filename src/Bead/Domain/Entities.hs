@@ -558,10 +558,10 @@ withTestScript t tc f = testScriptCata tc f t
 testScriptAppAna name desc notes script type_
   = TestScript <$> name <*> desc <*> notes <*> script <*> type_
 
--- Name of the file that a user can upload
-data UsersFile
-  = UsersPublicFile  String
-  | UsersPrivateFile String
+-- A file that a user can upload. Usually it is either a path or file contents.
+data UsersFile a
+  = UsersPublicFile  a
+  | UsersPrivateFile a
   deriving (Data, Eq, Ord, Read, Show, Typeable)
 
 -- Template function for User's file

@@ -90,7 +90,7 @@ readTCCreationParameters = do
   mPlainTestCase      <- getOptionalParameter (stringParameter (fieldName assignmentTestCaseField) "Test Script")
   return (mTestScript, mZippedTestCaseName, mPlainTestCase)
 
-tcCreation :: Maybe (Maybe TestScriptKey) -> Maybe UsersFile -> Maybe String -> Either String TCCreation
+tcCreation :: Maybe (Maybe TestScriptKey) -> Maybe (UsersFile FilePath) -> Maybe String -> Either String TCCreation
 tcCreation Nothing        _ _ = Right NoCreation
 tcCreation (Just Nothing) _ _ = Right NoCreation
 tcCreation (Just (Just tsk)) (Just uf) _ = Right $ FileCreation tsk uf
@@ -111,7 +111,7 @@ readTCModification = do
     Nothing -> throwError . contentHandlerError $ "Some error in test case parameters"
     Just tm -> return tm
 
-tcModification :: Maybe (Maybe TestScriptKey) -> Maybe (Either () UsersFile) -> Maybe String -> Maybe TCModification
+tcModification :: Maybe (Maybe TestScriptKey) -> Maybe (Either () (UsersFile FilePath)) -> Maybe String -> Maybe TCModification
 tcModification Nothing        _ _                    = Just NoModification
 tcModification (Just Nothing) _ _                    = Just TCDelete
 tcModification (Just (Just _tsk)) (Just (Left ())) _  = Just NoModification

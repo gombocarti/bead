@@ -297,7 +297,7 @@ userSubmissionDescPermissions = ObjectPermissions [
 
 data TCCreation
   = NoCreation
-  | FileCreation TestScriptKey UsersFile
+  | FileCreation TestScriptKey (UsersFile FilePath)
   | TextCreation TestScriptKey String
   deriving (Eq)
 
@@ -312,7 +312,7 @@ tcCreationCata
 
 data TCModification
   = NoModification
-  | FileOverwrite TestScriptKey UsersFile
+  | FileOverwrite TestScriptKey (UsersFile FilePath)
   | TextOverwrite TestScriptKey String
   | TCDelete
   deriving (Eq)
