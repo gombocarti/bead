@@ -86,7 +86,7 @@ removeTestCaseAssignment tk ak =
   deleteBy (UniqueTestCaseToAssignment (toEntityKey ak) (toEntityKey tk))
 
 -- Copy the Zipped test case file into the test case
-copyTestCaseFile :: Domain.TestCaseKey -> Domain.Username -> Domain.UsersFile -> Persist ()
+copyTestCaseFile :: Domain.TestCaseKey -> Domain.Username -> Domain.UsersFile FilePath -> Persist ()
 copyTestCaseFile tcKey username userfile =
   withUser username (persistError "copyTestCaseFile" $ "User is not found:" ++ show username)
   (\_userEnt -> void $ do

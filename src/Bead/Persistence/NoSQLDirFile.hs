@@ -57,6 +57,8 @@ feedbackDir = "feedback"
 assessmentDir = "assessment"
 scoreDir = "score"
 notificationDir = "notification"
+publicDir = "public-files"
+privateDir = "private-files"
 
 courseDataDir   = joinPath [dataDir, courseDir]
 userDataDir     = joinPath [dataDir, userDir]
@@ -816,10 +818,10 @@ userDirStructure = DirStructure {
       , "courseadmin"
       , "groupadmin"
       , "submissions"
-      , "public-files"
+      , publicDir
       , "score"
       , "notification"
-      , "private-files"
+      , privateDir
       ]
   }
 

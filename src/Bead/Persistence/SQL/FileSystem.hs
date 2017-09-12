@@ -6,7 +6,8 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 
 import           Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString as B
 import           Data.List (isSuffixOf)
 import           Data.Maybe
 import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
@@ -26,6 +27,12 @@ datadir = "data"
 testOutgoingDir = "test-outgoing"
 testIncomingDir = "test-incoming"
 userDir = "user"
+
+publicDir :: FilePath
+publicDir = "public-files"
+
+privateDir :: FilePath
+privateDir = "private-files"
 
 testOutgoingDataDir = joinPath [datadir, testOutgoingDir]
 testIncomingDataDir = joinPath [datadir, testIncomingDir]
@@ -59,7 +66,7 @@ fileLoadBS :: (MonadIO io) => FilePath -> io ByteString
 fileLoadBS fname = liftIO $ do
   h <- openFile fname ReadMode
   hSetEncoding h utf8
-  s <- BS.hGetContents h
+  s <- BC.hGetContents h
   s `deepseq` hClose h
   return s
 
@@ -74,7 +81,7 @@ fileSaveBS :: (MonadIO io) => FilePath -> ByteString -> io ()
 fileSaveBS fname s = liftIO $ do
   handler <- openFile fname WriteMode
   hSetEncoding handler utf8
-  BS.hPutStr handler s
+  BC.hPutStr handler s
   hClose handler
 
 filterDirContents :: (MonadIO io) => (FilePath -> IO Bool) -> FilePath -> io [FilePath]
@@ -113,31 +120,41 @@ createDirectoryLocked d m = do
   createDirectory d'
   m d'
   renameDirectory d' d
-
+                  
 createUserFileDir :: (MonadIO io) => Username -> io ()
 createUserFileDir u = liftIO $
-  forM_ ["private-files", "public-files" ] $ \d -> do
+  forM_ [privateDir, publicDir] $ \d -> do
     let dir = dirName u </> d
     exists <- doesDirectoryExist dir
     unless exists $ createDirectoryIfMissing True dir
 
-copyUsersFile :: (MonadIO io) => Username -> FilePath -> UsersFile -> io ()
-copyUsersFile username tmpPath userfile = liftIO $ do
+withUsersDir :: (MonadIO io) => Username -> (FilePath -> FilePath -> io a) -> io a
+withUsersDir username action = do
   createUserFileDir username
   let dirname = dirName username
-      publicDir  = dirname </> "public-files"
-      privateDir = dirname </> "private-files"
-  Dir.copyFile tmpPath $ usersFile (publicDir </>) (privateDir </>) userfile
+      public  = dirname </> publicDir
+      private = dirname </> privateDir
+  action public private
+
+copyUsersFile :: (MonadIO io) => Username -> FilePath -> UsersFile FilePath -> io ()
+copyUsersFile username tmpPath userfile = 
+  withUsersDir username $ \public private -> 
+    liftIO $ Dir.copyFile tmpPath $ usersFile (public </>) (private </>) userfile
+
+saveUsersFile :: (MonadIO io) => Username -> FilePath -> UsersFile ByteString -> io ()
+saveUsersFile username filename userfile = 
+  withUsersDir username $ \public private ->
+    liftIO $ usersFile (B.writeFile (public </> filename)) (B.writeFile (private </> filename)) userfile
 
 -- Calculates the file modification time in UTC time from the File status
 fileModificationInUTCTime = posixSecondsToUTCTime . realToFrac . modificationTime
 
-listFiles :: (MonadIO io) => Username -> io [(UsersFile, FileInfo)]
+listFiles :: (MonadIO io) => Username -> io [(UsersFile FilePath, FileInfo)]
 listFiles username = liftIO $ do
   createUserFileDir username
   let dirname = dirName username
-  privateFiles <- f (dirname </> "private-files") UsersPrivateFile
-  publicFiles  <- f (dirname </> "public-files") UsersPublicFile
+  privateFiles <- f (dirname </> privateDir) UsersPrivateFile
+  publicFiles  <- f (dirname </> publicDir) UsersPublicFile
   return $ privateFiles ++ publicFiles
   where
     f dir typ = do
@@ -151,13 +168,10 @@ listFiles username = liftIO $ do
 
     fileOffsetToInt (COff x) = fromIntegral x
 
-getFile :: (MonadIO io) => Username -> UsersFile -> io FilePath
-getFile username userfile = liftIO $ do
-  createUserFileDir username
-  let dirname = dirName username
-      publicDir  = dirname </> "public-files"
-      privateDir = dirname </> "private-files"
-  usersFile (f publicDir) (f privateDir) userfile
+getFile :: (MonadIO io) => Username -> UsersFile FilePath -> io FilePath
+getFile username userfile = 
+  withUsersDir username $ \public private ->
+    liftIO $ usersFile (f public) (f private) userfile
   where
     f dir fn = do
       let fname = dir </> fn
