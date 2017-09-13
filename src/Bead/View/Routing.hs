@@ -403,7 +403,7 @@ routingTest =
                ps = requestToParams . P.pageValue $ pageRequestParams p
            in requestToPage rp ps == Just p)
     P.pageGen
-    "For each page must be requestToPage must be defined"
+    "requestToPage must be defined for each page"
 
 
 #endif
