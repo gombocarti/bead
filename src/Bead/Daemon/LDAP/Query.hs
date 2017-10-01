@@ -40,8 +40,9 @@ queryResult
     QueryError msg -> queryError msg
 
 data QuerySettings = QuerySettings
-  { queryTimeout :: Int
-  , queryCommand :: String
+  { queryTimeout     :: Int
+  , queryCommand     :: String
+  , queryUsernameKey :: String
   }
 
 exitCode :: (Int -> a) -> a -> ExitCode -> a
@@ -56,11 +57,11 @@ raise = left
 type Query a = EitherT String (ReaderT QuerySettings IO) a
 
 ldapsearch :: String -> [String] -> Query [(String,String)]
-ldapsearch uid attrs = do
-  (t,cmd:args) <- asks $ queryTimeout &&& (words . queryCommand)
+ldapsearch username attrs = do
+  (t,(cmd:args,usernameKey)) <- asks $ queryTimeout &&& (words . queryCommand) &&& queryUsernameKey
   (ec,out,err) <- liftIO (timeout (t * 1000000) $
     readProcessWithExitCode
-      cmd (args ++ ["uid=" ++ uid] ++ attrs)
+      cmd (args ++ concat [usernameKey, "=", username] : attrs)
       "")
     >>= maybe (raise "timed out") return
   let out1 = DT.replace (fromString "\n ") (fromString "") $ fromString out
@@ -83,6 +84,6 @@ ldapsearch uid attrs = do
        Just cs2   = DT.stripPrefix colonColon cs
 
 query :: QuerySettings -> String -> [String] -> IO QueryResult
-query cfg usr attrs =
+query cfg username attrs =
  fmap (either QueryError id) $ flip runReaderT cfg . runEitherT $ do
-   QueryOK <$> ldapsearch usr attrs
+   QueryOK <$> ldapsearch username attrs

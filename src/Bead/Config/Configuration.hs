@@ -98,24 +98,26 @@ data FilePersistConfig = FilePersistConfig
 -- Login configuration that is used in single sign-on (SSO)
 data SSOLoginConfig = SSOLoginConfig {
     -- Query timeout (in seconds)
-    sSOTimeout       :: Int
+    sSOTimeout         :: Int
     -- Number of query threads
-  , sSOThreads       :: Int
+  , sSOThreads         :: Int
     -- A format string that tells how to query LDAP attributes
     -- on the given system
-  , sSOQueryCommand  :: String
+  , sSOQueryCommand    :: String
+    -- Key for username in LDAP
+  , sSOUsernameKey     :: String
     -- Key for UserID in LDAP
-  , sSOUserIdKey     :: String
+  , sSOUserIdKey       :: String
     -- Key for the user's full name in LDAP
-  , sSOUserNameKey   :: String
+  , sSOUserFullNameKey :: String
     -- Key for the user's email address in LDAP
-  , sSOUserEmailKey  :: String
+  , sSOUserEmailKey    :: String
     -- Enable login through a direct link, without SSO
-  , sSODeveloperMode :: Bool
+  , sSODeveloperMode   :: Bool
   } deriving (Eq, Show, Read)
 
-sSOLoginConfig f (SSOLoginConfig timeout threads cmd uik unk uek dev)
-  = f timeout threads cmd uik unk uek dev
+sSOLoginConfig f (SSOLoginConfig timeout threads cmd unk uik ufnk uek dev)
+  = f timeout threads cmd unk uik ufnk uek dev
 #else
 -- Login configuration that is used in standalone registration and login mode
 data StandaloneLoginConfig = StandaloneLoginConfig {
@@ -151,8 +153,9 @@ defaultLoginConfig =
       sSOTimeout = 5
     , sSOThreads = 4
     , sSOQueryCommand = "ldapsearch"
-    , sSOUserIdKey = "uid"
-    , sSOUserNameKey = "name"
+    , sSOUsernameKey = "sAMAccountName"
+    , sSOUserIdKey = "l"
+    , sSOUserFullNameKey = "name"
     , sSOUserEmailKey = "email"
     , sSODeveloperMode = False
     }

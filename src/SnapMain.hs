@@ -73,12 +73,13 @@ printConfigInfo = configCata loginConfigPart $ \logfile timeout dll dtz zoneInfo
     configLn s = putStrLn ("CONFIG: " ++ s)
     loginConfigPart =
 #ifdef SSO
-      sSOLoginConfig $ \timeout threads cmd uik unk uek _dev -> do
+      sSOLoginConfig $ \timeout threads cmd unk uik ufnk uek _dev -> do
          configLn $ "Timeout for LDAP queries: " ++ show timeout
          configLn $ "Number of LDAP query threads: " ++ show threads
          configLn $ "LDAP query command: " ++ show cmd
+         configLn $ "LDAP key for the Username: " ++ show unk
          configLn $ "LDAP key for the UserID: " ++ show uik
-         configLn $ "LDAP key for the User's full name: " ++ show unk
+         configLn $ "LDAP key for the User's full name: " ++ show ufnk
          configLn $ "LDAP key for the User's email: " ++ show uek
 #else
       standaloneLoginConfig $ \regexp example -> do
@@ -96,12 +97,13 @@ checkConfig cfg = do
 
   let loginCfgPart =
 #ifdef SSO
-        sSOLoginConfig $ \timeout threads cmd uik unk uek _dev -> do
+        sSOLoginConfig $ \timeout threads cmd unk uik ufnk uek _dev -> do
           check (timeout > 0) "LDAP query timeout is less or equal to zero"
           check (threads > 0) "LDAP query thread number is less or equals to zero"
           check (not $ null cmd) "LDAP query command is empty"
+          check (not $ null unk) "LDAP Username key is empty"
           check (not $ null uik) "LDAP UID key is empty"
-          check (not $ null unk) "LDAP User's fullname key is empty"
+          check (not $ null ufnk) "LDAP User's fullname key is empty"
           check (not $ null uek) "LDAP User's email key is empty"
 #else
         -- Standalone: Check the given username example against the given username regexp, if the
@@ -179,13 +181,14 @@ startService config = do
     defaultLDAPConfig = LDAPDaemonConfig 0 0 "" "" "" ""
 
     ldapDaemonConfig =
-      sSOLoginConfig $ \timeout threads cmd uik unk uek _dev ->
+      sSOLoginConfig $ \timeout threads cmd unk uik ufnk uek _dev ->
         LDAPDaemonConfig {
           timeout = timeout,
           workers = threads,
           command = cmd,
+          usernameKey = unk,
           uidKey = uik,
-          nameKey = unk,
+          fullnameKey = ufnk,
           emailKey = uek
         }
 #endif
