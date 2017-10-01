@@ -81,7 +81,8 @@ viewPageValue = viewPageCata
     cid = const id
 
 -- Pages that extract information from the persistence
--- and all the data will be rendered in the response
+-- and only the data will be rendered in the response
+-- (e.g. file download)
 data DataPage a
   = ExportSubmissions AssignmentKey a
   | ExportSubmissionsOfGroups AssignmentKey E.Username a
@@ -122,8 +123,8 @@ dataPageValue = dataPageCata
     c2id = const . cid
 
 -- User View pages are rendered using the data stored in the
--- persistence and some temporary data given by the user. Mainly
--- is for the information propagation to the user in a stated way.
+-- persistence and temporary data given by the user (e.g. form data).
+-- This is mainly for information propagation to the user in a stateful way.
 data UserViewPage a
   = NewGroupAssignmentPreview GroupKey a
   | NewCourseAssignmentPreview CourseKey a
