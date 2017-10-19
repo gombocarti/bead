@@ -81,15 +81,15 @@ submissionTable tableId now stb table = submissionTableContextCata html stb wher
   html _username courses groups testscripts = do
     msg <- getI18N
     return $ do
-      H.h4 . H.b $ fromString $ stiCourse table ++ userCountText msg
+      H.h4 . H.b $ fromString $ unwords [stiCourse table, userCountText msg]
       i18n msg $ assignmentCreationMenu courses groups table
       i18n msg $ submissionTablePart tableId now stb table
       i18n msg $ courseTestScriptTable testscripts table
 
-  userCountText msg = concat [" (", show userCount, " "
-                             , if (userCount > 1)
-                                 then msg $ msg_Home_SubmissionTable_Students "students"
-                                 else msg $ msg_Home_SubmissionTable_Student "student"
+  userCountText msg = concat ["(", show userCount, " "
+                             , if (userCount == 1)
+                                 then msg $ msg_Home_SubmissionTable_Student "student"
+                                 else msg $ msg_Home_SubmissionTable_Students "students"
                              , ")"
                              ]
   userCount = length (stiUsers table)
