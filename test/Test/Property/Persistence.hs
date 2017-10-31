@@ -584,24 +584,6 @@ courseNameAndAdminsTest = test $ testCase "Every assignment has to have a name a
     assertNonEmpty name "Course name was empty"
     assertTrue (length admins' == length admins) "Admin numbers are different"
 
--- Every assignment and an associated user has a submission list,
--- which contains information about the submissions posted to the given assignment
--- by the user
-submissionListDescTest = test $ testCase "Every assignment and an associated user has a submission list" $ do
-  reinitPersistence
-  cs <- courses 100
-  gs <- groups 200 cs
-  as <- courseAndGroupAssignments 200 200 cs gs
-  us <- users 300
-  ss <- infoListToSubmissionKeys <$> submissions 400 us as
-  quick 500 $ do
-    u <- pick $ elements us
-    a <- pick $ elements as
-    desc <- runPersistCmd $ submissionListDesc u a
-    assertNonEmpty (slGroup desc) "Group was empty"
-    assertNonEmpty (Assignment.desc $ slAssignment desc) "Assignment was empty"
-    assertEmpty (slTeacher desc) "There was teachers to the group"
-
 -- Allways the last evaluation is valid for the submission.
 lastEvaluationTest = test $ testCase "Allways the last evaluation is valid for the submission" $ do
   reinitPersistence
@@ -1554,7 +1536,6 @@ complexTests = group "Persistence Layer Complex tests" $ do
   groupDescriptionTest
   submissionDescTest
   courseNameAndAdminsTest
-  submissionListDescTest
   lastEvaluationTest
   submissionDetailsDescTest
   submissionTablesTest

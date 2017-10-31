@@ -277,11 +277,18 @@ availableAssignments pd timeconverter studentAssignments
 
     assignmentLine msg isLimited (k,a,s) = H.tr $ do
       case and [aActive a, noLimitIsReached a] of
-        True -> td $ Content.link (routeOf (Pages.submission k ())) (msg $ msg_Home_NewSolution "New submission")
-        False -> td (fromString . msg $ msg_Home_ClosedSubmission "Closed")
+        True ->
+          td $ H.span
+                 ! A.class_ "glyphicon glyphicon-lock"
+                 ! A.style "visibility: hidden"
+                 $ mempty
+        False ->
+          td $ H.span
+                 ! A.class_ "glyphicon glyphicon-lock"
+                 $ mempty
       td (fromString . aGroup $ a)
       td (fromString . join . intersperse ", " . sortHun . aTeachers $ a)
-      td $ linkWithText (routeOf (Pages.submissionList k ())) (fromString (aTitle a))
+      td $ linkWithText (routeOf (Pages.submission k ())) (fromString (aTitle a))
       when isLimited $ td (fromString . limit $ aLimit a)
       td (fromString . showDate . timeconverter $ aEndDate a)
       let tooltip tag text = tag ! A.title (fromString text)

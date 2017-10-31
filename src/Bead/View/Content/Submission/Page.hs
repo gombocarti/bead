@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Bead.View.Content.Submission.Page (
     submission
-  , resolveStatus
   ) where
 
 import           Control.Monad
@@ -24,7 +23,9 @@ import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
 import qualified Bead.Domain.Entities as E
 import qualified Bead.Domain.Entity.Assignment as Assignment
-import           Bead.View.Content
+import qualified Bead.Domain.Shared.Evaluation as Eval
+import           Bead.View.Content hiding (submissionForm)
+import qualified Bead.View.Content as C
 import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.Submission.Common
@@ -40,6 +41,7 @@ data PageData = PageData {
   , asNow :: UTCTime
   , asMaxFileSize :: Int
   , asLimit :: SubmissionLimit
+  , asSubmissions :: UserSubmissionInfo
   }
 
 data UploadResult
@@ -55,23 +57,25 @@ submissionPage = do
   ut <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ getCurrentTime
   size <- fmap maxUploadSizeInKb $ lift getConfiguration
-  -- TODO: Refactor use guards
-  let renderPage limit (desc,asg) =
-        return $ submissionContent
-          (PageData { asKey = ak, asValue = asg, asDesc = desc, asTimeConv = ut, asNow = now, asMaxFileSize = size, asLimit = limit })
-
-  limit <- userStory $ do
-    asg <- Story.userAssignmentForSubmission ak -- GUARD
+  (limit, aDesc, asg, submissions) <- userStory $ do
+    (aDesc, asg) <- Story.userAssignmentForSubmission ak
     lmt <- Story.assignmentSubmissionLimit ak
-    return $! fmap (const asg) lmt
+    submissions <- Story.userSubmissionInfos ak
+    return $! (lmt, aDesc, asg, submissions)
 
-  let limit' = fmap (const ()) limit
-  submissionLimit
-    (renderPage limit')
-    (const (renderPage limit'))
-    (const $ return (fromString "Limit is reached"))
-    limit
-
+  if (now < Assignment.start asg)
+    then return assignmentNotAvailableYetContent
+    else return $ submissionContent $
+           PageData {
+               asKey = ak
+             , asValue = asg
+             , asDesc = aDesc
+             , asTimeConv = ut
+             , asNow = now
+             , asMaxFileSize = size
+             , asLimit = limit
+             , asSubmissions = submissions
+             }
 
 submissionPostHandler :: POSTContentHandler
 submissionPostHandler = do
@@ -140,7 +144,11 @@ submissionPostHandler = do
             _         -> InvalidFile
         _                         -> return UnnamedFile
 
-
+assignmentNotAvailableYetContent :: IHtml
+assignmentNotAvailableYetContent = do
+  msg <- getI18N
+  return $ Bootstrap.rowColMd12 $ Bootstrap.alert Bootstrap.Danger $
+    H.p $ fromString $ msg $ msg_Submission_AssignmentNotAvailableYet "The assignment is not available yet. Check back later."
 
 submissionContent :: PageData -> IHtml
 submissionContent p = do
@@ -162,34 +170,95 @@ submissionContent p = do
                 (Assignment.end $ asValue p))
         maybe (return ()) (uncurry (.|.)) (remainingTries msg (asLimit p))
     Bootstrap.rowColMd12 $ do
+      let submissions = asSubmissions p
+      userSubmissionInfo msg submissions
+       
+    Bootstrap.rowColMd12 $ do
+      submissionLimit
+        (const $ submissionForm msg)
+        (const . const $ submissionForm msg)
+        (const $ limitReached msg)
+        (asLimit p)
+ 
+    Bootstrap.rowColMd12 $ do
       H.h2 $ fromString $ msg $ msg_Submission_Description "Description"
       H.div # assignmentTextDiv $ markdownToHtml $ Assignment.desc $ asValue p
-    postForm (routeOf submission) `withId` (rFormId submissionForm) ! A.enctype "multipart/form-data" $ do
-      assignmentPassword msg
-      Bootstrap.rowColMd12 $ h2 $
-        fromString $ msg $ msg_Submission_Solution "Submission"
-      if (Assignment.isZippedSubmissions aspects)
-        then
-          Bootstrap.formGroup $ do
-            Bootstrap.helpBlock $
-              (msg $ msg_Submission_Info_File
-                "Please select a file with .zip extension to submit.  Note that the maximum file size in kilobytes: ") ++
-              (fromString $ show $ asMaxFileSize p)
-            fileInput (fieldName submissionFileField)
-        else
-          Bootstrap.textArea (fieldName submissionTextField) "" ""
-      Bootstrap.submitButton (fieldName submitSolutionBtn) (fromString $ msg $ msg_Submission_Submit "Submit")
 
   where
     submission = Pages.submission (asKey p) ()
     aspects = Assignment.aspects $ asValue p
 
+    limitReached :: I18N -> H.Html
+    limitReached msg = Bootstrap.alert Bootstrap.Danger $ H.p $ fromString $ msg $
+      msg_Submission_LimitReached "Submission limit is reached."
+
+    submissionForm :: I18N -> H.Html
+    submissionForm msg =
+      if (Assignment.isActive (asValue p) (asNow p))
+        then do
+          h2 $ fromString $ msg $ msg_Submission_Solution "Solution"
+          postForm (routeOf submission) `withId` (rFormId C.submissionForm) ! A.enctype "multipart/form-data" $ do
+            assignmentPassword msg
+            if (Assignment.isZippedSubmissions aspects)
+              then
+                Bootstrap.formGroup $ do
+                  Bootstrap.helpBlock $
+                    (msg $ msg_Submission_Info_File
+                      "Please select a file with .zip extension to submit.  Note that the maximum file size in kilobytes: ") ++
+                    (fromString $ show $ asMaxFileSize p)
+                  fileInput (fieldName submissionFileField)
+              else
+                Bootstrap.textArea (fieldName submissionTextField) "" ""
+            Bootstrap.submitButton (fieldName submitSolutionBtn) (fromString $ msg $ msg_Submission_Submit "Submit")
+        else
+          Bootstrap.alert Bootstrap.Danger $ H.p $ fromString . msg $
+            msg_Submission_SubmissionFormDeadlineReached "Deadline is reached."
+
+    assignmentPassword :: I18N -> H.Html
     assignmentPassword msg =
       when (Assignment.isPasswordProtected aspects) $ do
         H.p $ fromString . msg $ msg_Submission_Info_Password
           "This assignment can only accept submissions by providing the password."
         Bootstrap.passwordInput (fieldName submissionPwdField) (msg $ msg_Submission_Password "Password for the assignment:")
 
-resolveStatus :: I18N -> Maybe String -> H.Html
-resolveStatus msg Nothing     = fromString . msg $ msg_SubmissionList_NotEvaluatedYet "Not evaluated yet"
-resolveStatus _msg (Just str) = fromString str
+    userSubmissionInfo :: I18N -> UserSubmissionInfo -> H.Html
+    userSubmissionInfo msg submissions =
+      userSubmission msg (submissionLine msg) submissions
+
+    userSubmission :: I18N -> ((SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy) -> H.Html) -> UserSubmissionInfo -> H.Html
+    userSubmission msg line submissions
+      | not $ null submissions = do
+          Bootstrap.rowColMd12 $ Bootstrap.listGroup $ mapM_ line submissions
+      | otherwise = do
+          (Bootstrap.rowColMd12 $ H.p $ fromString $ msg $ msg_Submission_NoSubmittedSolutions "There are no submissions.")
+
+    submissionLine :: I18N -> (SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy) -> H.Html
+    submissionLine msg (sk, time, status, _t) = do
+      Bootstrap.listGroupLinkItem
+        (routeOf $ submissionDetails (asKey p) sk)
+        (do Bootstrap.badge (resolveStatus msg status); fromString . showDate $ (asTimeConv p) time)
+        where
+          submissionDetails :: AssignmentKey -> SubmissionKey -> Pages.Page a b () c d
+          submissionDetails ak sk = Pages.submissionDetails ak sk ()
+
+    resolveStatus :: I18N -> SubmissionInfo -> String
+    resolveStatus msg = submissionInfoCata
+      (msg $ msg_Submission_NotFound "Not Found")
+      (msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet")
+      (bool (msg $ msg_Submission_TestsPassed "Tests are passed")
+            (msg $ msg_Submission_TestsFailed "Tests are failed"))
+      (const (evaluationResultMsg . Eval.evResult))
+      where
+        evaluationResultMsg :: Eval.EvaluationData Eval.Binary Eval.Percentage Eval.FreeForm -> String
+        evaluationResultMsg = evaluationResultCata
+          (Eval.binaryCata (Eval.resultCata
+            (msg $ msg_Submission_Passed "Passed")
+            (msg $ msg_Submission_Failed "Failed")))
+          (Eval.percentageCata (fromString . scores))
+          (Eval.freeForm fromString)
+
+        scores :: Eval.Scores Double -> String
+        scores (Eval.Scores [])  = "0%"
+        scores (Eval.Scores [p]) = concat [show . round $ 100 * p, "%"]
+        scores _                 = "???%"
+

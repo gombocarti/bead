@@ -20,7 +20,6 @@ import           Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.Comments
 import           Bead.View.Content.SeeMore
 import           Bead.View.Content.Submission.Common
-import           Bead.View.Content.Submission.Page (resolveStatus)
 import           Bead.View.Markdown
 
 import           Text.Blaze.Html5 as H
@@ -151,6 +150,11 @@ submissionDetailsContent p = do
     submissionDetails ak sk = Pages.submissionDetails ak sk ()
     maxLength = 2048
     maxLines  = 100
+
+    resolveStatus :: I18N -> Maybe String -> H.Html
+    resolveStatus msg Nothing     = fromString . msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet"
+    resolveStatus _msg (Just str) = fromString str
+
 
 invalidSubmission :: IHtml
 invalidSubmission = do

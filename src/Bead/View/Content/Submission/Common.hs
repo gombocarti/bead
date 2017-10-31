@@ -9,4 +9,4 @@ remainingTries msg =
   submissionLimit
     (const $ Nothing)
     (\n _ -> Just (fromString . msg $ msg_Submission_Remaining "Reamining:", fromString $ show n))
-    (const $ Just (fromString . msg $ msg_Submission_Remaining "Remaining:", fromString . msg $ msg_Submission_NoTriesLeft "No Tries left."))
+    (const $ Just (fromString . msg $ msg_Submission_Remaining "Remaining:", fromString . msg $ msg_Submission_NoTriesLeft "No tries left."))
