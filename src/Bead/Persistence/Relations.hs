@@ -1,9 +1,9 @@
 {-# LANGUAGE CPP #-}
 module Bead.Persistence.Relations (
-    userAssignmentKeys
+    assignmentDesc
+  , userAssignmentKeys
   , userAssignmentKeyList
   , submissionDesc
-  , submissionListDesc
   , submissionDetailsDesc
   , groupDescription
   , isAdminedSubmission
@@ -11,6 +11,7 @@ module Bead.Persistence.Relations (
   , submissionTables
   , courseSubmissionTableInfo
   , userSubmissionDesc
+  , userSubmissionInfos
   , userLastSubmissionInfo
   , courseOrGroupOfAssignment
   , courseOrGroupOfAssessment
@@ -155,6 +156,22 @@ courseOrGroupOfAssignment ak = do
       case mCk of
         Just ck -> return . Left $ ck
         Nothing -> error $ "Impossible: No course or groupkey was found for the assignment:" ++ show ak
+
+assignmentDesc :: UTCTime -> Username -> AssignmentKey -> Persist AssignmentDesc
+assignmentDesc now user key = do
+  a <- loadAssignment key
+  limit <- submissionLimitOfAssignment user key
+  let aspects = Assignment.aspects a
+  (name, adminNames) <- courseNameAndAdmins key
+  return $! AssignmentDesc {
+      aActive = Assignment.isActive a now
+    , aIsolated = Assignment.isIsolated aspects
+    , aLimit = limit
+    , aTitle  = Assignment.name a
+    , aTeachers = adminNames
+    , aGroup  = name
+    , aEndDate = Assignment.end a
+    }
 
 administratedGroupsWithCourseName :: Username -> Persist [(GroupKey, Group, String)]
 administratedGroupsWithCourseName u = do
@@ -302,30 +319,18 @@ courseNameAndAdmins ak = do
   adminNames <- mapM (fmap ud_fullname . userDescription) admins
   return (name, adminNames)
 
-
-submissionListDesc :: Username -> AssignmentKey -> Persist SubmissionListDesc
-submissionListDesc u ak = do
-  (name, adminNames) <- courseNameAndAdmins ak
-  asg <- loadAssignment ak
-  now <- liftIO getCurrentTime
-
-  submissions <- do
-    us <- userSubmissions u ak
-    mapM submissionStatus us
-
-  return SubmissionListDesc {
-    slGroup = name
-  , slTeacher = adminNames
-  , slAssignment = asg
-  , slSubmissions = submissions
-  }
+userSubmissionInfos :: Username -> AssignmentKey -> Persist UserSubmissionInfo
+userSubmissionInfos u ak = do
+  us <- userSubmissions u ak
+  infos <- mapM submissionStatus us
+  return $ sortSbmDescendingByTime infos
   where
+    submissionStatus :: SubmissionKey -> Persist (SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy)
     submissionStatus sk = do
       time <- solutionPostDate <$> loadSubmission sk
       si <- submissionInfo sk
       return (sk, time, si, "TODO: EvaluatedBy")
 
-    submissionTime sk = solutionPostDate <$> loadSubmission sk
 
 submissionEvalStr :: SubmissionKey -> Persist (Maybe String)
 submissionEvalStr sk = do

@@ -319,7 +319,6 @@ routeToPageMap = Map.fromList [
   , (evaluationTablePath  , j $ P.evaluationTable ())
   , (evaluationPath , \ps -> P.evaluation <$> submissionKey ps <*> unit)
   , (submissionPath , \ps -> P.submission <$> assignmentKey ps <*> unit)
-  , (submissionListPath   , \ps -> P.submissionList <$> assignmentKey ps <*> unit)
   , (viewUserScorePath    , \ps -> P.viewUserScore <$> scoreKey ps <*> unit)
   , (newUserScorePath     , \ps -> P.newUserScore <$> assessmentKey ps <*> username ps <*> unit)
   , (modifyUserScorePath  , \ps -> P.modifyUserScore <$> scoreKey ps <*> unit)

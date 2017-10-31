@@ -24,7 +24,6 @@ module Bead.View.RouteOf (
   , evaluationTablePath
   , evaluationPath
   , submissionPath
-  , submissionListPath
   , viewUserScorePath
   , newUserScorePath
   , modifyUserScorePath
@@ -134,9 +133,6 @@ evaluationPath = "/evaluation"
 
 submissionPath :: RoutePath
 submissionPath = "/submission"
-
-submissionListPath :: RoutePath
-submissionListPath = "/submission-list"
 
 userSubmissionsPath :: RoutePath
 userSubmissionsPath = "/user-submissions"
@@ -293,7 +289,6 @@ pageRoutePath = pfmap id id id id id . r where
     newCourseAssignmentPreviewPath
     modifyAssignmentPreviewPath
     submissionPath
-    submissionListPath
     submissionDetailsPath
     viewUserScorePath
     newUserScorePath
@@ -353,7 +348,6 @@ pageRequestParams = liftsP
   (\ck _ -> [requestParam ck]) -- newCourseAssignmentPreview
   (\ak _ -> [requestParam ak]) -- modifyAssignmentPreview
   (\ak _ -> [requestParam ak]) -- submission
-  (\ak _ -> [requestParam ak]) -- submissionList
   (\ak sk _ -> [requestParam ak, requestParam sk]) -- submissionDetails
   (\sk _ -> [requestParam sk]) -- viewUserScore
   (\assk u _ -> [requestParam assk, requestParam u]) -- newUserScore
