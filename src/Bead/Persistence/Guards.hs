@@ -105,10 +105,10 @@ isAdministratedEvaluation u ek = do
     falseOr k = maybe (return False) k
 
 -- Returns True if the given user submitted the given submission, otherwise false
-isUserSubmission :: Username -> SubmissionKey -> Persist Bool
-isUserSubmission u sk = do
-  ak <- assignmentOfSubmission sk
-  isUsersAssignment u ak
+isUserOfSubmission :: Username -> SubmissionKey -> Persist Bool
+isUserOfSubmission u sk = do
+  user <- usernameOfSubmission sk
+  return (user == u)
 
 -- Returns true if the assignment of submission is in ballot box mode at the
 -- moment of the query, otherwise false.
@@ -123,7 +123,7 @@ isInBallotBox sk = do
 -- administrates a course or group that the submission is submitted
 isAccessibleSubmission :: Username -> SubmissionKey -> Persist Bool
 isAccessibleSubmission u sk = do
-  owns <- isUserSubmission u sk
+  owns <- isUserOfSubmission u sk
   admined <- isAdministratedSubmission u sk
   return $ or [owns, admined]
 
@@ -132,7 +132,7 @@ isAccessibleSubmission u sk = do
 -- mode at the moment of the query.
 isAccessibleBallotBoxSubmission :: Username -> SubmissionKey -> Persist Bool
 isAccessibleBallotBoxSubmission u sk = do
-  owns    <- isUserSubmission u sk
+  owns    <- isUserOfSubmission u sk
   admined <- isAdministratedSubmission u sk
   boxed   <- isInBallotBox sk
   return $ (owns && not boxed) || admined
