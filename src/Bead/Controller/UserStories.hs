@@ -1536,7 +1536,7 @@ createComment sk c = logAction INFO ("comments on " ++ show sk) $ do
     let user = u_username u
     canComment <- Persist.canUserCommentOn user sk
     admined  <- Persist.isAdministratedSubmission user sk
-    attended <- Persist.isUserSubmission user sk
+    attended <- Persist.isUserOfSubmission user sk
     if (canComment && (admined || attended))
       then do ck <- Persist.saveComment sk c
               let Comment { commentAuthor = author, commentDate = now, comment = body } = c
@@ -1896,7 +1896,7 @@ nonAdministratedAssessment = msg_UserStoryError_NonAdministratedAssessment "This
 nonAdministratedSubmission = msg_UserStoryError_NonAdministratedSubmission "The submission is not administrated by you."
 nonAdministratedTestScript = msg_UserStoryError_NonAdministratedTestScript "The test script is not administrated by you."
 nonRelatedAssignment = msg_UserStoryError_NonRelatedAssignment "The assignment does not belong to you."
-nonAccessibleSubmission = msg_UserStoryError_NonAccessibleSubmission "The submission is not belongs to you."
+nonAccessibleSubmission = msg_UserStoryError_NonAccessibleSubmission "The submission does not belong to you."
 blockedSubmission = msg_UserStoryError_BlockedSubmission "The submission is blocked by an isolated assignment."
 nonAccessibleScore = msg_UserStoryError_NonAccessibleScore "The score does not belong to you."
 
