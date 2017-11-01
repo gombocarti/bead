@@ -94,6 +94,11 @@ inputGroup = H.div ! class_ "input-group"
 -- | Creates a list group div, which can contain a various list group items
 listGroup = H.div ! class_ "list-group"
 
+-- | Creates a list group div, which can contain a various list group items
+--   The maximum height is bounded by the first parameter. It is given in pixels.
+listGroupHeightLimit :: Int -> H.Html -> H.Html
+listGroupHeightLimit n = H.div ! class_ "list-group" ! (A.style $ fromString $ concat ["max-height: ", show n, "px; overflow: auto;"])
+
 -- | Creates and unordered list as a list group
 unorderedListGroup = H.ul ! class_ "list-group"
 
