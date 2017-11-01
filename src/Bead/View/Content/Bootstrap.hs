@@ -370,6 +370,7 @@ textAreaField paramName =
                ! A.rows (fromString . show $ textAreaRows)
                ! A.id (fromString paramName)
                ! A.name (fromString paramName)
+               ! textAreaStyle
 
 -- | Creates an optional text area input field with the given name as id, a given id
 textAreaOptionalField paramName =
@@ -377,9 +378,13 @@ textAreaOptionalField paramName =
                ! A.rows (fromString . show $ textAreaRows)
                ! A.id (fromString paramName)
                ! A.name (fromString paramName)
+               ! textAreaStyle
 
 textAreaRows :: Int
-textAreaRows = 10
+textAreaRows = 12
+
+textAreaStyle :: H.Attribute
+textAreaStyle = A.style "font-family: monospace;"
 
 -- | Creates a text area input with the given name as id, a given label
 textArea paramName labelText html =
