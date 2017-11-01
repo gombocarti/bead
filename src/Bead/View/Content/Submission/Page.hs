@@ -227,10 +227,10 @@ submissionContent p = do
 
     userSubmission :: I18N -> ((SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy) -> H.Html) -> UserSubmissionInfo -> H.Html
     userSubmission msg line submissions
-      | not $ null submissions = do
-          Bootstrap.rowColMd12 $ Bootstrap.listGroup $ mapM_ line submissions
-      | otherwise = do
-          (Bootstrap.rowColMd12 $ H.p $ fromString $ msg $ msg_Submission_NoSubmittedSolutions "There are no submissions.")
+      | not $ null submissions =
+          Bootstrap.rowColMd12 $ Bootstrap.listGroupHeightLimit (4 * 42) $ mapM_ line submissions
+      | otherwise =
+          Bootstrap.rowColMd12 $ H.p $ fromString $ msg $ msg_Submission_NoSubmittedSolutions "There are no submissions."
 
     submissionLine :: I18N -> (SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy) -> H.Html
     submissionLine msg (sk, time, status, _t) = do
@@ -243,7 +243,7 @@ submissionContent p = do
 
     resolveStatus :: I18N -> SubmissionInfo -> String
     resolveStatus msg = submissionInfoCata
-      (msg $ msg_Submission_NotFound "Not Found")
+      (msg $ msg_Submission_NotFound "Not found")
       (msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet")
       (bool (msg $ msg_Submission_TestsPassed "Tests are passed")
             (msg $ msg_Submission_TestsFailed "Tests are failed"))
