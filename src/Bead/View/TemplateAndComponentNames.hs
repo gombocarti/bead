@@ -159,7 +159,6 @@ menuId = P.pageCata
   (c2 "link-new-course-assignment-preview")
   (c2 "link-modify-assignment-preview")
   (c2 "link-submission")
-  (c2 "link-submission-list")
   (c3 "link-submission-details")
   (c2 "link-view-user-score")
   (c3 "link-new-user-score")

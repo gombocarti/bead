@@ -132,10 +132,11 @@ runCommand cmd = do
         putStrLn $ concat ["Importing ", username, " from LDAP..."]
         let loginCfg = loginConfig cfg
         let settings = QuerySettings
-                         { queryTimeout = sSOTimeout loginCfg
-                         , queryCommand = sSOQueryCommand loginCfg
+                         { queryTimeout     = sSOTimeout loginCfg
+                         , queryCommand     = sSOQueryCommand loginCfg
+                         , queryUsernameKey = sSOUsernameKey loginCfg
                          }
-        let attributes = map ($ loginCfg) [sSOUserIdKey, sSOUserNameKey, sSOUserEmailKey]
+        let attributes = map ($ loginCfg) [sSOUserIdKey, sSOUserFullNameKey, sSOUserEmailKey]
         query settings username attributes >>= queryResult
           (\attrs -> do
              let attrMap = Map.fromList attrs

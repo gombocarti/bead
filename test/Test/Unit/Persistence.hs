@@ -270,12 +270,6 @@ test_create_group_user = testCase "Create Course and Group with a user" $ do
 
   testComment sk
 
-  sld <- liftE interp $ submissionListDesc username gak
-  assertBool (concat ["Group name was different: '", slGroup sld, "' 'name - gname'"]) (slGroup sld == "name - gname")
-  assertBool "Admins was different" (slTeacher sld == ["admin"])
---  assertBool "There was different number od submissions" (length (slSubmissions sld) == 1)
-  assertBool "Assignment text was different" ((desc $ slAssignment sld) == "Assignment")
-
   return ()
 
 testComment :: SubmissionKey -> IO ()

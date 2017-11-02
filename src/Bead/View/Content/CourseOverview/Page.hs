@@ -6,6 +6,7 @@ module Bead.View.Content.CourseOverview.Page (
 import           Control.Monad.IO.Class
 import           Data.String (fromString)
 import           Data.Time (UTCTime, getCurrentTime)
+import qualified Text.Blaze.Html5 as H
 
 import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content
@@ -41,7 +42,7 @@ courseSubmissionsContent :: UTCTime -> SubmissionTableContext -> SubmissionTable
 courseSubmissionsContent now c s = do
   msg <- getI18N
   return $ do
-    Bootstrap.rowColMd12 $
+    Bootstrap.rowColMd12 $ H.p $
       fromString  . msg $ msg_Home_SubmissionTable_Info $ concat
         [ "Assignments may be modified by clicking on their identifiers if you have rights for the modification (their names are shown in the tooltip).  "
         , "Students may be unregistered from the courses or the groups by checking the boxes in the Remove column "

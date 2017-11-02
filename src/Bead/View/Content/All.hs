@@ -19,7 +19,6 @@ import Bead.View.Content.EvaluationTable.Page
 import Bead.View.Content.Evaluation.Page
 import Bead.View.Content.Assignment.Page
 import Bead.View.Content.Submission.Page
-import Bead.View.Content.SubmissionList.Page
 import Bead.View.Content.SubmissionDetails.Page
 import Bead.View.Content.GroupRegistration.Page
 import Bead.View.Content.UserDetails.Page
@@ -60,7 +59,6 @@ pageContent = Pages.constantsP
   newCourseAssignmentPreview
   modifyAssignmentPreview
   submission
-  submissionList
   submissionDetails
   viewUserScore
   newUserScore
