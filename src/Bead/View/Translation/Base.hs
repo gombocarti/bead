@@ -361,7 +361,7 @@ labels =
  , "msg_Profile_User"
  , "msg_Profile_Email"
  , "msg_Profile_FullName"
- , "msg_Profile_Timezone"
+ , "msg_Profile_TimeZone"
  , "msg_Profile_SaveButton"
  , "msg_Profile_OldPassword"
  , "msg_Profile_NewPassword"
