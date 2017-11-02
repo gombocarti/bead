@@ -134,9 +134,9 @@ evalHandlerError onError onSuccess h = do
     Left e  -> onError e
     Right s -> onSuccess s
 
--- Runs the handler and clears the status message, is any error occurs
+-- Runs the handler and clears the status message, if any error occurs
 -- the onError handler is run, in both cases returns information about
--- the successfullness.
+-- success.
 runGETHandler
   :: (ContentError -> BeadHandler a)
   -> ContentHandler a
@@ -220,7 +220,7 @@ renderResponse = P.pfmap
 {- When a user logs in the home page is shown for her. An universal handler
    is used. E.g "/home" -> handlePage P.Home.
    * If the user can navigate to the
-   intented page from its state, it's state is going to change in his session
+   intended page from its state, it's state is going to change in his session
    and in the server side as well.
    * When a user submits information with a POST request, from the submitted information
    we calculate the appropiate user action and runs it
@@ -319,7 +319,6 @@ routeToPageMap = Map.fromList [
   , (evaluationTablePath  , j $ P.evaluationTable ())
   , (evaluationPath , \ps -> P.evaluation <$> submissionKey ps <*> unit)
   , (submissionPath , \ps -> P.submission <$> assignmentKey ps <*> unit)
-  , (submissionListPath   , \ps -> P.submissionList <$> assignmentKey ps <*> unit)
   , (viewUserScorePath    , \ps -> P.viewUserScore <$> scoreKey ps <*> unit)
   , (newUserScorePath     , \ps -> P.newUserScore <$> assessmentKey ps <*> username ps <*> unit)
   , (modifyUserScorePath  , \ps -> P.modifyUserScore <$> scoreKey ps <*> unit)

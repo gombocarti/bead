@@ -825,7 +825,7 @@ createCourseAssignment ck a tc = logAction INFO msg $ do
     statusMsg = const .
       putStatusMessage $ msg_UserStory_NewCourseAssignment "The course assignment has been created."
 
--- | The 'loadExercise' loads an exercise from the persistence layer
+-- | The 'loadAssignment' loads an assignment from the persistence layer
 loadAssignment :: AssignmentKey -> UserStory Assignment
 loadAssignment k = logAction INFO ("loads assignment " ++ show k) $ do
   authorize P_Open P_Assignment
@@ -1219,7 +1219,8 @@ submitSolution :: AssignmentKey -> Submission -> UserStory SubmissionKey
 submitSolution ak s = logAction INFO ("submits solution for assignment " ++ show ak) $ do
   authorize P_Open   P_Assignment
   authorize P_Create P_Submission
-  checkActiveAssignment
+  a <- loadAssignment ak
+  checkActiveAssignment a
   join $ withUserAndPersist $ \u -> do
     let user = u_username u
     attended <- Persist.isUsersAssignment user ak
@@ -1233,17 +1234,20 @@ submitSolution ak s = logAction INFO ("submits solution for assignment " ++ show
                printf "The user tries to submit a solution for an assignment which not belongs to him: (%s)" (assignmentKeyMap id ak)
              errorPage $ userError nonRelatedAssignment
   where
-    checkActiveAssignment :: UserStory ()
-    checkActiveAssignment = do
-      a <- Bead.Controller.UserStories.loadAssignment ak
-      now <- liftIO getCurrentTime
-      unless (Assignment.isActive a now) . errorPage . userError $
-        msg_UserStoryError_SubmissionDeadlineIsReached "The submission deadline is reached."
-
     -- TODO: Change the ABI to remove the unevaluated automatically
     removeUserOpenedSubmissions u ak = do
       sks <- Persist.usersOpenedSubmissions ak u
       mapM_ (Persist.removeFromOpened ak u) sks
+
+    checkActiveAssignment :: Assignment -> UserStory ()
+    checkActiveAssignment asg = do
+      now <- liftIO getCurrentTime
+      let (start, end) = Assignment.assignmentCata (\_name _desc _asp start end _evtype -> (start, end)) asg
+      when (now < start) . errorPage . userError $
+        msg_UserStoryError_AssignmentNotAvailableYet "The assignment is not available yet."
+      when (now > end) . errorPage . userError $
+        msg_UserStoryError_SubmissionDeadlineIsReached "The submission deadline is reached."
+      return ()
 
 -- Returns all the group for that the user does not submitted a soultion already
 availableGroups :: UserStory [(GroupKey, GroupDesc)]
@@ -1275,6 +1279,13 @@ userSubmissionKeys ak = logAction INFO msg $ do
   withUserAndPersist $ \u -> Persist.userSubmissions (u_username u) ak
   where
     msg = "lists the submissions for assignment " ++ show ak
+
+userSubmissionInfos :: AssignmentKey -> UserStory UserSubmissionInfo
+userSubmissionInfos ak = logAction INFO ("loads submission infos for assigment " ++ show ak) $ do
+  authorize P_Open P_Assignment
+  authorize P_Open P_Submission
+  isUsersAssignment ak
+  withUserAndPersist $ \u -> Persist.userSubmissionInfos (u_username u) ak
 
 lastSubmission :: AssignmentKey -> Username -> UserStory (Maybe SubmissionKey)
 lastSubmission ak u = logAction INFO ("loads a last submission for assignment " ++ show ak) $ do
@@ -1331,24 +1342,7 @@ userAssignmentForSubmission key = logAction INFO "check user assignment for subm
   isUsersAssignment key
   now <- liftIO getCurrentTime
   withUserAndPersist $ \u ->
-    (,) <$> (assignmentDesc now (u_username u) key) <*> (Persist.loadAssignment key)
-
--- Helper function which computes the assignment description
-assignmentDesc :: UTCTime -> Username -> AssignmentKey -> Persist AssignmentDesc
-assignmentDesc now user key = do
-  a <- Persist.loadAssignment key
-  limit <- Persist.submissionLimitOfAssignment user key
-  let aspects = Assignment.aspects a
-  (name, adminNames) <- Persist.courseNameAndAdmins key
-  return $! AssignmentDesc {
-      aActive = Assignment.isActive a now
-    , aIsolated = Assignment.isIsolated aspects
-    , aLimit = limit
-    , aTitle  = Assignment.name a
-    , aTeachers = adminNames
-    , aGroup  = name
-    , aEndDate = Assignment.end a
-    }
+    (,) <$> (Persist.assignmentDesc now (u_username u) key) <*> (Persist.loadAssignment key)
 
 -- Produces a map of assignments and information about the submissions for the
 -- described assignment, which is associated with the course or group
@@ -1376,7 +1370,7 @@ userAssignments = logAction INFO "lists assignments" $ do
       case (now < Assignment.start a) of
         True -> return Nothing
         False -> do
-          desc <- assignmentDesc now u ak
+          desc <- Persist.assignmentDesc now u ak
           si <- Persist.userLastSubmissionInfo u ak
           return $ (Just (ak, desc, si))
 
@@ -1400,11 +1394,6 @@ openSubmissions = logAction INFO ("lists unevaluated submissions") $ do
   authorize P_Open P_Submission
   u <- username
   persistence $ Persist.openedSubmissionInfo u
-
-submissionListDesc :: AssignmentKey -> UserStory SubmissionListDesc
-submissionListDesc ak = logAction INFO ("lists submissions for assignment " ++ show ak) $ do
-  authPerms submissionListDescPermissions
-  withUserAndPersist $ \u -> Persist.submissionListDesc (u_username u) ak
 
 courseSubmissionTable :: CourseKey -> UserStory SubmissionTableInfo
 courseSubmissionTable ck = logAction INFO ("gets submission table for course " ++ show ck) $ do
@@ -1547,7 +1536,7 @@ createComment sk c = logAction INFO ("comments on " ++ show sk) $ do
     let user = u_username u
     canComment <- Persist.canUserCommentOn user sk
     admined  <- Persist.isAdministratedSubmission user sk
-    attended <- Persist.isUserSubmission user sk
+    attended <- Persist.isUserOfSubmission user sk
     if (canComment && (admined || attended))
       then do ck <- Persist.saveComment sk c
               let Comment { commentAuthor = author, commentDate = now, comment = body } = c
@@ -1900,14 +1889,14 @@ persistence m = do
 
 -- * User Error Messages
 
-nonAdministratedCourse = msg_UserStoryError_NonAdministratedCourse "The course is not administrated by you"
+nonAdministratedCourse = msg_UserStoryError_NonAdministratedCourse "The course is not administrated by you."
 nonAdministratedGroup  = msg_UserStoryError_NonAdministratedGroup "This group is not administrated by you."
 nonAdministratedAssignment = msg_UserStoryError_NonAdministratedAssignment "This assignment is not administrated by you."
 nonAdministratedAssessment = msg_UserStoryError_NonAdministratedAssessment "This assessment is not administrated by you."
 nonAdministratedSubmission = msg_UserStoryError_NonAdministratedSubmission "The submission is not administrated by you."
 nonAdministratedTestScript = msg_UserStoryError_NonAdministratedTestScript "The test script is not administrated by you."
-nonRelatedAssignment = msg_UserStoryError_NonRelatedAssignment "The assignment is not belongs to you."
-nonAccessibleSubmission = msg_UserStoryError_NonAccessibleSubmission "The submission is not belongs to you."
+nonRelatedAssignment = msg_UserStoryError_NonRelatedAssignment "The assignment does not belong to you."
+nonAccessibleSubmission = msg_UserStoryError_NonAccessibleSubmission "The submission does not belong to you."
 blockedSubmission = msg_UserStoryError_BlockedSubmission "The submission is blocked by an isolated assignment."
 nonAccessibleScore = msg_UserStoryError_NonAccessibleScore "The score does not belong to you."
 

@@ -94,6 +94,11 @@ inputGroup = H.div ! class_ "input-group"
 -- | Creates a list group div, which can contain a various list group items
 listGroup = H.div ! class_ "list-group"
 
+-- | Creates a list group div, which can contain a various list group items
+--   The maximum height is bounded by the first parameter. It is given in pixels.
+listGroupHeightLimit :: Int -> H.Html -> H.Html
+listGroupHeightLimit n = H.div ! class_ "list-group" ! (A.style $ fromString $ concat ["max-height: ", show n, "px; overflow: auto;"])
+
 -- | Creates and unordered list as a list group
 unorderedListGroup = H.ul ! class_ "list-group"
 
@@ -102,7 +107,7 @@ unorderedListGroup = H.ul ! class_ "list-group"
 listGroupLinkItem route text = H.a ! href (fromString route) ! class_ "list-group-item" $ text
 
 -- | Creates a linked list group item with a route to point at, and a text to
--- display, renderd with the given color.
+-- display, rendered with the given color.
 listGroupAlertLinkItem alert route text = H.a ! href (fromString route) ! class_ (fromString itemColor) $ text
   where
     itemColor = "list-group-item list-group-item-" ++ (alertAlgebra "success" "info" "warning" "danger" alert)
@@ -117,6 +122,8 @@ badge text = H.span ! class_ "badge" $ fromString text
 badgeAlert alert text = H.span ! class_ (fromString $ "badge alert-" ++ a) $ fromString text where
   a = alertAlgebra "success" "info" "warning" "danger" alert
 
+alert color = H.div ! class_ (fromString $ "alert alert-" ++ alertColor)
+  where alertColor = alertAlgebra "success" "info" "warning" "danger" color
 
 -- | Creates a caret sign
 caret = H.span ! class_ "caret" $ mempty
@@ -360,16 +367,24 @@ blueLabel text = H.span ! class_ "label label-primary" $ fromString text
 textAreaField paramName =
     H.textarea ! formControl
                ! A.required ""
-               ! A.rows "20"
+               ! A.rows (fromString . show $ textAreaRows)
                ! A.id (fromString paramName)
                ! A.name (fromString paramName)
+               ! textAreaStyle
 
 -- | Creates an optional text area input field with the given name as id, a given id
 textAreaOptionalField paramName =
     H.textarea ! formControl
-               ! A.rows "20"
+               ! A.rows (fromString . show $ textAreaRows)
                ! A.id (fromString paramName)
                ! A.name (fromString paramName)
+               ! textAreaStyle
+
+textAreaRows :: Int
+textAreaRows = 12
+
+textAreaStyle :: H.Attribute
+textAreaStyle = A.style "font-family: monospace;"
 
 -- | Creates a text area input with the given name as id, a given label
 textArea paramName labelText html =
@@ -421,7 +436,7 @@ colMd4 = H.div ! class_ "col-md-4"
 -- | Creates a bootstrap 6 width column
 colMd6 = H.div ! class_ "col-md-6"
 
--- | Creates a bootstrap raw with only one colMd12 column
+-- | Creates a bootstrap row with only one colMd12 column
 rowColMd12 = row . colMd12
 
 -- | Creates a boostrap row with a 4 sized column in the middle of the page

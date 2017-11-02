@@ -82,7 +82,7 @@ bootStrapDocument state body' = do
   where
     needKaTeXBy (UserState { page = p }) = P.isPage texPages p
       where
-        texPages = [ P.isSubmission, P.isSubmissionList, P.isSubmissionDetails
+        texPages = [ P.isSubmission, P.isSubmissionDetails
                    , P.isNewGroupAssignmentPreview, P.isNewCourseAssignmentPreview
                    , P.isModifyAssignmentPreview
                    ]
@@ -393,7 +393,6 @@ linkText = P.pageCata
   (c2 $ msg_LinkText_NewCourseAssignmentPreview "New Course Assignment")
   (c2 $ msg_LinkText_ModifyAssignmentPreview "Modify Assignment")
   (c2 $ msg_LinkText_Submission "Submission")
-  (c2 $ msg_LinkText_SubmissionList "Submissions")
   (c3 $ msg_LinkText_SubmissionDetails "Submission Details")
   (c2 $ msg_LinkText_ViewUserScore "Score")
   (c3 $ msg_LinkText_NewUserScore "New Score")

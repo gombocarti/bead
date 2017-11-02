@@ -43,6 +43,7 @@ instance FromJSON SSOLoginConfig where
     <$> (withDefault 5  <$> v .:? "timeout")
     <*> (withDefault 4  <$> v .:? "threads")
     <*> (withDefault "ldapsearch -Q -LLL" <$> v .:? "query-command")
+    <*> v .: "username-key"
     <*> v .: "uid-key"
     <*> v .: "name-key"
     <*> v .: "email-key"
@@ -78,25 +79,40 @@ parseYamlConfig = decodeEither . pack
 parseTests = group "parserTests" $ do
 
 #ifdef SSO
-  let sSOConfig1 = SSOLoginConfig 5 4 "ldapsearch -Q -LLL" "uid" "name" "email" False
+  let sSOConfig1 = SSOLoginConfig 5 4 "ldapsearch -Q -LLL" "sAMAccountName" "l" "name" "email" False
   assertEquals "SSO login config #1" (Right sSOConfig1)
     (decodeEither $ fromString $ unlines [
-        "uid-key: 'uid'",
+        "username-key: 'sAMAccountName'",
+        "uid-key: 'l'",
         "name-key: 'name'",
         "email-key: 'email'"
       ])
     "SSO config is not parsed correctly"
 
-  let sSOConfig2 = SSOLoginConfig 5 4 "ldapsearch -Q" "uid" "name" "email" True
+  let sSOConfig2 = SSOLoginConfig 5 4 "ldapsearch -Q" "sAMAccountName" "l" "name" "email" True
   assertEquals "SSO login config #2" (Right sSOConfig2)
     (decodeEither $ fromString $ unlines [
         "timeout: 5",
         "threads: 4",
         "query-command: 'ldapsearch -Q'",
-        "uid-key: 'uid'",
+        "username-key: 'sAMAccountName'",
+        "uid-key: 'l'",
         "name-key: 'name'",
         "email-key: 'email'",
         "developer: yes"
+      ])
+    "SSO config is not parsed correctly"
+
+  assertEquals "SSO login config #3" (Right sSOConfig2)
+    (decodeEither $ fromString $ unlines [
+        "uid-key: 'l'",
+        "timeout: 5",
+        "email-key: 'email'",
+        "username-key: 'sAMAccountName'",
+        "developer: yes",
+        "threads: 4",
+        "name-key: 'name'",
+        "query-command: 'ldapsearch -Q'"
       ])
     "SSO config is not parsed correctly"
 #else
@@ -176,7 +192,8 @@ parseTests = group "parserTests" $ do
   assertEquals "Config with SSO #1"
     (Right $ config sSOConfig1 persistConfig)
     (parseYamlConfig . fromString $ configStr (unlines [
-        "  uid-key: 'uid'",
+        "  username-key: 'sAMAccountName'",
+        "  uid-key: 'l'",
         "  name-key: 'name'",
         "  email-key: 'email'"
       ]) persistConfigStr)
@@ -188,10 +205,25 @@ parseTests = group "parserTests" $ do
         "  timeout: 5",
         "  threads: 4",
         "  query-command: 'ldapsearch -Q'",
-        "  uid-key: 'uid'",
+        "  username-key: 'sAMAccountName'",
+        "  uid-key: 'l'",
         "  name-key: 'name'",
         "  email-key: 'email'",
         "  developer: yes"
+      ]) persistConfigStr)
+    "Config with SSO is not parsed correctly"
+
+  assertEquals "Config with SSO #3"
+    (Right $ config sSOConfig2 persistConfig)
+    (parseYamlConfig . fromString $ configStr (unlines [
+        "  name-key: 'name'",
+        "  query-command: 'ldapsearch -Q'",
+        "  timeout: 5",
+        "  username-key: 'sAMAccountName'",
+        "  developer: yes",
+        "  threads: 4",
+        "  email-key: 'email'",
+        "  uid-key: 'l'"
       ]) persistConfigStr)
     "Config with SSO is not parsed correctly"
 #else

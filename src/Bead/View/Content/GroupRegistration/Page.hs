@@ -6,7 +6,7 @@ module Bead.View.Content.GroupRegistration.Page (
 
 import           Control.Monad
 import           Control.Arrow ((***))
-import           Data.List (intersperse)
+import           Data.List (intercalate)
 import           Data.String (fromString)
 
 import           Text.Blaze.Html5 as H hiding (map)
@@ -82,7 +82,7 @@ groupsAlreadyRegistered ds = do
     groupLine msg (key, desc, hasSubmission) = flip groupDescFold desc $ \n as -> do
       H.tr $ do
         H.td $ fromString n
-        H.td $ fromString $ join $ intersperse " " as
+        H.td $ fromString $ intercalate " " as
         H.td $
           if hasSubmission
             then (fromString . msg $ msg_GroupRegistration_NoUnsubscriptionAvailable
@@ -105,5 +105,5 @@ groupsForTheUser gs = do
     groupRegistration = Pages.groupRegistration ()
 
     descriptive :: GroupDesc -> String
-    descriptive g = join [gName g, " / ", join (intersperse " , " (gAdmins g))]
+    descriptive g = join [gName g, " / ", intercalate ", " (gAdmins g)]
 

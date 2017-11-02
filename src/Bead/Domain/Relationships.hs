@@ -3,8 +3,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Bead.Domain.Relationships where
 
+import Data.Ord (Down(..))
 import Data.Data
-import Data.Function (on)
 import Data.List as List hiding (group)
 import Data.Map (Map)
 import Data.Time (UTCTime(..))
@@ -168,26 +168,12 @@ userSubmissionTimesCata
   -> b
 userSubmissionTimesCata list time s = list $ map time s
 
-data SubmissionListDesc = SubmissionListDesc {
-    slGroup   :: String
-  , slTeacher :: [String]
-  , slSubmissions :: UserSubmissionInfo
-  , slAssignment :: Assignment
-  }
-
 -- Sorts the given submission list description into descending order, by
 -- the times of the given submissions
-sortSbmListDescendingByTime :: SubmissionListDesc -> SubmissionListDesc
-sortSbmListDescendingByTime s = s { slSubmissions = slSubmissions' }
+sortSbmDescendingByTime :: UserSubmissionInfo -> UserSubmissionInfo
+sortSbmDescendingByTime = List.sortOn (Down . userSubmissionTime)
   where
     userSubmissionTime (_submissionKey,time,_status,_evalatedBy) = time
-    sortUserSubmissionInfo = reverse . List.sortBy (compare `on` userSubmissionTime)
-    slSubmissions' = sortUserSubmissionInfo $ slSubmissions s
-
-submissionListDescPermissions = ObjectPermissions [
-    (P_Open, P_Group), (P_Open, P_Course)
-  , (P_Open, P_Submission), (P_Open, P_Assignment)
-  ]
 
 data SubmissionDetailsDesc = SubmissionDetailsDesc {
     sdGroup :: String

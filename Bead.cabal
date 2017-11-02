@@ -323,7 +323,6 @@ Library
     Bead.View.Content.Submission.Common
     Bead.View.Content.Submission.Page
     Bead.View.Content.SubmissionDetails.Page
-    Bead.View.Content.SubmissionList.Page
     Bead.View.Content.TestScript.Page
     Bead.View.Content.UploadFile.Page
     Bead.View.Content.UserDetails.Page

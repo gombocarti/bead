@@ -35,8 +35,9 @@ data LDAPDaemonConfig = LDAPDaemonConfig {
     timeout     :: Int
   , workers     :: Int
   , command     :: String
+  , usernameKey :: String
   , uidKey      :: String
-  , nameKey     :: String
+  , fullnameKey :: String
   , emailKey    :: String
   }
 
@@ -57,7 +58,7 @@ startLDAPDaemon logger config = do
             atomically $ readTMVar resultEnvelope
 
   let uid_key = uidKey config
-  let name_key = nameKey config
+  let name_key = fullnameKey config
   let email_key = emailKey config
 
   let queryOK attrs =
@@ -81,8 +82,9 @@ startLDAPDaemon logger config = do
           (user,resultEnvelope) <- readTChan queryQueue
           return $ do
             let querySettings = QuerySettings
-                                  { queryTimeout = timeout config
-                                  , queryCommand = command config
+                                  { queryTimeout     = timeout config
+                                  , queryCommand     = command config
+                                  , queryUsernameKey = usernameKey config
                                   }
             queryResult <- waitCatch =<< async (Query.query querySettings user attrs)
             log logger INFO $ concat ["LDAP Daemon ", daemon_id, " queries attributes for ", user]
