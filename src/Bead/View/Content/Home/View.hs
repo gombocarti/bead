@@ -63,7 +63,7 @@ homeContent d = do
               -- Course Administration links
               when hasCourse $ do
                 Bootstrap.row $ Bootstrap.colMd12 $ h3 $ fromString . msg $ msg_Home_CourseAdministration "Course Administration"
-                Bootstrap.row $ Bootstrap.colMd12 $ fromString . msg $ msg_Home_CourseSubmissionTableList_Info $ concat
+                Bootstrap.row $ Bootstrap.colMd12 $ p $ fromString . msg $ msg_Home_CourseSubmissionTableList_Info $ concat
                   [ "Submission table for courses can be found on separate pages, please click on the "
                   , "name of a course."
                   ]
