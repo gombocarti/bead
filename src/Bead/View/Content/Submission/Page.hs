@@ -106,12 +106,14 @@ submissionPostHandler = do
         then submit $ SimpleSubmission <$> getParameter (stringParameter (fieldName submissionTextField) "Submission text")
         else
           case uploadedFile of
-            Just (File name contents) ->
-              if (takeExtension name == ".zip")
+            Just (File name contents) -> do
+              let extension = ".zip"
+                  signature = B.pack "PK"
+              if (takeExtension name == extension || signature `B.isPrefixOf` contents)
                 then submit $ return $ ZippedSubmission contents
                 else return $
                   ErrorMessage $ msg_Submission_File_InvalidFile
-                    "The extension of the file to be uploaded is incorrect."
+                    "The file to be uploaded does not appear to be a zip file. Invalid file extension and signature."
             Just PolicyFailure      -> return $
               ErrorMessage $ msg_Submission_File_PolicyFailure
                 "The upload policy has been violated, probably the file was too large."
