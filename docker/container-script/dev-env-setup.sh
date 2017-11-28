@@ -11,4 +11,5 @@ fi
 
 # Start MySQL and create database
 service mysql start
-echo "create database bead;" | mysql -u root -ppassword
+mysqladmin create bead
+

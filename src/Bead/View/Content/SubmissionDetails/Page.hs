@@ -7,7 +7,7 @@ import           Prelude hiding (div)
 
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.List (intersperse)
+import           Data.List (intercalate)
 import           Data.Monoid
 import           Data.Time (getCurrentTime, UTCTime)
 import           Data.String (fromString)
@@ -97,10 +97,10 @@ submissionDetailsContent p = do
     let info = smDetails p
     let tc   = uTime p
     Bootstrap.rowColMd12 $ Bootstrap.table $ tbody $ do
-      (msg $ msg_SubmissionDetails_Course "Course, group:")  .|. (fromString . sdGroup $ info)
-      (msg $ msg_SubmissionDetails_Admins "Teacher:")        .|. (fromString . join . intersperse ", " . sortHun $ sdTeacher info)
-      (msg $ msg_SubmissionDetails_Assignment "Assignment:") .|. (fromString . Assignment.name $ sdAssignment info)
-      (msg $ msg_SubmissionDetails_Deadline "Deadline:")     .|. (fromString . showDate . tc . Assignment.end $ sdAssignment info)
+      (msg $ msg_SubmissionDetails_Course "Course, group:")  .|. sdGroup info
+      (msg $ msg_SubmissionDetails_Admins "Teacher:")        .|. (intercalate ", " . sortHun $ sdTeacher info)
+      (msg $ msg_SubmissionDetails_Assignment "Assignment:") .|. (Assignment.name $ sdAssignment info)
+      (msg $ msg_SubmissionDetails_Deadline "Deadline:")     .|. (showDate . tc . Assignment.end $ sdAssignment info)
       maybe (return ()) (uncurry (.|.)) (remainingTries msg (smLimit p))
     let asg = sdAssignment info
     let aspects = Assignment.aspects asg
@@ -139,6 +139,7 @@ submissionDetailsContent p = do
     postForm (routeOf $ submissionDetails (aKey p) (smKey p)) $ do
       Bootstrap.textArea (fieldName commentValueField)
                          (fromString $ msg $ msg_SubmissionDetails_NewComment "New comment")
+                         Bootstrap.Small
                          mempty
       Bootstrap.submitButton "" (fromString $ msg $ msg_SubmissionDetails_SubmitComment "Submit")
     let studentComments = forStudentCFs isProtected $ submissionDetailsDescToCFs info

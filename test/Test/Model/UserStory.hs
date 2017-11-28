@@ -30,6 +30,7 @@ context = do
           _     -> return ()
       }
 
+adminUserState :: UserState
 adminUserState = UserState {
     user = Username "admin"
   , page = P.home ()
@@ -41,6 +42,7 @@ adminUserState = UserState {
   , uid = Uid "admin"
   }
 
+student :: User
 student = User {
     u_role = E.Student
   , u_username = (Username "student")
@@ -51,6 +53,7 @@ student = User {
   , u_uid = Uid "student"
   }
 
+student2 :: User
 student2 = User {
     u_role = E.Student
   , u_username = (Username "student2")
@@ -62,6 +65,7 @@ student2 = User {
   }
 
 
+adminUser :: User
 adminUser = User {
     u_role = E.Admin
   , u_username = (Username "admin")
@@ -72,6 +76,7 @@ adminUser = User {
   , u_uid = Uid "admin"
   }
 
+groupAdminUser :: User
 groupAdminUser = User {
     u_role = E.GroupAdmin
   , u_username = Username "groupadmin"
@@ -82,6 +87,7 @@ groupAdminUser = User {
   , u_uid = Uid "groupadmin"
   }
 
+courseAdminUser :: User
 courseAdminUser = User {
     u_role = E.CourseAdmin
   , u_username = Username "courseadmin"
@@ -133,6 +139,7 @@ assertUserState state usr = do
   assertBool "Invalid person name: "     $ (name state) == (u_name usr)
   assertBool "Invalid role was loaded"   $ (role state) == (u_role usr)
 
+initPersistent :: IO ()
 initPersistent = do
   init <- createPersistInit defaultConfig
   setUp <- PersistInit.isSetUp init
@@ -141,6 +148,7 @@ initPersistent = do
   setUp <- PersistInit.isSetUp init
   assertBool "Setting up persistence was failed" setUp
 
+cleanUpPersistent :: IO ()
 cleanUpPersistent = do
   init <- createPersistInit defaultConfig
   PersistInit.tearDown init

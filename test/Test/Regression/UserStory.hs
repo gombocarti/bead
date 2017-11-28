@@ -1,11 +1,14 @@
 module Test.Regression.UserStory where
 
+
+import           Control.Concurrent (threadDelay)
+import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans (lift)
 import           Data.Time.Clock
 import qualified Data.Map as Map
 import           Bead.Controller.UserStories as U
 import           Bead.Domain.Entities as E hiding (name, uid)
-import           Bead.Domain.Relationships (TCCreation(..), SubmissionInfo(..))
+import           Bead.Domain.Relationships (TCCreation(..), SubmissionState(..))
 import           Bead.Domain.Shared.Evaluation
 
 import           Test.HUnit hiding (Test(..), test)
@@ -62,6 +65,11 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
     testAgentStory $ do
       U.insertTestFeedback sk1 (TestResult False)
       testAgentFeedbacks
+      -- Introduce some delay between two feedbacks.
+      -- In an unrealistic scenario, the two feedbacks have the same date.
+      -- This is very unlikely in the real world, where each submission has at most one test feedback, and the hardware is not super fast,
+      -- but this is needed for travis.
+      liftIO $ threadDelay (10^5) -- 0.1 second
       U.insertTestFeedback sk1 (TestResult True)
       testAgentFeedbacks    
     
@@ -70,7 +78,7 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
       return . trd . head . value . head . Map.toList $ Map.map snd ua
 
     -- TODO: Write assert typeclass
-    lift $ assertBool "Submission test information is not changed" (si == Submission_Tested True)
+    lift $ assertBool "Submission test information is not changed" (si == Just (sk1, Submission_Tested True))
   where
     value = snd
     trd (_x,_y,z) = z

@@ -10,13 +10,14 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
 import           Data.List (isSuffixOf)
 import           Data.Maybe
+import           Data.Time (UTCTime)
 import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           System.Directory
 import qualified System.Directory as Dir
 import           System.FilePath
 import           System.IO
 import           System.Posix.Types (COff(..))
-import           System.Posix.Files (getFileStatus, fileSize, modificationTime)
+import           System.Posix.Files (FileStatus, getFileStatus, fileSize, modificationTimeHiRes)
 
 import           Bead.Domain.Entities
 import           Bead.Domain.Relationships
@@ -147,7 +148,8 @@ saveUsersFile username filename userfile =
     liftIO $ usersFile (B.writeFile (public </> filename)) (B.writeFile (private </> filename)) userfile
 
 -- Calculates the file modification time in UTC time from the File status
-fileModificationInUTCTime = posixSecondsToUTCTime . realToFrac . modificationTime
+fileModificationInUTCTime :: FileStatus -> UTCTime
+fileModificationInUTCTime = posixSecondsToUTCTime . modificationTimeHiRes
 
 listFiles :: (MonadIO io) => Username -> io [(UsersFile FilePath, FileInfo)]
 listFiles username = liftIO $ do

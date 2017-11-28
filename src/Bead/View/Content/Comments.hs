@@ -14,7 +14,7 @@ module Bead.View.Content.Comments (
   , forStudentCFs
   ) where
 
-import           Data.List (sortBy)
+import           Data.List (sortOn)
 import           Data.String
 import           Data.Map as Map (toList)
 import           Control.Monad
@@ -57,8 +57,7 @@ submissionDetailsDescToCFs s = (commentsToCFs . Map.toList $ sdComments s) ++ (f
 
 -- Sort the items by increasing by the creation time
 sortIncreasingTime :: [CommentOrFeedback] -> [CommentOrFeedback]
-sortIncreasingTime = sortBy compareTimes where
-  compareTimes a b = compare (time a) (time b)
+sortIncreasingTime = sortOn time where
   time = commentOrFeedbackTime
 
 -- Sort the items by descreasing by the creation time

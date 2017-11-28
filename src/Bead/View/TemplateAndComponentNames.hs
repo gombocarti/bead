@@ -165,7 +165,6 @@ menuId = P.pageCata
   (c2 "link-modify-user-score")
   (c "link-group-registration")
   (c "link-user-details")
-  (c "link-user-submissions")
   (c "link-new-test-script")
   (c2 "link-modify-test-script")
   (c "link-upload-files")
@@ -381,7 +380,6 @@ instance SnapClassName TableClassName where
 evaluationClassTable = TableClassName "evaluation-table"
 submissionListTable = TableClassName "submission-list-table"
 groupSubmissionTable = TableClassName "group-submission-table"
-userSubmissionTable = TableClassName "user-submission-table"
 assignmentTable = TableClassName "assignment-table"
 
 data DivClassName = DivClassName {

@@ -159,7 +159,7 @@ openedSubmissionSubset assignemts users = do
     []
   return $! map (toDomainKey . openedSubmissionSubmission . entityVal) openeds
 
--- Calculates all the opened submisison for a given user and a given assignment
+-- Calculates all the opened submission for a given user and a given assignment
 usersOpenedSubmissions :: Domain.AssignmentKey -> Domain.Username -> Persist [Domain.SubmissionKey]
 usersOpenedSubmissions key username =
   withUser

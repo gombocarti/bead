@@ -7,8 +7,9 @@ ENV DEBIAN_FRONTEND noninteractive
 # Download locales, GHC, stack, cabal and necessary GHC tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-                       cabal-install locales \
-                       ghc cpphs haskell-stack \
+                       git patch \
+                       locales \
+                       cpphs haskell-stack \
                        happy alex \
                        libpcre3 libpcre3-dev mysql-server \
                        default-libmysqlclient-dev screen \
@@ -30,9 +31,18 @@ RUN mkdir /development && \
     mkdir /bead-server
 
 # Copy cabal file and install dependencies
-COPY "./Bead.cabal" "/development/init/Bead.cabal"
-COPY "./stack.yaml" "/development/init/stack.yaml"
+COPY "./Bead.cabal" "/development/init/"
+COPY "./stack.yaml" "/development/init/"
+COPY "./snaplet-fay-search-all-pkgdbs.patch" "/development/init/"
+COPY "./stack-snaplet-fay.yaml" "/development/init/"
 RUN cd development/init && \
+    git clone https://github.com/faylang/snaplet-fay.git && \
+    cd snaplet-fay && \
+    git checkout 7381250505c738a6da667cedbf9a4456733e67a7 && \
+    patch -p1 < ../snaplet-fay-search-all-pkgdbs.patch && \
+    cd /development/init && \
+    stack setup && \
+    stack --stack-yaml=stack-snaplet-fay.yaml build snaplet-fay && \
     stack build --only-dependencies
 
 # Convenience scripts for development

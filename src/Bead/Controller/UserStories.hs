@@ -30,8 +30,9 @@ import           Control.Monad.Trans
 import           Prelude hiding (log, userError)
 import           Data.ByteString (ByteString)
 import           Data.Hashable
+import           Data.Foldable (foldrM)
 import           Data.Function (on)
-import           Data.List (nub, sortBy, (\\))
+import           Data.List (nub, (\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (catMaybes)
@@ -1056,7 +1057,7 @@ userAssessments = logAction INFO "lists assessments" $ do
             Just (sk,sInfo) -> return $ Just (ak, assessment, sk, sInfo)
 
 -- Produces the score key, score info for the specific user and assessment.
--- Returns Nothing if there are multiple scoreinfos available.
+-- Returns Nothing if there are multiple scoreinfo available.
 scoreInfoOfUser :: Username -> AssessmentKey -> UserStory (Maybe (Maybe ScoreKey, ScoreInfo))
 scoreInfoOfUser u ak = logAction INFO ("loads score info of user " ++ show u ++ " and assessment " ++ show ak) $
   persistence $ do
@@ -1280,15 +1281,29 @@ userSubmissionKeys ak = logAction INFO msg $ do
   where
     msg = "lists the submissions for assignment " ++ show ak
 
-userSubmissionInfos :: AssignmentKey -> UserStory UserSubmissionInfo
-userSubmissionInfos ak = logAction INFO ("loads submission infos for assigment " ++ show ak) $ do
+-- |Loads infos of submissions uploaded by a user to an assignment.
+-- It is used by the Evaluation page.
+-- The elements in the result list are in reverse chronological order: the first element is the most recent.
+submissionInfos :: Username -> AssignmentKey -> UserStory [SubmissionInfo]
+submissionInfos u ak = logAction INFO msg $ do
+  authorize P_Open P_Submission
+  isAdministratedAssignment ak
+  persistence $ Persist.userSubmissionInfos u ak
+  where
+    msg = concat ["lists ", show u,"'s submissions for assignment ", show ak]
+
+-- |Loads information on submissions uploaded by the current user to an assignment.
+-- It is used by the Submission page.
+-- The elements in the result list are in reverse chronological order: the first element is the most recent.
+userSubmissionInfos :: AssignmentKey -> UserStory [SubmissionInfo]
+userSubmissionInfos ak = logAction INFO ("loads info on submissions for assigment " ++ show ak) $ do
   authorize P_Open P_Assignment
   authorize P_Open P_Submission
   isUsersAssignment ak
   withUserAndPersist $ \u -> Persist.userSubmissionInfos (u_username u) ak
 
 lastSubmission :: AssignmentKey -> Username -> UserStory (Maybe SubmissionKey)
-lastSubmission ak u = logAction INFO ("loads a last submission for assignment " ++ show ak) $ do
+lastSubmission ak u = logAction INFO ("loads the key of the last submission for assignment " ++ show ak) $ do
   authorize P_Open P_Assignment
   authorize P_Open P_Submission
   persistence $ Persist.lastSubmission ak u
@@ -1346,7 +1361,7 @@ userAssignmentForSubmission key = logAction INFO "check user assignment for subm
 
 -- Produces a map of assignments and information about the submissions for the
 -- described assignment, which is associated with the course or group
-userAssignments :: UserStory (Map CourseKey (Course,[(AssignmentKey, AssignmentDesc, SubmissionInfo)]))
+userAssignments :: UserStory (Map CourseKey (Course, [(AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))]))
 userAssignments = logAction INFO "lists assignments" $ do
   authorize P_Open P_Assignment
   authorize P_Open P_Course
@@ -1355,24 +1370,24 @@ userAssignments = logAction INFO "lists assignments" $ do
   withUserAndPersist $ \u -> do
     let user = u_username u
     asgMap <- Persist.userAssignmentKeys user
-    newMap <- forM (Map.toList asgMap) $ \(key,aks) -> do
-      key' <- Persist.loadCourse key
-      descs <- catMaybes <$> mapM (createDesc user now) (Set.toList aks)
-      return $! (key, (key', descs))
-    return $! Map.fromList newMap
-
+    Map.traverseWithKey (\key aks -> do
+                            course <- Persist.loadCourse key
+                            asgLine <- foldrM (\ak descs -> maybe descs (: descs) <$> createDesc user now ak) [] aks
+                            return $! (course, asgLine)
+                        )
+      asgMap
   where
     -- Produces the assignment description if the assignment is active
     -- Returns Nothing if the assignment is not visible for the user
-    createDesc :: Username -> UTCTime -> AssignmentKey -> Persist (Maybe (AssignmentKey, AssignmentDesc, SubmissionInfo))
+    createDesc :: Username -> UTCTime -> AssignmentKey -> Persist (Maybe (AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState)))
     createDesc u now ak = do
       a <- Persist.loadAssignment ak
       case (now < Assignment.start a) of
         True -> return Nothing
         False -> do
           desc <- Persist.assignmentDesc now u ak
-          si <- Persist.userLastSubmissionInfo u ak
-          return $ (Just (ak, desc, si))
+          info <- Persist.userLastSubmission u ak
+          return $ (Just (ak, desc, submKeyAndState <$> info))
 
 submissionDescription :: SubmissionKey -> UserStory SubmissionDesc
 submissionDescription sk = logAction INFO msg $ do
@@ -1588,23 +1603,6 @@ testAgentFeedbacks = do
   where
     submission = fst
 
-userSubmissions :: Username -> AssignmentKey -> UserStory (Maybe UserSubmissionDesc)
-userSubmissions s ak = logAction INFO msg $ do
-  authPerms userSubmissionDescPermissions
-  withUserAndPersist $ \u -> do
-    let user = u_username u
-    -- The admin can see the submission of students who are belonging to him
-    courses <- (map fst) <$> Persist.administratedCourses user
-    groups  <- (map fst) <$> Persist.administratedGroups  user
-    courseStudents <- concat <$> mapM Persist.subscribedToCourse courses
-    groupStudents  <- concat <$> mapM Persist.subscribedToGroup  groups
-    let students = nub (courseStudents ++ groupStudents)
-    case elem s students of
-      False -> return Nothing
-      True  -> Just <$> Persist.userSubmissionDesc s ak
-  where
-    msg = join ["lists ",show s,"'s submissions for assignment ", show ak]
-
 -- List all the related notifications for the active user and marks them
 -- as seen if their state is new.
 notifications :: UserStory [(Notification.Notification, Notification.NotificationState, Notification.NotificationReference)]
@@ -1633,10 +1631,15 @@ submissionsForAssignment ak = logAction INFO ("gets all the submission keys for 
 
 -- | Checks if there is at least one submission for the given assignment
 isThereASubmission :: AssignmentKey -> UserStory Bool
-isThereASubmission ak = logAction INFO ("" ++ show ak) $ do
+isThereASubmission ak = logAction INFO ("are there submissions for " ++ show ak) $ do
   authorize P_Open P_Assignment
   isAdministratedAssignment ak
   fmap (not . null) $ submissionsForAssignment ak
+
+assignmentOfSubmission :: SubmissionKey -> UserStory AssignmentKey
+assignmentOfSubmission sk = logAction INFO ("gets assignment of submission " ++ show sk) $ do
+  authorize P_Open P_Assignment
+  persistence $ Persist.assignmentOfSubmission sk
 
 -- | Modify the given assignment but keeps the evaluation type if there is
 -- a submission for the given assignment, also shows a warning message if the

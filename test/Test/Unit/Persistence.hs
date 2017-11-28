@@ -50,7 +50,7 @@ test_initialize_persistence = testCase "Initialize NoSQLDir persistence layer" $
   assertBool "Persistence was set up" (not setUp)
   initPersist init
   setUp <- isSetUp init
-  assertBool "Settin up persistence was failed" setUp
+  assertBool "Setting up persistence was failed" setUp
 
 test_feedbacks = testCase "Create and delete test feedbacks" $ do
   -- Given
@@ -106,7 +106,7 @@ test_create_user = testCase "Create user" $ do
   assertBool "Updating and loading user has failed" (user3 == user2)
 
 #ifndef SSO
-testUserRegSaveAndLoad = testCase "Save and Load User regisistration" $ do
+testUserRegSaveAndLoad = testCase "Save and Load User registration" $ do
   interp <- createPersistInterpreter defaultConfig
   let now = utcTimeConstant
   let u = UserRegistration "username" "e@e.com" "Family name" "token" now

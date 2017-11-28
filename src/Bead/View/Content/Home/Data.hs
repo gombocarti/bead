@@ -8,11 +8,11 @@ import           Data.Time
 import           Bead.View.Content hiding (userState)
 import           Bead.View.Content.SubmissionTable
 
-type ActiveAssignment = (AssignmentKey, AssignmentDesc, SubmissionInfo)
+type ActiveAssignment = (AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))
 
-activeAsgKey  (key,_desc,_info) = key
-activeAsgDesc (_key,desc,_info) = desc
-activeAsgInfo (_key,_desc,info) = info
+activeAsgKey  (key,_desc,_s) = key
+activeAsgDesc (_key,desc,_s) = desc
+activeAsgInfo (_key,_desc,s) = s
 
 type StudentAssignments = Map CourseKey (Course, [ActiveAssignment])
 

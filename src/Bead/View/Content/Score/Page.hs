@@ -122,12 +122,12 @@ scoreContent pd = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
-      (msg . msg_NewUserScore_Course $ "Course:" )    .|. fromString aCourse
-      (msg . msg_NewUserScore_Assessment $ "Assessment:") .|. fromString aTitle
-      when (not . null $ aDesc) $ (msg . msg_NewUserScore_Description $ "Description:") .|. fromString aDesc
-      maybe mempty (\g -> (msg . msg_NewUserScore_Group $ "Group:") .|. fromString g) aGroup
-      (msg . msg_NewUserScore_Student $ "Student:")    .|. fromString (pdStudent pd)
-      (msg . msg_NewUserScore_UserName $ "Username:")   .|. (uid fromString $ pdUid pd)
+      (msg . msg_NewUserScore_Course $ "Course:" )    .|. aCourse
+      (msg . msg_NewUserScore_Assessment $ "Assessment:") .|. aTitle
+      when (not . null $ aDesc) $ (msg . msg_NewUserScore_Description $ "Description:") .|. aDesc
+      maybe mempty (\g -> (msg . msg_NewUserScore_Group $ "Group:") .|. g) aGroup
+      (msg . msg_NewUserScore_Student $ "Student:")    .|. pdStudent pd
+      (msg . msg_NewUserScore_UserName $ "Username:")   .|. (uid id $ pdUid pd)
     postForm (routeOf handler) $ do
       view msg
       evaluationInput msg
@@ -165,7 +165,7 @@ scoreContent pd = do
                         (\_student _uname _uid _aDesc score _sk ->
                              scoreInfoAlgebra
                              (evaluationFrame (evConfig as) msg mempty)
-                             (\_ evResult -> evaluationFrameWithDefault msg (evConfig as) evResult empty)
+                             (\_ evResult -> evaluationFrameWithDefault msg (evConfig as) evResult mempty)
                              score)
                         pd
 
@@ -180,13 +180,13 @@ viewScoreContent sd = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
-      (msg . msg_ViewUserScore_Course $ "Course:")   .|. fromString (scdCourse sd)
-      maybe mempty (\g -> (msg . msg_ViewUserScore_Group $ "Group:") .|. fromString g) (scdGroup sd)
-      (msg . msg_ViewUserScore_Teacher $ "Teacher:") .|. (fromString . intercalate ", " . sortHun . scdTeacher) sd
-      (msg . msg_ViewUserScore_Assessment $ "Assessment:") .|. fromString aTitle
+      (msg . msg_ViewUserScore_Course $ "Course:")   .|. scdCourse sd
+      maybe mempty (\g -> (msg . msg_ViewUserScore_Group $ "Group:") .|. g) (scdGroup sd)
+      (msg . msg_ViewUserScore_Teacher $ "Teacher:") .|. (intercalate ", " . sortHun . scdTeacher) sd
+      (msg . msg_ViewUserScore_Assessment $ "Assessment:") .|. aTitle
       when (not . null $ aDesc) $
-        (msg . msg_ViewUserScore_Description $ "Description:") .|. fromString aDesc
-    Bootstrap.rowColMd12 . H.p . fromString . (scoreInfoToText "error" msg) $ scdScore sd
+        (msg . msg_ViewUserScore_Description $ "Description:") .|. aDesc
+    Bootstrap.rowColMd12 . H.p . H.toMarkup . (scoreInfoToText "error" msg) $ scdScore sd
   where 
     aTitle, aDesc :: String
     (aTitle, aDesc) = assessment (\title desc _creation _cfg _visible -> (title,desc)) (scdAssessment sd)
@@ -244,7 +244,7 @@ binaryInput msg res = do
 percentageInput :: I18N -> String -> Html
 percentageInput msg defaultText = do
   Bootstrap.formGroup . evaluationDiv . Bootstrap.rowColMd12 $ do 
-           fromString . msg $ msg_Evaluation_Percentage "Percentage: "
+           H.toMarkup . msg $ msg_Evaluation_Percentage "Percentage: "
            H.input ! A.name (fieldName evaluationPercentagePrm) ! A.type_ "number"
                    ! A.min "0" ! A.max "100"
                    ! A.required ""

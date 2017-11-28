@@ -12,7 +12,7 @@ module Bead.Persistence.Relations (
   , courseSubmissionTableInfo
   , userSubmissionDesc
   , userSubmissionInfos
-  , userLastSubmissionInfo
+  , userLastSubmission
   , courseOrGroupOfAssignment
   , courseOrGroupOfAssessment
   , courseNameAndAdmins
@@ -43,14 +43,16 @@ related information is computed.
 -}
 
 import           Control.Applicative
-import           Control.Arrow
+import           Control.Arrow ((&&&), Kleisli(Kleisli), runKleisli)
 import           Control.Monad (foldM, forM, when)
 import           Control.Monad.IO.Class
+import           Data.Bifunctor (second)
 import           Data.Function (on)
-import           Data.List ((\\), nub, sortBy, intersect, find)
+import           Data.List ((\\), nub, sortBy, sortOn, intersect, find)
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (catMaybes)
+import           Data.Ord (Down(Down))
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime, getCurrentTime)
@@ -227,7 +229,6 @@ submissionDesc sk = do
         , eAssignment     = asg
         , eAssignmentKey  = ak
         , eAssignmentDate = created
-        , eSubmissionDate = solutionPostDate submission
         , eComments = Map.fromList cs
         , eFeedbacks = fs
         }
@@ -247,7 +248,6 @@ submissionDesc sk = do
         , eAssignment     = asg
         , eAssignmentKey  = ak
         , eAssignmentDate = created
-        , eSubmissionDate = solutionPostDate submission
         , eComments = Map.fromList cs
         , eFeedbacks = fs
         }
@@ -319,18 +319,13 @@ courseNameAndAdmins ak = do
   adminNames <- mapM (fmap ud_fullname . userDescription) admins
   return (name, adminNames)
 
-userSubmissionInfos :: Username -> AssignmentKey -> Persist UserSubmissionInfo
+-- |Loads information on submissions uploaded by a user to an assignment.
+-- The elements in the result list are in reverse chronological order: the first element is the most recent.
+userSubmissionInfos :: Username -> AssignmentKey -> Persist [SubmissionInfo]
 userSubmissionInfos u ak = do
   us <- userSubmissions u ak
-  infos <- mapM submissionStatus us
+  infos <- mapM submissionInfo  us
   return $ sortSbmDescendingByTime infos
-  where
-    submissionStatus :: SubmissionKey -> Persist (SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy)
-    submissionStatus sk = do
-      time <- solutionPostDate <$> loadSubmission sk
-      si <- submissionInfo sk
-      return (sk, time, si, "TODO: EvaluatedBy")
-
 
 submissionEvalStr :: SubmissionKey -> Persist (Maybe String)
 submissionEvalStr sk = do
@@ -422,13 +417,13 @@ loadAssignmentInfos as = Map.fromList <$> mapM loadAssignmentInfo as
        asg <- loadAssignment a
        return (a,asg)
 
-submissionInfoAsgKey :: Username -> AssignmentKey -> Persist (AssignmentKey, SubmissionInfo)
-submissionInfoAsgKey u ak = addKey <$> (userLastSubmissionInfo u ak)
+lastSubmissionAsgKey :: Username -> AssignmentKey -> Persist (AssignmentKey, Maybe SubmissionInfo)
+lastSubmissionAsgKey u ak = addKey <$> (userLastSubmission u ak)
   where
     addKey s = (ak,s)
 
 -- TODO: Need to be add semantics there
-calculateResult :: [SubmissionInfo] -> Maybe Result
+calculateResult :: [SubmissionState] -> Maybe Result
 calculateResult _ = Nothing
 
 #ifdef TEST
@@ -448,11 +443,8 @@ mkCourseSubmissionTableInfo courseName us as key = do
   assignmentInfos <- loadAssignmentInfos as
   ulines <- forM us $ \u -> do
     ud <- userDescription u
-    asi <- mapM (submissionInfoAsgKey u) as
-    let result = case asi of
-                   [] -> Nothing
-                   _  -> calculateResult $ map snd asi
-    return (ud, result, Map.fromList asi)
+    sInfos <- mapM (lastSubmissionAsgKey u) as
+    return (ud, Map.fromList . map (second submKeyAndState) . removeNotFound $ sInfos)
   return CourseSubmissionTableInfo {
       stiCourse = courseName
     , stiUsers = us
@@ -472,12 +464,9 @@ mkGroupSubmissionTableInfo courseName us cas gas ckey gkey = do
   assignmentInfos <- loadAssignmentInfos (cas ++ gas)
   ulines <- forM us $ \u -> do
     ud <- userDescription u
-    casi <- mapM (submissionInfoAsgKey u) cas
-    gasi <- mapM (submissionInfoAsgKey u) gas
-    let result = case gasi of
-                   [] -> Nothing
-                   _  -> calculateResult $ map snd gasi
-    return (ud, result, Map.fromList (casi ++ gasi))
+    casInfos <- mapM (lastSubmissionAsgKey u) cas
+    gasInfos <- mapM (lastSubmissionAsgKey u) gas
+    return (ud, Map.fromList . map (second submKeyAndState) . removeNotFound $ casInfos ++ gasInfos)
   return GroupSubmissionTableInfo {
       stiCourse = courseName
     , stiUsers = us
@@ -488,26 +477,36 @@ mkGroupSubmissionTableInfo courseName us cas gas ckey gkey = do
     , stiGroupKey  = gkey
     }
   where
+    createdTime :: CGInfo AssignmentKey -> Persist UTCTime
     createdTime = cgInfoCata
       (assignmentCreatedTime)
       (assignmentCreatedTime)
 
+removeNotFound :: [(a, Maybe b)] -> [(a, b)]
+removeNotFound abs = [(a, b) | (a, Just b) <- abs]
+
+-- |Loads information on a 'Submission'.
+-- It loads a 'Submission' exactly once from the database, to get the time of upload.
 submissionInfo :: SubmissionKey -> Persist SubmissionInfo
 submissionInfo sk = do
+  state <- submissionState sk
+  submission <- loadSubmission sk
+  return $ (sk, state, (solutionPostDate submission))
+
+submissionState :: SubmissionKey -> Persist SubmissionState
+submissionState sk = do
   mEk <- evaluationOfSubmission sk
   case mEk of
     Nothing -> do
       fs <- mapM loadFeedback =<< (feedbacksOfSubmission sk)
-      -- Supposing that only one test result feedback will arrive
-      -- to a submission.
       return . maybe
         Submission_Unevaluated
         Submission_Tested
           $ feedbackTestResult =<< lastTestAgentFeedback fs
     Just ek -> (Submission_Result ek . evaluationResult) <$> loadEvaluation ek
   where
-    lastTestAgentFeedback = find isTestedFeedback . reverse . sortBy createdDate
-    createdDate = compare `on` postDate
+    lastTestAgentFeedback :: [Feedback] -> Maybe Feedback
+    lastTestAgentFeedback = find isTestedFeedback . sortOn (Down . postDate)
 
 -- Produces information for the given score
 scoreInfo :: ScoreKey -> Persist ScoreInfo
@@ -517,10 +516,10 @@ scoreInfo sk = do
     Nothing -> return Score_Not_Found
     Just ek -> Score_Result ek . evaluationResult <$> loadEvaluation ek
 
--- Produces information of the last submission for the given user and assignment
-userLastSubmissionInfo :: Username -> AssignmentKey -> Persist SubmissionInfo
-userLastSubmissionInfo u ak =
-  (maybe (return Submission_Not_Found) (submissionInfo)) =<< (lastSubmission ak u)
+-- Produces the info on the last submission for the given user and assignment
+userLastSubmission :: Username -> AssignmentKey -> Persist (Maybe SubmissionInfo)
+userLastSubmission u ak =
+  (maybe (return Nothing) ((Just <$>) . submissionInfo)) =<< lastSubmission ak u
 
 userSubmissionDesc :: Username -> AssignmentKey -> Persist UserSubmissionDesc
 userSubmissionDesc u ak = do
@@ -532,11 +531,7 @@ userSubmissionDesc u ak = do
               Right gk -> fullGroupName gk
   student <- ud_fullname <$> userDescription u
   keys    <- userSubmissions u ak
-  -- Calculate the submission information list
-  submissions <- flip mapM keys $ \sk -> do
-    time  <- solutionPostDate <$> loadSubmission sk
-    sinfo <- submissionInfo sk
-    return (sk, time, sinfo)
+  submissions <- mapM submissionInfo keys
 
   return UserSubmissionDesc {
     usCourse         = crName

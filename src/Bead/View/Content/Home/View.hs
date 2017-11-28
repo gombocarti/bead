@@ -16,7 +16,9 @@ import           Text.Blaze.Html5.Attributes as A hiding (id)
 import qualified Bead.Controller.Pages as Pages
 import           Bead.Domain.Entities as E (Role(..))
 import           Bead.Domain.Evaluation
+import           Bead.View.Markdown (markdownToHtml)
 import           Bead.View.Content as Content hiding (userState, table, assessments)
+import           Bead.View.Content.SubmissionState as SState
 import           Bead.View.Content.SubmissionTable as ST
 import           Bead.View.Content.ScoreInfo (scoreInfoToIconLink,scoreInfoToIcon)
 import           Bead.View.Content.VisualConstants
@@ -219,13 +221,18 @@ availableAssignments pd timeconverter studentAssignments
                   $ toActiveAssignmentList studentAssignments
       msg <- getI18N
       return $ do
-        Bootstrap.row
-          $ Bootstrap.colMd12
+        Bootstrap.rowColMd12
           $ p
           $ fromString . msg $ msg_Home_Assignments_Info $ concat
             [ "Submissions and their evaluations may be accessed by clicking on each assignment's link. "
             , "The table shows only the last evaluation per assignment."
             ]
+
+        Bootstrap.rowColMd12 $
+          Bootstrap.alert Bootstrap.Info $
+          markdownToHtml . msg $ msg_Home_EvaluationLink_Hint $
+          "**Hint**: You can go straight to your submission by clicking on a link in the Evaluation column."
+
         forM_ asl $ \(key, coursename, as) -> do
           let asm = Map.lookup key (assessments pd)
           let hasAssessments = case asm of
@@ -266,6 +273,7 @@ availableAssignments pd timeconverter studentAssignments
 
     groupRegistration = Pages.groupRegistration ()
 
+    headerLine :: I18N -> Bool -> H.Html
     headerLine msg isLimited = tr $ do
       th ""
       th (fromString $ msg $ msg_Home_Course "Course")
@@ -275,8 +283,9 @@ availableAssignments pd timeconverter studentAssignments
       th (fromString $ msg $ msg_Home_Deadline "Deadline")
       th (fromString $ msg $ msg_Home_Evaluation "Evaluation")
 
-    assignmentLine msg isLimited (k,a,s) = H.tr $ do
-      case and [aActive a, noLimitIsReached a] of
+    assignmentLine :: I18N -> Bool -> ActiveAssignment -> H.Html
+    assignmentLine msg isLimited (a,aDesc,sLookup) = H.tr $ do
+      case and [aActive aDesc, noLimitIsReached aDesc] of
         True ->
           td $ H.span
                  ! A.class_ "glyphicon glyphicon-lock"
@@ -286,40 +295,27 @@ availableAssignments pd timeconverter studentAssignments
           td $ H.span
                  ! A.class_ "glyphicon glyphicon-lock"
                  $ mempty
-      td (fromString . aGroup $ a)
-      td (fromString . join . intersperse ", " . sortHun . aTeachers $ a)
-      td $ linkWithText (routeOf (Pages.submission k ())) (fromString (aTitle a))
-      when isLimited $ td (fromString . limit $ aLimit a)
-      td (fromString . showDate . timeconverter $ aEndDate a)
-      let tooltip tag text = tag ! A.title (fromString text)
-      H.td $ withSubmissionInfo s
-               (Bootstrap.grayLabel $ msg $ msg_Home_SubmissionCell_NoSubmission "No submission")
-               (Bootstrap.grayLabel $ msg $ msg_Home_SubmissionCell_NonEvaluated "Non-evaluated")
-               (bool (Bootstrap.grayLabel $ msg $ msg_Home_SubmissionCell_Tests_Passed "Tests are passed")
-                     (Bootstrap.grayLabel $ msg $ msg_Home_SubmissionCell_Tests_Failed "Tests are failed"))
-               (\_key result -> evResult
-                                  (Bootstrap.greenLabel $ msg $ msg_Home_SubmissionCell_Accepted "Accepted")
-                                  (Bootstrap.redLabel $ msg $ msg_Home_SubmissionCell_Rejected "Rejected")
-                                  Bootstrap.blueLabel
-                                  (\resultText -> let cell = if length resultText < displayableFreeFormResultLength
-                                                        then resultText
-                                                        else msg $ msg_Home_SubmissionCell_FreeFormEvaluated "Evaluated"
-                                                  in tooltip (Bootstrap.blueLabel cell) resultText)
-                                  result)
+      td (fromString . aGroup $ aDesc)
+      td (fromString . join . intersperse ", " . sortHun . aTeachers $ aDesc)
+      td $ Bootstrap.link (routeOf (Pages.submission a ())) (aTitle aDesc)
+      when isLimited $ td (fromString . limit $ aLimit aDesc)
+      td (fromString . showDate . timeconverter $ aEndDate aDesc)
+      H.td submissionStateLabel
       where
         noLimitIsReached = submissionLimit (const True) (\n _ -> n > 0) (const False) . aLimit
         limit = fromString . submissionLimit
           (const "") (\n _ -> (msg $ msg_Home_Remains "Remains: ") ++ show n) (const $ msg $ msg_Home_Reached "Reached")
 
-        evResult passed failed percentage freeFormMsg =
-          evResultCata
-            (binaryCata (resultCata passed failed))
-            score
-            (freeForm freeFormMsg)
-          where
-            percent x = join [show . round $ (100 * x), "%"]
-            score (Percentage (Scores [p])) = percentage $ percent p
-            score _                         = error "SubmissionTable.coloredSubmissionCell percentage is not defined"
+        submissionDetails :: SubmissionKey -> Pages.Page () () () () ()
+        submissionDetails key = Pages.submissionDetails a key ()
+
+        submissionStateLabel :: Html
+        submissionStateLabel = 
+          maybe
+          (Bootstrap.grayLabel $ msg $ msg_Home_SubmissionCell_NoSubmission "No submission")
+          (\(key, state) ->
+             Bootstrap.link (routeOf (submissionDetails key)) (SState.formatSubmissionState SState.toLabel msg state))
+          sLookup
 
 -- assessment table for students
 availableAssessment :: I18N -> (Course, [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)]) -> Html

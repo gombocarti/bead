@@ -435,12 +435,12 @@ viewAssessmentContent aDesc = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
-      (msg . msg_ViewAssessment_Course $ "Course:")   .|. fromString (adCourse aDesc)
-      maybe mempty (\g -> (msg . msg_ViewAssessment_Group $ "Group:") .|. fromString g) (adGroup aDesc)
-      (msg . msg_ViewAssessment_Teacher $ "Teacher:") .|. (fromString . intercalate ", " . sortHun . adTeacher) aDesc
-      (msg . msg_ViewAssessment_Assessment $ "Assessment:") .|. fromString title
+      (msg . msg_ViewAssessment_Course $ "Course:")   .|. adCourse aDesc
+      maybe mempty (\g -> (msg . msg_ViewAssessment_Group $ "Group:") .|. g) (adGroup aDesc)
+      (msg . msg_ViewAssessment_Teacher $ "Teacher:") .|. (intercalate ", " . sortHun . adTeacher) aDesc
+      (msg . msg_ViewAssessment_Assessment $ "Assessment:") .|. title
       when (not . null $ description) $
-        (msg . msg_ViewAssessment_Description $ "Description:") .|. fromString description
+        (msg . msg_ViewAssessment_Description $ "Description:") .|. description
     where
       title, description :: String
       (title, description) = let assessment = adAssessment aDesc

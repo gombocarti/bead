@@ -22,7 +22,6 @@ import Bead.View.Content.Submission.Page
 import Bead.View.Content.SubmissionDetails.Page
 import Bead.View.Content.GroupRegistration.Page
 import Bead.View.Content.UserDetails.Page
-import Bead.View.Content.UserSubmissions.Page
 #ifndef SSO
 import Bead.View.Content.SetUserPassword.Page
 #endif
@@ -65,7 +64,6 @@ pageContent = Pages.constantsP
   modifyUserScore
   groupRegistration
   userDetails
-  userSubmissions
   newTestScript
   modifyTestScript
   uploadFile

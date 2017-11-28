@@ -326,7 +326,6 @@ Library
     Bead.View.Content.TestScript.Page
     Bead.View.Content.UploadFile.Page
     Bead.View.Content.UserDetails.Page
-    Bead.View.Content.UserSubmissions.Page
     Bead.View.Content.All
     Bead.View.Content.Bootstrap
     Bead.View.Content.Comments
@@ -335,6 +334,7 @@ Library
     Bead.View.Content.GetCsv
     Bead.View.Content.ScoreInfo
     Bead.View.Content.SeeMore
+    Bead.View.Content.SubmissionState
     Bead.View.Content.SubmissionTable
     Bead.View.Content.Utils
     Bead.View.Content.VisualConstants
