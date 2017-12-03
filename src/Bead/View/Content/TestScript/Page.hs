@@ -121,11 +121,13 @@ hasPageContent pd = do
         Bootstrap.textArea
           (fieldName testScriptScriptField)
           (fromString . msg $ msg_NewTestScript_Script "Test script")
+          Bootstrap.Medium
           (maybe mempty fromString $ testScriptScript pd)
 
         Bootstrap.textArea
           (fieldName testScriptNotesField)
           (fromString . msg $ msg_NewTestScript_Notes "Help for writing test cases")
+          Bootstrap.Medium
           (maybe mempty fromString $ testScriptNotes pd)
 
       Bootstrap.row $ Bootstrap.colMd12 $

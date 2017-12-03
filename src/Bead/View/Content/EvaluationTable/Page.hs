@@ -5,19 +5,20 @@ module Bead.View.Content.EvaluationTable.Page (
 
 import           Control.Monad
 import           Data.Function (on)
-import           Data.List (sortBy)
+import           Data.List (sortOn)
 import           Data.Maybe (fromMaybe)
 import           Data.Map (Map)
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import           Data.String (fromString)
 import           Data.Time (UTCTime)
+import           Data.Tuple.Utils (snd3, thd3)
 
 import qualified Bead.Controller.Pages as Pages
 import           Bead.Controller.UserStories (openSubmissions)
 import           Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Pagelets
 import           Bead.View.Content
-import           Bead.View.Content.SubmissionTable (formatSubmissionInfo)
+import qualified Bead.View.Content.SubmissionState as St
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 
 import           Text.Blaze.Html5 as H hiding (link, map)
@@ -62,6 +63,7 @@ evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup rela
     isGroup  = True
     isCourse = False
 
+    noUnevaluatedSubmission :: I18N -> [SMVal] -> [SMVal] -> [SMVal] -> H.Html
     noUnevaluatedSubmission msg ac ag rl = Bootstrap.rowColMd12 $ if (and [null ac, null ag, null rl])
       then (H.p $ fromString $ msg $ msg_EvaluationTable_EmptyUnevaluatedSolutions "There are no unevaluated submissions.")
       else
@@ -71,6 +73,7 @@ evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup rela
           , "on the home page."
           ]
 
+    evaluationTable :: I18N -> [SMVal] -> Bool -> H.Html
     evaluationTable msg ks isGroup =
       when (not $ null ks) $ Bootstrap.rowColMd12 $ do
         Bootstrap.table $ do
@@ -86,41 +89,23 @@ evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup rela
           tbody $ forM_ ks (submissionInfo tc msg isGroup)
 
 submissionInfo tc msg isGroup (key, desc) = H.tr $ do
-  H.td $ link (routeOf (evaluation key)) (msg $ msg_EvaluationTable_Solution "Submission")
+  H.td $ Bootstrap.link (routeOf (evaluation key)) (msg $ msg_EvaluationTable_Solution "Submission")
   H.td . fromString . Assignment.name . eAssignment $ desc
   uid (H.td . fromString) $ eUid desc
   H.td . fromString . eStudent $ desc
   H.td . fromString . eCourse $ desc
   when isGroup $ H.td . fromString . fromMaybe "" . eGroup $ desc
-  H.td . fromString . showDate . tc $ eSubmissionDate desc
-  H.td . submissionIcon msg . eSubmissionInfo $ desc
+  H.td . fromString . showDate . tc $ submissionPostTime desc
+  H.td . St.formatSubmissionState St.toMediumIcon msg . snd3 . eSubmissionInfo $ desc
   where
     evaluation k = Pages.evaluation k ()
 
-submissionIcon :: I18N -> SubmissionInfo -> H.Html
-submissionIcon msg =
-  formatSubmissionInfo
-    id
-    mempty -- not found
-    (H.i ! A.class_ "glyphicon glyphicon-stop"  ! A.style "color:#AAAAAA; font-size: large"
-         ! tooltip (msg_Home_SubmissionCell_NonEvaluated "Non evaluated") $ mempty) -- non-evaluated
-    (bool (H.i ! A.class_ "glyphicon glyphicon-ok-circle" ! A.style "color:#AAAAAA; font-size: large"
-               ! tooltip (msg_Home_SubmissionCell_Tests_Passed "Tests are passed") $ mempty)  -- tested accepted
-    (H.i ! A.class_ "glyphicon glyphicon-remove-circle" ! A.style "color:#AAAAAA; font-size: large"
-         ! tooltip (msg_Home_SubmissionCell_Tests_Failed "Tests are failed") $ mempty)) -- tested rejected
-    (H.i ! A.class_ "glyphicon glyphicon-thumbs-up" ! A.style "color:#00FF00; font-size: large"
-         ! tooltip (msg_Home_SubmissionCell_Accepted "Accepted") $ mempty) -- accepted
-    (H.i ! A.class_ "glyphicon glyphicon-thumbs-down" ! A.style "color:#FF0000; font-size: large"
-         ! tooltip (msg_Home_SubmissionCell_Rejected "Rejected") $ mempty) -- rejected
-      where
-        tooltip m = A.title (fromString $ msg m)
-
 -- * Sorting submissions
 
--- Create an ordered submission list based on the course group and assignment time ordering,
--- the submission list elements are ordered by the submission time of the solution
+-- Create an ordered submission list based on the course name, group name and assignment time ordering.
+-- The submission list elements are ordered by the submission time of the solution.
 
--- The key for the ordering consists of in order a course name, a group name (possible empty), and
+-- |The key for the ordering consists of a course name, a group name (possibly empty), and
 -- the time of the assignment
 type SMKey = (String, Maybe String, UTCTime)
 
@@ -132,14 +117,15 @@ type SMap = Map SMKey [SMVal]
 descToKey :: SMVal -> SMKey
 descToKey (_k,d) = (eCourse d, eGroup d, eAssignmentDate d)
 
-insertSMap :: SMap -> SMVal -> SMap
-insertSMap m x =
-  let key = descToKey x
-  in maybe (Map.insert key [x] m) (\xs -> Map.insert key (x:xs) m) (Map.lookup key m)
+insertSMap :: SMVal -> SMap -> SMap
+insertSMap v m =
+  let key = descToKey v
+  in Map.insertWith (++) key [v] m
 
 sortSubmissions :: [SMVal] -> [SMVal]
 sortSubmissions [] = []
 sortSubmissions [s] = [s]
-sortSubmissions sm = concat . map (sortBy cmp) . map snd . Map.toList . foldl insertSMap Map.empty $ sm
-  where
-    cmp = compare `on` (eSubmissionDate . snd)
+sortSubmissions sm = concatMap (sortOn (submissionPostTime . snd)) . Map.elems . foldr insertSMap Map.empty $ sm
+
+submissionPostTime :: SubmissionDesc -> UTCTime
+submissionPostTime = thd3 . eSubmissionInfo

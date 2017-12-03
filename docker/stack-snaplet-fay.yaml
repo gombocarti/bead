@@ -1,0 +1,12 @@
+packages:
+  - snaplet-fay/
+extra-deps:
+  - heist-1.0.1.1
+  - map-syntax-0.2.0.2
+  - snap-1.0.0.2
+  - fay-0.23.1.16
+  - xmlhtml-0.2.5.2
+  - spoon-0.3.1
+  - type-eq-0.5
+  - traverse-with-class-0.2.0.4
+resolver: lts-9.14

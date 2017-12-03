@@ -28,6 +28,7 @@ import           Bead.View.Content hiding (submissionForm)
 import qualified Bead.View.Content as C
 import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
+import qualified Bead.View.Content.SubmissionState as St
 import           Bead.View.Content.Submission.Common
 import           Bead.View.Markdown (markdownToHtml)
 
@@ -41,7 +42,7 @@ data PageData = PageData {
   , asNow :: UTCTime
   , asMaxFileSize :: Int
   , asLimit :: SubmissionLimit
-  , asSubmissions :: UserSubmissionInfo
+  , asSubmissions :: [SubmissionInfo]
   }
 
 data UploadResult
@@ -106,12 +107,14 @@ submissionPostHandler = do
         then submit $ SimpleSubmission <$> getParameter (stringParameter (fieldName submissionTextField) "Submission text")
         else
           case uploadedFile of
-            Just (File name contents) ->
-              if (takeExtension name == ".zip")
+            Just (File name contents) -> do
+              let extension = ".zip"
+                  signature = B.pack "PK"
+              if (takeExtension name == extension || signature `B.isPrefixOf` contents)
                 then submit $ return $ ZippedSubmission contents
                 else return $
                   ErrorMessage $ msg_Submission_File_InvalidFile
-                    "The extension of the file to be uploaded is incorrect."
+                    "The file to be uploaded does not appear to be a zip file. Invalid file extension and signature."
             Just PolicyFailure      -> return $
               ErrorMessage $ msg_Submission_File_PolicyFailure
                 "The upload policy has been violated, probably the file was too large."
@@ -148,7 +151,7 @@ assignmentNotAvailableYetContent :: IHtml
 assignmentNotAvailableYetContent = do
   msg <- getI18N
   return $ Bootstrap.rowColMd12 $ Bootstrap.alert Bootstrap.Danger $
-    H.p $ fromString $ msg $ msg_Submission_AssignmentNotAvailableYet "The assignment is not available yet. Check back later."
+    fromString $ msg $ msg_Submission_AssignmentNotAvailableYet "The assignment is not available yet. Check back later."
 
 submissionContent :: PageData -> IHtml
 submissionContent p = do
@@ -157,11 +160,11 @@ submissionContent p = do
     -- Informational table on the page
     Bootstrap.rowColMd12 $ Bootstrap.table $
       H.tbody $ do
-        (msg $ msg_Submission_Course "Course: ")         .|. (fromString . aGroup $ asDesc p)
-        (msg $ msg_Submission_Admin "Teacher: ")         .|. (fromString . concat . intersperse ", " . sortHun . aTeachers $ asDesc p)
-        (msg $ msg_Submission_Assignment "Assignment: ") .|. (fromString . Assignment.name $ asValue p)
+        (msg $ msg_Submission_Course "Course: ")         .|. (aGroup $ asDesc p)
+        (msg $ msg_Submission_Admin "Teacher: ")         .|. (concat . intersperse ", " . sortHun . aTeachers $ asDesc p)
+        (msg $ msg_Submission_Assignment "Assignment: ") .|. (Assignment.name $ asValue p)
         (msg $ msg_Submission_Deadline "Deadline: ")     .|.
-          (fromString . showDate . (asTimeConv p) . Assignment.end $ asValue p)
+          (showDate . (asTimeConv p) . Assignment.end $ asValue p)
         (msg $ msg_Submission_TimeLeft "Time left: ")    .|. (startEndCountdownDiv
                 "ctd"
                 (msg $ msg_Submission_Days "day(s)")
@@ -170,15 +173,17 @@ submissionContent p = do
                 (Assignment.end $ asValue p))
         maybe (return ()) (uncurry (.|.)) (remainingTries msg (asLimit p))
     Bootstrap.rowColMd12 $ do
-      let submissions = asSubmissions p
-      userSubmissionInfo msg submissions
-       
-    Bootstrap.rowColMd12 $ do
       submissionLimit
         (const $ submissionForm msg)
         (const . const $ submissionForm msg)
         (const $ limitReached msg)
         (asLimit p)
+
+    Bootstrap.rowColMd12 H.hr
+
+    Bootstrap.rowColMd12 $ do
+      let submissions = asSubmissions p
+      userSubmissionInfo msg submissions
  
     Bootstrap.rowColMd12 $ do
       H.h2 $ fromString $ msg $ msg_Submission_Description "Description"
@@ -208,7 +213,7 @@ submissionContent p = do
                     (fromString $ show $ asMaxFileSize p)
                   fileInput (fieldName submissionFileField)
               else
-                Bootstrap.textArea (fieldName submissionTextField) "" ""
+                Bootstrap.textArea (fieldName submissionTextField) "" Bootstrap.Medium ""
             Bootstrap.submitButton (fieldName submitSolutionBtn) (fromString $ msg $ msg_Submission_Submit "Submit")
         else
           Bootstrap.alert Bootstrap.Danger $ H.p $ fromString . msg $
@@ -221,44 +226,24 @@ submissionContent p = do
           "This assignment can only accept submissions by providing the password."
         Bootstrap.passwordInput (fieldName submissionPwdField) (msg $ msg_Submission_Password "Password for the assignment:")
 
-    userSubmissionInfo :: I18N -> UserSubmissionInfo -> H.Html
+    userSubmissionInfo :: I18N -> [SubmissionInfo] -> H.Html
     userSubmissionInfo msg submissions =
       userSubmission msg (submissionLine msg) submissions
 
-    userSubmission :: I18N -> ((SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy) -> H.Html) -> UserSubmissionInfo -> H.Html
+    userSubmission :: I18N -> (SubmissionInfo -> H.Html) -> [SubmissionInfo] -> H.Html
     userSubmission msg line submissions
       | not $ null submissions =
-          Bootstrap.rowColMd12 $ Bootstrap.listGroupHeightLimit (4 * 42) $ mapM_ line submissions
+          Bootstrap.rowColMd12 $ Bootstrap.listGroupHeightLimit 4 $ mapM_ line submissions
       | otherwise =
           Bootstrap.rowColMd12 $ H.p $ fromString $ msg $ msg_Submission_NoSubmittedSolutions "There are no submissions."
 
-    submissionLine :: I18N -> (SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy) -> H.Html
-    submissionLine msg (sk, time, status, _t) = do
+    submissionLine :: I18N -> SubmissionInfo -> H.Html
+    submissionLine msg (sk, state, time) = do
       Bootstrap.listGroupLinkItem
         (routeOf $ submissionDetails (asKey p) sk)
-        (do Bootstrap.badge (resolveStatus msg status); fromString . showDate $ (asTimeConv p) time)
+        (do fromString . showDate $ (asTimeConv p) time
+            St.formatSubmissionState St.toColoredBadge msg state
+        )
         where
           submissionDetails :: AssignmentKey -> SubmissionKey -> Pages.Page a b () c d
           submissionDetails ak sk = Pages.submissionDetails ak sk ()
-
-    resolveStatus :: I18N -> SubmissionInfo -> String
-    resolveStatus msg = submissionInfoCata
-      (msg $ msg_Submission_NotFound "Not found")
-      (msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet")
-      (bool (msg $ msg_Submission_TestsPassed "Tests are passed")
-            (msg $ msg_Submission_TestsFailed "Tests are failed"))
-      (const (evaluationResultMsg . Eval.evResult))
-      where
-        evaluationResultMsg :: Eval.EvaluationData Eval.Binary Eval.Percentage Eval.FreeForm -> String
-        evaluationResultMsg = evaluationResultCata
-          (Eval.binaryCata (Eval.resultCata
-            (msg $ msg_Submission_Passed "Passed")
-            (msg $ msg_Submission_Failed "Failed")))
-          (Eval.percentageCata (fromString . scores))
-          (Eval.freeForm fromString)
-
-        scores :: Eval.Scores Double -> String
-        scores (Eval.Scores [])  = "0%"
-        scores (Eval.Scores [p]) = concat [show . round $ 100 * p, "%"]
-        scores _                 = "???%"
-

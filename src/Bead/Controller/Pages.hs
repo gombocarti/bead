@@ -24,7 +24,6 @@ data ViewPage a
   | CourseOverview CourseKey a
   | EvaluationTable a
   | ViewAssignment AssignmentKey a
-  | UserSubmissions a
   | Administration a
   | CourseAdmin a
   | ViewAssessment AssessmentKey a
@@ -39,7 +38,6 @@ viewPageCata
   courseOverview
   evaluationTable
   viewAssignment
-  userSubmissions
   administration
   courseAdmin
   viewAssessment
@@ -52,7 +50,6 @@ viewPageCata
     CourseOverview ck a -> courseOverview ck a
     EvaluationTable a -> evaluationTable a
     ViewAssignment ak a -> viewAssignment ak a
-    UserSubmissions a -> userSubmissions a
     Administration a -> administration a
     CourseAdmin a -> courseAdmin a
     ViewAssessment ak a -> viewAssessment ak a
@@ -67,7 +64,6 @@ viewPageValue = viewPageCata
   cid -- courseOverview
   id -- evaluationTable
   cid -- viewAssignment
-  id -- userSubmissions
   id -- administration
   id -- courseAdmin
   cid -- viewAssessment
@@ -357,7 +353,6 @@ home                    = View . Home
 courseOverview ck       = View . CourseOverview ck
 evaluationTable         = View . EvaluationTable
 viewAssignment ak       = View . ViewAssignment ak
-userSubmissions         = View . UserSubmissions
 administration          = View . Administration
 courseAdmin             = View . CourseAdmin
 viewAssessment ak       = View . ViewAssessment ak
@@ -436,7 +431,6 @@ pageCata
   modifyUserScore
   groupRegistration
   userDetails
-  userSubmissions
   newTestScript
   modifyTestScript
   uploadFile
@@ -490,7 +484,6 @@ pageCata
     (ViewModify (ModifyUserScore sk a)) -> modifyUserScore sk a
     (ViewModify (GroupRegistration a)) -> groupRegistration a
     (ViewModify (UserDetails a)) -> userDetails a
-    (View (UserSubmissions a)) -> userSubmissions a
     (ViewModify (NewTestScript a)) -> newTestScript a
     (ViewModify (ModifyTestScript tsk a)) -> modifyTestScript tsk a
     (ViewModify (UploadFile a)) -> uploadFile a
@@ -546,7 +539,6 @@ constantsP
   modifyUserScore_
   groupRegistration_
   userDetails_
-  userSubmissions_
   newTestScript_
   modifyTestScript_
   uploadFile_
@@ -600,7 +592,6 @@ constantsP
       (\sk _ -> modifyUserScore sk modifyUserScore_)
       (c $ groupRegistration groupRegistration_)
       (c $ userDetails userDetails_)
-      (c $ userSubmissions userSubmissions_)
       (c $ newTestScript newTestScript_)
       (\tsk _ -> modifyTestScript tsk modifyTestScript_)
       (c $ uploadFile uploadFile_)
@@ -658,7 +649,6 @@ liftsP
   modifyUserScore_
   groupRegistration_
   userDetails_
-  userSubmissions_
   newTestScript_
   modifyTestScript_
   uploadFile_
@@ -712,7 +702,6 @@ liftsP
       (\sk a -> modifyUserScore sk (modifyUserScore_ sk a))
       (groupRegistration . groupRegistration_)
       (userDetails . userDetails_)
-      (userSubmissions . userSubmissions_)
       (newTestScript . newTestScript_)
       (\tsk a -> modifyTestScript tsk (modifyTestScript_ tsk a))
       (uploadFile . uploadFile_)
@@ -813,9 +802,6 @@ isGroupRegistration _ = False
 
 isUserDetails (ViewModify (UserDetails _)) = True
 isUserDetails _ = False
-
-isUserSubmissions (View (UserSubmissions _)) = True
-isUserSubmissions _ = False
 
 isNewTestScript (ViewModify (NewTestScript _)) = True
 isNewTestScript _ = False
@@ -930,7 +916,6 @@ groupAdminPages = [
   , isViewAssignment
   , isNewGroupAssignmentPreview
   , isModifyAssignmentPreview
-  , isUserSubmissions
   , isNewUserScore
   , isModifyUserScore
 #ifndef SSO
@@ -962,7 +947,6 @@ courseAdminPages = [
   , isNewGroupAssignmentPreview
   , isModifyAssignmentPreview
   , isViewAssignment
-  , isUserSubmissions
   , isNewUserScore
   , isModifyUserScore
 #ifndef SSO
@@ -1027,7 +1011,6 @@ menuPageList = map ($ ()) [
   , courseAdmin
   , evaluationTable
   , groupRegistration
-  , userSubmissions
   , newTestScript
   , uploadFile
   ]
@@ -1136,7 +1119,6 @@ pageGen = oneof [
         , evaluationTable ()
         , groupRegistration ()
         , userDetails ()
-        , userSubmissions ()
         , uploadFile ()
         , createCourse ()
         , createGroup ()

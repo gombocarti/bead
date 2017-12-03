@@ -31,7 +31,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Assessment
   title       Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   description Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
-  created     UTCTime
+  created     UTCTime sqltype="datetime(6)"
   evalConfig  JSONText sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   visible     Bool
   deriving Show
@@ -40,16 +40,16 @@ Assignment
   name        Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   description Text sqltype="longtext character set utf8mb4 collate utf8mb4_unicode_ci"
   type        JSONText sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
-  start       UTCTime
-  end         UTCTime
-  created     UTCTime
+  start       UTCTime sqltype="datetime(6)"
+  end         UTCTime sqltype="datetime(6)"
+  created     UTCTime sqltype="datetime(6)"
   evalConfig  JSONText sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   deriving Show
 
 Comment
   text   Text sqltype="longtext character set utf8mb4 collate utf8mb4_unicode_ci"
   author Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
-  date   UTCTime
+  date   UTCTime sqltype="datetime(6)"
   type   JSONText sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   deriving Show
 
@@ -66,7 +66,7 @@ Evaluation
 
 Feedback
   info JSONText sqltype="longtext character set utf8mb4 collate utf8mb4_unicode_ci"
-  date UTCTime
+  date UTCTime sqltype="datetime(6)"
   deriving Show
 
 Group
@@ -76,7 +76,7 @@ Group
 
 Notification
   event       JSONText sqltype="longtext character set utf8mb4 collate utf8mb4_unicode_ci"
-  date        UTCTime
+  date        UTCTime sqltype="datetime(6)"
   type        JSONText sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   deriving Show
 
@@ -87,7 +87,7 @@ Score
 Submission
   simple   Text       Maybe sqltype="longtext character set utf8mb4 collate utf8mb4_unicode_ci"
   zipped   ByteString Maybe sqltype=longblob
-  postDate UTCTime
+  postDate UTCTime sqltype="datetime(6)"
   deriving Show
 
 TestCase
@@ -123,7 +123,7 @@ UserRegistration
   email    Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   name     Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
   token    Text sqltype="text character set utf8mb4 collate utf8mb4_unicode_ci"
-  timeout  UTCTime
+  timeout  UTCTime sqltype="datetime(6)"
   deriving Show
 
 -- Connections between objects
@@ -308,7 +308,7 @@ UserNotification
   notification NotificationId
   seen         Bool
   processed    Bool
-  created      UTCTime
+  created      UTCTime sqltype="datetime(6)"
   UniqueUserNotification user notification
 
 |]

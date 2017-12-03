@@ -484,7 +484,10 @@ data UserDesc = UserDesc {
     ud_username :: Username
   , ud_fullname :: String
   , ud_uid      :: Uid
-  } deriving (Eq, Ord, Show)
+  } deriving Eq
+
+instance Ord UserDesc where
+  compare = compareHun
 
 mkUserDescription :: User -> UserDesc
 mkUserDescription u = UserDesc {

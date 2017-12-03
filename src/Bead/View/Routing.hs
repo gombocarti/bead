@@ -322,7 +322,6 @@ routeToPageMap = Map.fromList [
   , (viewUserScorePath    , \ps -> P.viewUserScore <$> scoreKey ps <*> unit)
   , (newUserScorePath     , \ps -> P.newUserScore <$> assessmentKey ps <*> username ps <*> unit)
   , (modifyUserScorePath  , \ps -> P.modifyUserScore <$> scoreKey ps <*> unit)
-  , (userSubmissionsPath  , j $ P.userSubmissions ())
   , (newTestScriptPath    , j $ P.newTestScript ())
   , (modifyTestScriptPath , \ps -> P.modifyTestScript <$> testScriptKey ps <*> unit)
   , (uploadFilePath , j $ P.uploadFile ())

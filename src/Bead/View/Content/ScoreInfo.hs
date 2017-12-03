@@ -12,6 +12,7 @@ import qualified Text.Blaze.Html5.Attributes as A
 import           Data.String (fromString)
 
 import           Bead.View.Content hiding (notFound)
+import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.VisualConstants
 import           Bead.Domain.Shared.Evaluation
 
@@ -49,7 +50,7 @@ scoreInfoToIcon msg = scoreInfoAlgebra notFound' $ \_ek -> evResultToIcon msg
 
 scoreInfoToIconLink :: I18N -> String -> String -> ScoreInfo -> Html
 scoreInfoToIconLink msg notFoundLink foundLink =
-  scoreInfoAlgebra (linkWithHtml notFoundLink notFound') $ \_ek -> (linkWithHtml foundLink . evResultToIcon msg)
+  scoreInfoAlgebra (Bootstrap.link notFoundLink notFound') $ \_ek -> (Bootstrap.link foundLink . evResultToIcon msg)
   where 
     notFound' = notFound msg
 
@@ -58,11 +59,11 @@ tooltip msg = A.title . fromString . msg
 
 notFound :: I18N -> Html
 notFound msg = H.i ! A.class_ "glyphicon glyphicon-stop" ! A.style "color:#AAAAAA; font-size: xx-large"
-                   ! tooltip msg (msg_Home_SubmissionCell_NonEvaluated "Non evaluated") $ mempty
+                   ! tooltip msg (msg_SubmissionState_NonEvaluated "Non evaluated") $ mempty
 
 accepted, rejected :: Translation String
-accepted = msg_Home_SubmissionCell_Accepted "Accepted"
-rejected = msg_Home_SubmissionCell_Rejected "Rejected"
+accepted = msg_SubmissionState_Accepted "Accepted"
+rejected = msg_SubmissionState_Rejected "Rejected"
 
 passed :: I18N -> Html
 passed msg = H.i ! A.class_ "glyphicon glyphicon-thumbs-up" ! A.style "color:#00FF00; font-size: xx-large"

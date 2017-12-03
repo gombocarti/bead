@@ -7,21 +7,22 @@ module Bead.View.Content.Evaluation.Page (
 import           Control.Monad.IO.Class
 import           Control.Monad
 import           Control.Arrow ((&&&))
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, listToMaybe)
 import           Data.Monoid
 import           Text.Printf
 import           Data.String (fromString)
-import           Data.Time (getCurrentTime)
+import           Data.Time (UTCTime, getCurrentTime)
+import           Data.Tuple.Utils (snd3, thd3)
 
 import qualified Bead.Controller.Pages as Pages
-import           Bead.Controller.UserStories (submissionDescription)
+import qualified Bead.Controller.UserStories as Story
 import           Bead.Domain.Entity.Assignment as Assignment
 import           Bead.Domain.Evaluation
 import           Bead.View.Content as C
 import           Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.Comments
 import           Bead.View.Content.SeeMore
-import           Bead.View.Content.SubmissionTable (formatSubmissionInfo)
+import qualified Bead.View.Content.SubmissionState as St
 import           Bead.View.Content.VisualConstants
 
 import           Text.Blaze.Html5 as H
@@ -43,18 +44,25 @@ data PageData = PageData {
   , sbmSubmissionKey :: SubmissionKey
   , sbmEvaluationKey :: Maybe EvaluationKey
   , userTime :: UserTimeConverter
+  , submissions :: [SubmissionInfo]
+  , latestSubmission :: Maybe SubmissionInfo
   }
 
 evaluationPage :: GETContentHandler
 evaluationPage = do
   sk <- getParameter submissionKeyPrm
-  sd <- userStory (submissionDescription sk)
+  sd <- userStory (Story.submissionDescription sk)
   tc <- userTimeZoneToLocalTimeConverter
+  subms <- userStory $ do
+    ak <- Story.assignmentOfSubmission sk
+    Story.submissionInfos (eUsername sd) ak
   let pageData = PageData {
       sbmDesc = sd
     , sbmSubmissionKey = sk
     , sbmEvaluationKey = Nothing
     , userTime = tc
+    , submissions = subms
+    , latestSubmission = listToMaybe subms
     }
   return $ evaluationContent pageData
 
@@ -62,13 +70,18 @@ modifyEvaluationPage :: GETContentHandler
 modifyEvaluationPage = do
   sk <- getParameter submissionKeyPrm
   ek <- getParameter evaluationKeyPrm
-  sd <- userStory (submissionDescription sk)
+  sd <- userStory (Story.submissionDescription sk)
   tc <- userTimeZoneToLocalTimeConverter
+  subms <- userStory $ do
+    ak <- Story.assignmentOfSubmission sk
+    Story.submissionInfos (eUsername sd) ak
   let pageData = PageData {
     sbmDesc = sd
   , sbmSubmissionKey = sk
   , sbmEvaluationKey = Just ek
   , userTime = tc
+  , submissions = subms
+  , latestSubmission = listToMaybe subms
   }
   return $ evaluationContent pageData
 
@@ -195,33 +208,41 @@ evaluationContent pd = do
   let sd = sbmDesc pd
       tc = userTime pd
   msg <- getI18N
-  let freeFormCommentTitle = evConfigCata
-        (return ())
-        (const $ return ())
-        (Bootstrap.labelFor (fieldName evaluationValueField) (msg $ msg_Evaluation_FreeFormComment "Comment"))
   return $ do
-    Bootstrap.row $ Bootstrap.colMd12 $
-      H.p $ fromString . msg $ msg_Evaluation_Info $ concat
-        [ "It is not mandatory to evaluate the submission, it is allowed to comment on it only.  "
-        , "The student may answer the comments by further comments.  The submission may be "
-        , "evaluated many times."
-        ]
-
-    Bootstrap.row $ Bootstrap.colMd12 $ Bootstrap.table $
+    Bootstrap.rowColMd12 $ Bootstrap.table $
       H.tbody $ do
         let aName = assignmentCata (\name _ _ _ _ _ -> name)
-        (msg $ msg_Evaluation_Course "Course: ") .|. (fromString . eCourse $ sd)
-        (msg $ msg_Evaluation_Assignment "Assignment: ") .|. (fromString . aName . eAssignment $ sd)
+        (msg $ msg_Evaluation_Course "Course: ") .|. (eCourse $ sd)
+        (msg $ msg_Evaluation_Assignment "Assignment: ") .|. (aName . eAssignment $ sd)
         maybe
           mempty
-          (\group -> (msg $ msg_Evaluation_Group "Group: ") .|. (fromString group))
+          (\group -> (msg $ msg_Evaluation_Group "Group: ") .|. group)
           (eGroup sd)
-        (msg $ msg_Evaluation_Student "Student: ") .|. (fromString . eStudent $ sd)
-        (msg $ msg_Evaluation_Username "Username: ") .|. (fromString . uid Prelude.id $ eUid sd)
-        (msg $ msg_Evaluation_SubmissionDate "Date of submission: ") .|. (fromString . showDate . tc $ eSubmissionDate sd)
-        (msg $ msg_Evaluation_SubmissionInfo "State: ") .|. submissionIcon msg (eSubmissionInfo sd)
+        (msg $ msg_Evaluation_Student "Student: ") .|. (eStudent $ sd)
+        (msg $ msg_Evaluation_Username "Username: ") .|. (uid Prelude.id $ eUid sd)
+        (msg $ msg_Evaluation_SubmissionDate "Date of submission: ") .|. (showDate . tc . thd3 $ eSubmissionInfo sd)
+        let customIconStyle = St.toMediumIcon {
+              St.freeFormPlaceholder = \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
+              }
+          in (msg $ msg_Evaluation_SubmissionInfo "State: ") .|. (St.formatSubmissionState customIconStyle msg . snd3 . eSubmissionInfo $ sd)
 
-    Bootstrap.row $ Bootstrap.colMd12 $ do
+    let (viewTheLatestSubmissionLink, dontEvaluateThisSubmissionLink) =
+          maybe
+            mempty
+            (\latest ->
+               if (sbmSubmissionKey pd /= submKey latest)
+               then
+                 ( Bootstrap.rowColMd12 (notTheLatestWarning msg latest)
+                 , Bootstrap.rowColMd12 (shouldNotEvaluateWarning msg latest)
+                 )
+               else
+                 (mempty, mempty)
+            )
+          (latestSubmission pd)
+
+    viewTheLatestSubmissionLink
+
+    Bootstrap.rowColMd12 $ do
       let downloadSubmissionButton =
             Bootstrap.buttonLink
               (routeOf $ Pages.getSubmission submissionKey ())
@@ -242,21 +263,39 @@ evaluationContent pd = do
           H.br
           H.div # submissionTextDiv $ seeMoreSubmission "submission-text-" msg maxLength maxLines (eSolution sd)
 
-    Bootstrap.row $ Bootstrap.colMd12 $
+    Bootstrap.rowColMd12 $
+      H.p $ fromString . msg $ msg_Evaluation_Info $ concat
+        [ "It is not mandatory to evaluate the submission, it is allowed to comment on it only.  "
+        , "The student may answer the comments by further comments.  The submission may be "
+        , "evaluated many times."
+        ]
+
+    dontEvaluateThisSubmissionLink
+
+    Bootstrap.rowColMd12 $
       postForm (routeOf . evPage $ maybeEvalKey) $ do
         let evType = Assignment.evType $ eAssignment sd
+            textInputTitle = evConfigCata
+              (msg $ msg_Evaluation_EvaluationOrComment "Evaluation or Comment")
+              (const $ msg $ msg_Evaluation_EvaluationOrComment "Evaluation or Comment")
+              (msg $ msg_Evaluation_FreeFormComment "Comment")
+              evType
         evaluationFrame evType msg $ do
-          freeFormCommentTitle evType
-          Bootstrap.optionalTextArea (fieldName evaluationValueField) "" $ mempty
+          Bootstrap.optionalTextArea (fieldName evaluationValueField) textInputTitle Bootstrap.Medium $ mempty
           hiddenInput (fieldName assignmentKeyField) (paramValue $ eAssignmentKey sd)
           hiddenInput (fieldName evCommentOnlyText) (msg $ msg_Evaluation_New_Comment "New Comment")
         Bootstrap.submitButton
           (fieldName saveEvalBtn) (fromString . msg $ msg_Evaluation_SaveButton "Submit")
 
+    let subms = submissions pd
+    when (not $ null subms) $
+      Bootstrap.rowColMd12 $ do
+        H.h2 (fromString . msg $ msg_Submissions_Title "Submissions")
+        submissionList msg tc subms (sbmSubmissionKey pd)
+
     let comments = submissionDescToCFs sd
     when (not $ null comments) $ do
-      Bootstrap.row $ Bootstrap.colMd12 $ hr
-      Bootstrap.row $ Bootstrap.colMd12 $
+      Bootstrap.rowColMd12 $
         H.h2 (fromString . msg $ msg_Comments_Title "Comments")
       -- Renders the comment area where the user can place a comment
       i18n msg $ commentsDiv "evaluation-comments-" tc comments
@@ -270,20 +309,46 @@ evaluationContent pd = do
     maxLength = 2048
     maxLines  = 100
 
-    submissionIcon :: I18N -> SubmissionInfo -> H.Html
-    submissionIcon msg =
-      formatSubmissionInfo
-        id
-        mempty -- not found
-        (H.i ! A.class_ "glyphicon glyphicon-stop"  ! A.style "color:#AAAAAA; font-size: large"
-             ! tooltip (msg_Home_SubmissionCell_NonEvaluated "Non evaluated") $ mempty) -- non-evaluated
-        (bool (H.i ! A.class_ "glyphicon glyphicon-ok-circle" ! A.style "color:#AAAAAA; font-size: large"
-                   ! tooltip (msg_Home_SubmissionCell_Tests_Passed "Tests are passed") $ mempty)  -- tested accepted
-              (H.i ! A.class_ "glyphicon glyphicon-remove-circle" ! A.style "color:#AAAAAA; font-size: large"
-                   ! tooltip (msg_Home_SubmissionCell_Tests_Failed "Tests are failed") $ mempty)) -- tested rejected
-        (H.i ! A.class_ "glyphicon glyphicon-thumbs-up" ! A.style "color:#00FF00; font-size: large"
-             ! tooltip (msg_Home_SubmissionCell_Accepted "Accepted") $ mempty) -- accepted
-        (H.i ! A.class_ "glyphicon glyphicon-thumbs-down" ! A.style "color:#FF0000; font-size: large"
-             ! tooltip (msg_Home_SubmissionCell_Rejected "Rejected") $ mempty) -- rejected
-      where
-        tooltip m = A.title (fromString $ msg m)
+    notTheLatestWarning :: I18N -> SubmissionInfo -> H.Html
+    notTheLatestWarning msg si = 
+      Bootstrap.link (evalRoute si) $
+        Bootstrap.alert Bootstrap.Warning $ H.toMarkup $ msg $ msg_Evaluation_NotTheLatest
+          "You are not viewing the most recent submission of the student. For the most recent, click on this link."
+
+    shouldNotEvaluateWarning :: I18N -> SubmissionInfo -> H.Html
+    shouldNotEvaluateWarning msg si =
+      Bootstrap.link (evalRoute si) $
+        Bootstrap.alert Bootstrap.Warning $ H.toMarkup $ msg $ msg_Evaluation_ShouldNotEvaluate $
+        unwords [
+          "The evaluation of this submission will not be visible on the student's home page."
+        , "It is recommended to evaluate the most recent submission. In order to do so, click on this link."
+        ]
+
+submissionList :: I18N -> UserTimeConverter -> [SubmissionInfo] -> SubmissionKey -> H.Html
+submissionList msg userTime submissions currentSubmission =
+  Bootstrap.listGroupHeightLimit 4 $ mapM_ (line msg) submissions
+
+  where
+    line :: I18N -> SubmissionInfo -> H.Html
+    line msg info
+      | submKey info == currentSubmission =
+          Bootstrap.listGroupActiveLinkItem -- In Bootstrap 4, it should not be a link. It is now because 'active' supports only links.
+           (evalRoute info)
+           (do toMarkup (date info)
+               St.formatSubmissionState St.toBadge msg (submState info)
+           )
+      | otherwise =
+          Bootstrap.listGroupLinkItem
+            (evalRoute info)
+            (do toMarkup (date info)
+                St.formatSubmissionState St.toColoredBadge msg (submState info)
+            )
+
+    date :: SubmissionInfo -> String
+    date = showDate . userTime . submTime
+
+evalRoute :: SubmissionInfo -> String
+evalRoute (sk, st, time) = case siEvaluationKey st of
+  Nothing -> routeOf (Pages.evaluation sk ())
+  Just ek -> routeOf (Pages.modifyEvaluation sk ek ())
+

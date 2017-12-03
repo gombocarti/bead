@@ -232,7 +232,7 @@ newAssignmentContent pd = do
                 Bootstrap.formGroup $ do
                     let assignmentDesc = fromString $ fieldName assignmentDescField
                     Bootstrap.labelFor assignmentDesc $ fromString . msg $ msg_NewAssignment_Description "Description"
-                    editOrReadOnly pd $ Bootstrap.textAreaField assignmentDesc $ do
+                    editOrReadOnly pd $ Bootstrap.textAreaField assignmentDesc Bootstrap.Large $ do
                       fromString $ fromAssignment Assignment.desc (fromString . msg $
                         msg_NewAssignment_Description_Default $ unlines
                           [ concat
@@ -269,10 +269,10 @@ newAssignmentContent pd = do
                         H.div # assignmentTextDiv $ markdownToHtml $ Assignment.desc a
 
                 pageDataCata
-                  (const5 empty)
-                  (const5 empty)
-                  (const7 empty)
-                  (const5 empty)
+                  (const5 mempty)
+                  (const5 mempty)
+                  (const7 mempty)
+                  (const5 mempty)
                   (\_tz _t _key _tsType _fs a _tc -> assignmentPreview a)
                   (\_tz _t _key _tsType _fs a _tc -> assignmentPreview a)
                   (\_tz _k a _t _fs _tst _tm _ev -> assignmentPreview a)
@@ -500,7 +500,7 @@ newAssignmentContent pd = do
         where
           textArea val = do
             Bootstrap.labelFor (fieldName assignmentTestCaseField) (msg $ msg_NewAssignment_TestCase "Test cases")
-            editOrReadOnly pd $ Bootstrap.textAreaOptionalField (fieldName assignmentTestCaseField) (maybe mempty fromString val)
+            editOrReadOnly pd $ Bootstrap.textAreaOptionalField (fieldName assignmentTestCaseField) Bootstrap.Medium (maybe mempty fromString val)
 
           createTestCaseAreaPreview fs ts tcp = case tcp of
             (Just Nothing , Nothing, Nothing) -> createTestCaseArea fs ts

@@ -41,7 +41,7 @@ css :: String -> Html
 css c = H.link ! A.type_ "text/css" ! A.href (fromString c) ! A.rel "stylesheet"
 
 js :: String -> Html
-js j = H.script ! A.src (fromString j) $ empty
+js j = H.script ! A.src (fromString j) $ mempty
 
 bootStrapDocument :: UserState -> IHtml -> IHtml
 bootStrapDocument state body' = do
@@ -99,7 +99,7 @@ titleAndHead doc title content = doc
       content <- content
       return $ do
         H.div ! A.id "header" $ do
-          H.div ! A.id "logo" $ "BE-AD"
+          H.div ! A.id "logo" $ "E-AD"
           H.div ! A.id "title" $ fromString $ msg title
         H.div ! A.id "content" $ content)
 
@@ -361,17 +361,8 @@ countdownDiv divId daystr overstr showDays seconds = do
 table :: String -> String -> Html -> Html
 table i c = H.table ! A.id (fromString i) ! A.class_ (fromString c)
 
-tableLine :: String -> Html -> Html
-tableLine title field = do
-  H.tr $ do
-    H.td (fromString title)
-    H.td field
-
 hiddenTableLine :: Html -> Html
 hiddenTableLine value = H.tr . H.td $ value
-
-empty :: Html
-empty = return ()
 
 linkText :: P.Page a b c d e -> Translation String
 linkText = P.pageCata
@@ -399,7 +390,6 @@ linkText = P.pageCata
   (c2 $ msg_LinkText_ModifyUserScore "Modify Score")
   (c $ msg_LinkText_GroupRegistration "Group Registration")
   (c $ msg_LinkText_UserDetails "User Details")
-  (c $ msg_LinkText_UserSubmissions "Submissions")
   (c $ msg_LinkText_NewTestScript "New Test")
   (c2 $ msg_LinkText_ModifyTestScript "Modify Test Script")
   (c $ msg_LinkText_UploadFile "Upload file")
@@ -436,44 +426,31 @@ linkText = P.pageCata
 linkToPage :: P.Page a b c d e -> IHtml
 linkToPage g = do
   msg <- getI18N
-  return $ H.a ! A.href (routeOf g) ! A.id (fieldName g) $ fromString $ msg $ linkText g
+  return $ Bootstrap.link (routeOf g) (msg $ linkText g) ! A.id (fieldName g)
 
 linkToPageWithPostfix :: P.Page a b c d e -> String -> IHtml
 linkToPageWithPostfix g p = do
   msg <- getI18N
-  return $ H.a ! A.href (routeOf g) ! A.id (fieldName g) $ fromString (msg (linkText g) ++ p)
+  return $ Bootstrap.link (routeOf g) (msg (linkText g) ++ p) ! A.id (fieldName g)
 
 linkButtonToPageBS :: P.Page a b c d e -> IHtml
 linkButtonToPageBS g = do
   msg <- getI18N
-  return $ H.a ! A.href (routeOf g) ! A.class_ "btn btn-default" $ fromString $ msg $ linkText g
+  return $ Bootstrap.buttonLink (routeOf g) (msg $ linkText g)
 
 linkToPageBlank :: P.Page a b c d e -> IHtml
 linkToPageBlank g = do
   msg <- getI18N
-  return $ H.a ! A.href (routeOf g) ! A.target "_blank" ! A.id (fieldName g) $ fromString $ msg $ linkText g
+  return $ Bootstrap.link (routeOf g) (msg $ linkText g) ! A.target "_blank" ! A.id (fieldName g)
 
 linkToPageWithText :: P.Page a b c d e -> String -> Html
-linkToPageWithText g t = H.p $ H.a ! A.href (routeOf g) ! A.id (fieldName g) $ fromString t
-
-link :: String -> String -> Html
-link r t = H.a ! A.href (fromString r) $ (fromString t)
-
-linkWithText :: String -> String -> Html
-linkWithText r t = H.a ! A.href (fromString r) $ (fromString t)
-
-linkWithHtml :: String -> Html -> Html
-linkWithHtml r t = H.a ! A.href (fromString r) $ t
+linkToPageWithText g t = H.p $ Bootstrap.link (routeOf g) t ! A.id (fieldName g)
 
 -- Produces a HTML-link with the given route text and title
 linkWithTitle :: String -> String -> String -> Html
 linkWithTitle route title text =
-  H.a ! A.href (fromString route)
-      ! A.title (fromString title)
-      $ fromString text
-
-linkToRoute :: String -> Html
-linkToRoute = link "/"
+  Bootstrap.link route text
+    ! A.title (fromString title)
 
 -- Html text in span tag with title attribute
 spanWithTitle :: String -> String -> Html
@@ -497,7 +474,7 @@ bootStrapHeader s secs newNotifs = do
             H.style ".body{padding-top:70px}"
             H.div ! class_ "container" $ do
                 H.div ! class_ "navbar-header" $ do
-                    a ! class_ "navbar-brand" ! href (routeOf home) $ "BE-AD"
+                    Bootstrap.link (routeOf home) ("BE-AD" :: Html) ! class_ "navbar-brand"
                     button ! type_ "button" ! class_ "navbar-toggle" ! dataAttribute "toggle" "collapse" ! dataAttribute "target" ".navbar-collapse" $ do
                         H.span ! class_ "sr-only" $ "Toggle navigation"
                         H.span ! class_ "icon-bar" $ mempty
@@ -575,7 +552,7 @@ selectionWithDefAndAttr name attrs def = foldl (!) (selection' name) attrs . map
     option' (v,t) = option (encodeToFay' "selection" v) t (def v) where
 
 evalSelectionDiv :: EvaluationHook -> Html
-evalSelectionDiv h = ((H.div `withId` (evSelectionDivId h)) $ empty)
+evalSelectionDiv h = ((H.div `withId` (evSelectionDivId h)) $ mempty)
 
 -- * Radio buttons
 

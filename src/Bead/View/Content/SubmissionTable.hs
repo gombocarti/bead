@@ -7,7 +7,6 @@ module Bead.View.Content.SubmissionTable (
   , submissionTable
   , submissionTableContext
   , sortUserLines
-  , formatSubmissionInfo
   , groupButtonStyle
   ) where
 
@@ -33,6 +32,7 @@ import qualified Bead.Controller.UserStories as S
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.VisualConstants
+import           Bead.View.Content.SubmissionState (formatSubmissionState, toLargeIcon)
 import qualified Bead.View.DataBridge as Param
 
 import           Text.Blaze.Html5 ((!))
@@ -240,7 +240,11 @@ submissionTablePart tableId now ctx s = do
     isAdminedCourse :: CourseKey -> Bool
     isAdminedCourse ck = Map.member ck (stcAdminCourses ctx)
 
-    userLine msg s (u,_p,submissionInfoMap) = do
+    userLine :: I18N
+             -> SubmissionTableInfo
+             -> (UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))
+             -> H.Html
+    userLine msg s (u, submissionMap) = do
       H.tr $ do
         let username = ud_username u
         H.td . fromString $ ud_fullname u
@@ -248,43 +252,27 @@ submissionTablePart tableId now ctx s = do
         submissionCells msg username s
         deleteUserCheckbox u
       where
-        submissionInfos = submissionTableInfoCata course group where
-          course _n _users as _ulines _anames _key =
-            catMaybes $ map (\ak -> Map.lookup ak submissionInfoMap) as
-
-          group _n _users as _ulines _anames _ckey _gkey =
-            catMaybes $ map lookup as
-            where
-              lookup = cgInfoCata (const Nothing) (flip Map.lookup submissionInfoMap)
-
-
+        submissionCells :: I18N -> Username -> SubmissionTableInfo -> H.Html
         submissionCells msg username = submissionTableInfoCata course group where
           course _n _users as _ulines _anames _key = mapM_ (submissionInfoCell msg username) as
 
           group _n _users as _ulines _anames _ck _gk =
             mapM_ (cgInfoCata (submissionInfoCell msg username) (submissionInfoCell msg username)) as
 
-        submissionInfoCell msg u ak = case Map.lookup ak submissionInfoMap of
+        submissionInfoCell :: I18N -> Username -> AssignmentKey -> H.Html
+        submissionInfoCell msg u ak = case Map.lookup ak submissionMap of
           Nothing -> H.td $ mempty
-          Just si -> submissionCell msg u (ak,si)
+          Just ss -> submissionCell msg u ss
 
-    submissionCell msg u (ak,si) =
-      formatSubmissionInfo
-        (H.td . linkWithHtml (routeWithParams (Pages.userSubmissions ()) [requestParam u, requestParam ak]))
-        mempty -- not found
-        (H.i ! A.class_ "glyphicon glyphicon-stop"  ! A.style "color:#AAAAAA; font-size: xx-large"
-             ! tooltip (msg_Home_SubmissionCell_NonEvaluated "Non evaluated") $ mempty) -- non-evaluated
-        (bool (H.i ! A.class_ "glyphicon glyphicon-ok-circle" ! A.style "color:#AAAAAA; font-size: xx-large"
-                   ! tooltip (msg_Home_SubmissionCell_Tests_Passed "Tests are passed") $ mempty)  -- tested accepted
-              (H.i ! A.class_ "glyphicon glyphicon-remove-circle" ! A.style "color:#AAAAAA; font-size: xx-large"
-                   ! tooltip (msg_Home_SubmissionCell_Tests_Failed "Tests are failed") $ mempty)) -- tested rejected
-        (H.i ! A.class_ "glyphicon glyphicon-thumbs-up" ! A.style "color:#00FF00; font-size: xx-large"
-             ! tooltip (msg_Home_SubmissionCell_Accepted "Accepted") $ mempty) -- accepted
-        (H.i ! A.class_ "glyphicon glyphicon-thumbs-down" ! A.style "color:#FF0000; font-size: xx-large"
-             ! tooltip (msg_Home_SubmissionCell_Rejected "Rejected") $ mempty) -- rejected
-        si -- of percent
+    submissionCell :: I18N -> Username -> (SubmissionKey, SubmissionState) -> H.Html
+    submissionCell msg u (sKey, sState) =
+      H.td . Bootstrap.link route $ formatSubmissionState toLargeIcon msg sState
+
       where
-        tooltip m = A.title (fromString $ msg m)
+        route :: String
+        route = routeOf $ case siEvaluationKey sState of
+                            Nothing -> Pages.evaluation sKey ()
+                            Just ek -> Pages.modifyEvaluation sKey ek ()
 
     deleteHeaderCell msg = submissionTableInfoCata deleteForCourseButton deleteForGroupButton s where
         deleteForCourseButton _n _us _as _uls _ans _ck =
@@ -310,26 +298,6 @@ submissionTablePart tableId now ctx s = do
             (encode delUserFromGroupPrm $ ud_username u)
             False ! A.onclick (fromString (onClick ++ "(this)"))
 
-formatSubmissionInfo contentWrapper notFound unevaluated tested passed failed s =
-  contentWrapper (sc s)
-  where
-    sc = submissionInfoCata
-           notFound
-           unevaluated
-           tested
-           (\_key result -> val result) -- evaluated
-
-    val = evResultCata
-            (binaryCata (resultCata passed failed))
-            percentage
-            (freeForm $ \msg ->
-              let cell = if length msg < displayableFreeFormResultLength then msg else "..." in
-              Bootstrap.blueLabel cell ! A.title (fromString msg))
-          where
-            percent x = join [show . round $ (100 * x), "%"]
-
-            percentage (Percentage (Scores [p])) = Bootstrap.blueLabel $ percent p
-            percentage _ = error "SubmissionTable.coloredSubmissionCell percentage is not defined"
 
 courseTestScriptTable :: CourseTestScriptInfos -> SubmissionTableInfo -> IHtml
 courseTestScriptTable cti = submissionTableInfoCata course group where
@@ -383,7 +351,7 @@ assignmentCreationMenu courses groups = submissionTableInfoCata courseMenu group
     navigationWithRoute msg links =
       Bootstrap.rowColMd12 . Bootstrap.buttonGroup $ mapM_ elem links
       where
-        elem page = Bootstrap.buttonLink (routeOf page) (fromString . msg $ linkText page)
+        elem page = Bootstrap.buttonLink (routeOf page) (msg $ linkText page)
 
 -- * CSS Section
 
@@ -419,10 +387,8 @@ sortUserLines = submissionTableInfoCata course group where
   group name users assignments userlines names ckey gkey =
       GroupSubmissionTableInfo name users assignments (sort userlines) names ckey gkey
 
-  sort = sortBy (compareHun `on` fst3)
-
-  fst3 :: (a,b,c) -> a
-  fst3 (x,_,_) = x
+  sort :: [(UserDesc, a)] -> [(UserDesc, a)]
+  sort = sortOn fst
 
 submissionTableInfoAssignments = submissionTableInfoCata course group where
   course _n _us as _uls _ans _ck = as

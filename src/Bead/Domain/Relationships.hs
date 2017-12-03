@@ -8,6 +8,7 @@ import Data.Data
 import Data.List as List hiding (group)
 import Data.Map (Map)
 import Data.Time (UTCTime(..))
+import Data.Tuple.Utils (fst3, snd3, thd3)
 
 import Bead.Domain.Entities
 import Bead.Domain.Evaluation
@@ -118,7 +119,6 @@ data SubmissionDesc = SubmissionDesc {
   , eAssignmentKey   :: AssignmentKey
   , eAssignment      :: Assignment
   , eAssignmentDate  :: UTCTime
-  , eSubmissionDate  :: UTCTime
   , eComments :: Map CommentKey Comment
   , eFeedbacks :: [Feedback]
   }
@@ -146,34 +146,10 @@ type OpenedSubmissions = OpenedSubmissionsS SubmissionDesc
 openedSubmissionsCata f (OpenedSubmissions admincourse admingroup relatedcourse)
   = f admincourse admingroup relatedcourse
 
-type EvaluatedBy = String
-
--- List of the submissions made by a student for a given assignment
-type UserSubmissionInfo = [(SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy)]
-
-userSubmissionInfoCata
-  :: ([a] -> b)
-  -> ((SubmissionKey, UTCTime, SubmissionInfo, EvaluatedBy) -> a)
-  -> UserSubmissionInfo
-  -> b
-userSubmissionInfoCata list info us = list $ map info us
-
--- List of the submission times made by a student for a given assignment
-type UserSubmissionTimes = [UTCTime]
-
-userSubmissionTimesCata
-  :: ([a] -> b)
-  -> (UTCTime -> a)
-  -> UserSubmissionTimes
-  -> b
-userSubmissionTimesCata list time s = list $ map time s
-
 -- Sorts the given submission list description into descending order, by
 -- the times of the given submissions
-sortSbmDescendingByTime :: UserSubmissionInfo -> UserSubmissionInfo
-sortSbmDescendingByTime = List.sortOn (Down . userSubmissionTime)
-  where
-    userSubmissionTime (_submissionKey,time,_status,_evalatedBy) = time
+sortSbmDescendingByTime :: [SubmissionInfo] -> [SubmissionInfo]
+sortSbmDescendingByTime = List.sortOn (Down . thd3)
 
 data SubmissionDetailsDesc = SubmissionDetailsDesc {
     sdGroup :: String
@@ -191,37 +167,49 @@ submissionDetailsDescPermissions = ObjectPermissions [
   , (P_Open, P_Comment)
   ]
 
+-- |A 'SubmissionInfo' consists of a key, a state and a post time.
+type SubmissionInfo = (SubmissionKey, SubmissionState, UTCTime)
+
+submKeyAndState :: SubmissionInfo -> (SubmissionKey, SubmissionState)
+submKeyAndState (key, state, _time) = (key, state)
+
+submKey :: SubmissionInfo -> SubmissionKey
+submKey = fst3
+
+submState :: SubmissionInfo -> SubmissionState
+submState = snd3
+
+submTime :: SubmissionInfo -> UTCTime
+submTime = thd3
+
 -- | Information about a submission for a given assignment
-data SubmissionInfo
-  = Submission_Not_Found
-    -- ^ There is no submission.
-  | Submission_Unevaluated
-    -- ^ There is at least one submission which is not evaluated yet.
+data SubmissionState
+  = Submission_Unevaluated
+    -- ^ Submission is not evaluated yet.
   | Submission_Tested Bool
-    -- ^ There is at least one submission which is tested by the automation testing framework.
+    -- ^ Submission is tested by the automation testing framework.
     -- The parameter is True if the submission has passed the tests, and False if has failed
     -- the tests.
   | Submission_Result EvaluationKey EvResult
-    -- ^ There is at least submission with the evaluation.
+    -- ^ Submission is evaluated.
   deriving (Eq, Show)
 
-submissionInfoCata
-  notFound
+submissionStateCata :: a -> (Bool -> a) -> (EvaluationKey -> EvResult -> a) -> SubmissionState -> a
+submissionStateCata
   unevaluated
   tested
   result
   s = case s of
-    Submission_Not_Found   -> notFound
     Submission_Unevaluated -> unevaluated
     Submission_Tested r    -> tested r
     Submission_Result k r  -> result k r
 
-withSubmissionInfo s notFound unevaluated tested result
-  = submissionInfoCata notFound unevaluated tested result s
+withSubmissionState :: SubmissionState -> a -> (Bool -> a) -> (EvaluationKey -> EvResult -> a) -> a
+withSubmissionState s unevaluated tested result
+  = submissionStateCata unevaluated tested result s
 
-siEvaluationKey :: SubmissionInfo -> Maybe EvaluationKey
-siEvaluationKey = submissionInfoCata
-  Nothing -- notFound
+siEvaluationKey :: SubmissionState -> Maybe EvaluationKey
+siEvaluationKey = submissionStateCata
   Nothing -- unevaluated
   (const Nothing) -- tested
   (\key _result -> Just key) -- result
@@ -238,7 +226,7 @@ data SubmissionTableInfo
       stiCourse :: String
     , stiUsers       :: [Username]      -- Alphabetically ordered list of usernames
     , stiAssignments :: [AssignmentKey] -- Cronologically ordered list of assignments
-    , stiUserLines   :: [(UserDesc, Maybe Result, Map AssignmentKey SubmissionInfo)]
+    , stiUserLines   :: [(UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))]
     , stiAssignmentInfos :: Map AssignmentKey Assignment
     , stiCourseKey :: CourseKey
     }
@@ -246,12 +234,11 @@ data SubmissionTableInfo
       stiCourse :: String
     , stiUsers      :: [Username] -- Alphabetically ordered list of usernames
     , stiCGAssignments :: [CGInfo AssignmentKey] -- Cronologically ordered list of course and group assignments
-    , stiUserLines :: [(UserDesc, Maybe Result, Map AssignmentKey SubmissionInfo)]
+    , stiUserLines :: [(UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))]
     , stiAssignmentInfos :: Map AssignmentKey Assignment
     , stiCourseKey :: CourseKey
     , stiGroupKey :: GroupKey
     }
-  deriving (Show)
 
 submissionTableInfoCata
   course
@@ -274,7 +261,7 @@ data UserSubmissionDesc = UserSubmissionDesc {
     usCourse         :: String
   , usAssignmentName :: String
   , usStudent        :: String
-  , usSubmissions :: [(SubmissionKey, UTCTime, SubmissionInfo)]
+  , usSubmissions    :: [SubmissionInfo]
   } deriving (Show)
 
 userSubmissionDescPermissions = ObjectPermissions [
@@ -438,7 +425,7 @@ data ScoreBoard =
     , sbAssessments :: [(AssessmentKey,Assessment)]
     , sbUsers :: [UserDesc]
     }
-  deriving (Eq, Show)
+  deriving Eq
 
 scoreBoardPermissions = ObjectPermissions
   [ (P_Open, P_Group), (P_Open, P_Assessment) ]

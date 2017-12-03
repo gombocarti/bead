@@ -104,20 +104,20 @@ pageContent pd = do
         (\_name _key script -> Bootstrap.textInputWithDefault (fieldName param) (msg label) (valueSelector script))
         pd
 
-  let textArea param label valueSelector = pageDataCata
-        (const $ Bootstrap.textArea (fieldName param) (msg label) "")
-        (\_name _key script -> Bootstrap.textArea (fieldName param) (msg label) (fromString (valueSelector script)))
+  let textArea param label height valueSelector = pageDataCata
+        (const $ Bootstrap.textArea (fieldName param) (msg label) height "")
+        (\_name _key script -> Bootstrap.textArea (fieldName param) (msg label) height (fromString (valueSelector script)))
         pd
 
-  let utf8TextArea param label valueSelector = pageDataCata
-        (const $ Bootstrap.utf8TextArea (fieldName param) (msg label) "")
-        (\_name _key script -> Bootstrap.utf8TextArea (fieldName param) (msg label) (fromString (valueSelector script)))
+  let utf8TextArea param label height valueSelector = pageDataCata
+        (const $ Bootstrap.utf8TextArea (fieldName param) (msg label) height "")
+        (\_name _key script -> Bootstrap.utf8TextArea (fieldName param) (msg label) height (fromString (valueSelector script)))
         pd
 
   let name        = textField testScriptNameField (msg_NewTestScript_Name "Name") tsName
   let description = textField testScriptDescField (msg_NewTestScript_Description "Description") tsDescription
-  let help        = textArea  testScriptNotesField (msg_NewTestScript_Notes "Help for writing test cases") tsNotes
-  let script      = textArea  testScriptScriptField (msg_NewTestScript_Script "Test script") tsScript
+  let help        = textArea  testScriptNotesField (msg_NewTestScript_Notes "Help for writing test cases") Bootstrap.Medium tsNotes
+  let script      = textArea  testScriptScriptField (msg_NewTestScript_Script "Test script") Bootstrap.Medium tsScript
 
   return $ do
     postForm (routeOf $ testScriptPage pd) $ do

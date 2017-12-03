@@ -95,9 +95,9 @@ inputGroup = H.div ! class_ "input-group"
 listGroup = H.div ! class_ "list-group"
 
 -- | Creates a list group div, which can contain a various list group items
---   The maximum height is bounded by the first parameter. It is given in pixels.
+--   The number of fully visible elements is bounded by the first parameter. It is given in pixels.
 listGroupHeightLimit :: Int -> H.Html -> H.Html
-listGroupHeightLimit n = H.div ! class_ "list-group" ! (A.style $ fromString $ concat ["max-height: ", show n, "px; overflow: auto;"])
+listGroupHeightLimit n = H.div ! class_ "list-group" ! (A.style $ fromString $ concat ["max-height: ", show (n * 42), "px; overflow: auto;"])
 
 -- | Creates and unordered list as a list group
 unorderedListGroup = H.ul ! class_ "list-group"
@@ -106,6 +106,10 @@ unorderedListGroup = H.ul ! class_ "list-group"
 -- display
 listGroupLinkItem route text = H.a ! href (fromString route) ! class_ "list-group-item" $ text
 
+-- | Creates an active linked list group item with a route to point at, and a text to display.
+listGroupActiveLinkItem :: String -> H.Html -> H.Html
+listGroupActiveLinkItem route text = H.a ! href (fromString route) ! class_ "list-group-item active" $ text
+
 -- | Creates a linked list group item with a route to point at, and a text to
 -- display, rendered with the given color.
 listGroupAlertLinkItem alert route text = H.a ! href (fromString route) ! class_ (fromString itemColor) $ text
@@ -113,14 +117,16 @@ listGroupAlertLinkItem alert route text = H.a ! href (fromString route) ! class_
     itemColor = "list-group-item list-group-item-" ++ (alertAlgebra "success" "info" "warning" "danger" alert)
 
 -- | Creates a texted list group item
-listGroupTextItem text = H.a ! href "#" ! class_ "list-group-item" $ fromString text
+listGroupTextItem text = H.li ! class_ "list-group-item" $ fromString text
 
 -- | Creates a badge that can be displayed in the list group
 badge text = H.span ! class_ "badge" $ fromString text
 
--- | Creates a badge with alert coloring
-badgeAlert alert text = H.span ! class_ (fromString $ "badge alert-" ++ a) $ fromString text where
-  a = alertAlgebra "success" "info" "warning" "danger" alert
+badgeAlert :: Alert -> String -> H.Html
+badgeAlert alert text = H.span ! class_ (fromString $ "badge alert-" ++ alertColor) $ fromString text
+  where
+    alertColor :: String
+    alertColor = alertAlgebra "success" "info" "warning" "danger" alert
 
 alert color = H.div ! class_ (fromString $ "alert alert-" ++ alertColor)
   where alertColor = alertAlgebra "success" "info" "warning" "danger" color
@@ -136,14 +142,16 @@ buttonGroup = H.div ! class_ "btn-group"
 
 -- | Creates a button link with custom button attribute, a route to point
 -- a title and a text to show
+customButtonLink :: ToMarkup a => [String] -> String -> String -> a -> Html
 customButtonLink custom ref ttl text =
-  a ! class_ (fromString ("btn " <> (unwords custom)))
+  a ! class_ (toValue ("btn " <> (unwords custom)))
     ! customAttribute "role" "button"
-    ! A.title (fromString ttl)
-    ! href (fromString ref)
-    $ (fromString text)
+    ! A.title (toValue ttl)
+    ! href (toValue ref)
+    $ (toMarkup text)
 
 -- | Creates a button styled link
+buttonLink :: ToMarkup a => String -> a -> Html
 buttonLink ref text = customButtonLink ["btn-default"] ref "" text
 
 -- | Creates a block button styled link
@@ -179,9 +187,10 @@ dateTimePickerScript pickerId = script . fromString $ concat
   , "});"
   ]
 
+link :: B.ToMarkup a => String -> a -> H.Html
 link ref text =
-  a ! href (fromString ref)
-    $ (fromString text)
+  a ! href (toValue ref)
+    $ toMarkup text
 
 -- | Creates a dropdown button
 customDropdownButton custom text =
@@ -364,45 +373,57 @@ blueLabel :: String -> Html
 blueLabel text = H.span ! class_ "label label-primary" $ fromString text
 
 -- | Creates a text area input field with the given name as id, a given id
-textAreaField paramName =
+textAreaField paramName height =
     H.textarea ! formControl
                ! A.required ""
-               ! A.rows (fromString . show $ textAreaRows)
+               ! A.rows (fromString . show $ textAreaRows height)
                ! A.id (fromString paramName)
                ! A.name (fromString paramName)
                ! textAreaStyle
 
 -- | Creates an optional text area input field with the given name as id, a given id
-textAreaOptionalField paramName =
+textAreaOptionalField paramName height =
     H.textarea ! formControl
-               ! A.rows (fromString . show $ textAreaRows)
+               ! A.rows (fromString . show $ textAreaRows height)
                ! A.id (fromString paramName)
                ! A.name (fromString paramName)
                ! textAreaStyle
 
-textAreaRows :: Int
-textAreaRows = 12
+data Size
+  = Small
+  | Medium
+  | Large
+
+sizeCata :: a -> a -> a -> Size -> a
+sizeCata small medium large size =
+  case size of
+    Small -> small
+    Medium -> medium
+    Large -> large
+
+textAreaRows :: Size -> Int
+textAreaRows = sizeCata 4 8 12
 
 textAreaStyle :: H.Attribute
 textAreaStyle = A.style "font-family: monospace;"
 
 -- | Creates a text area input with the given name as id, a given label
-textArea paramName labelText html =
+textArea paramName labelText height html =
   formGroup $ do
     labelFor paramName labelText
-    textAreaField paramName html
+    textAreaField paramName height html
 
 -- | Creates an optional text area input with the given name as id, a given label
-optionalTextArea paramName labelText html =
+optionalTextArea paramName labelText height html =
   formGroup $ do
     labelFor paramName labelText
-    textAreaOptionalField paramName html
+    textAreaOptionalField paramName height html
 
 -- | Creates a text area input with the given name as id, a given label
-utf8TextArea paramName labelText html =
+utf8TextArea paramName labelText height html =
   formGroup $ do
     labelFor paramName labelText
-    textAreaField paramName ! A.acceptCharset "utf-8" $ html
+    textAreaField paramName height ! A.acceptCharset "utf-8" $ html
 
 -- | Creates a radio button group, with a given values and labels, the parameter name
 -- as numbered ids. The first value is the primary active
@@ -450,10 +471,10 @@ table = H.table ! class_ "table table-bordered table-condensed table-hover table
 
 -- Creates a table line first element is a bold text and the second is a HTML snippet
 infixl 7 .|.
-(.|.) :: String -> Html -> Html
+(.|.) :: (ToMarkup v) => String -> v -> Html
 name .|. value = H.tr $ do
-  H.td $ b $ fromString $ name
-  H.td $ value
+  H.td $ b $ toMarkup name
+  H.td $ toMarkup value
 
 -- Alerts
 
@@ -519,6 +540,7 @@ ariaControls = customAttribute "aria-controls"
 ariaLabelledBy = customAttribute "aria-labelledby"
 
 textCenter = A.class_ "text-center"
+textRight = A.class_ "text-right"
 
 dataToggle = customAttribute "data-toggle"
 
