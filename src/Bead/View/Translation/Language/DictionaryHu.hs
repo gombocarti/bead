@@ -1,13 +1,13 @@
-module DictionaryHu (dict) where
+module Bead.View.Translation.Language.DictionaryHu (dictionaryHu) where
 
-import Bead.View.Dictionary
-import Bead.View.Translation
+import qualified Bead.View.DictionaryFile as DF
+import           Bead.View.DictionaryFile ((<|))
+import           Bead.View.Translation
 
-dict = DictionaryFile {
-  iconFile = "hu.ico",
-  langCode = "hu",
-  langName = "Magyar",
-  entries =
+dictionaryHu = DF.DictionaryFile {
+  DF.langCode = "hu",
+  DF.langName = "Magyar",
+  DF.entries =
     [ msg_Index_Header <| "Köszöntjük!"
     , msg_Index_Body <| "Az oldalt az intézményhez tartozó Active Directory címtárban regisztrált felhasználók tudják használni.\n\nAmennyiben rendelkezünk ilyen hozzáféréssel, a belépéshez kattintsunk a **Tovább** gombra!\n\n*Megjegyzés:* A biztonságos bejelentkezéshez javasolt az [IWA](https://en.wikipedia.org/wiki/Integrated_Windows_Authentication) használata azokban a böngészőkben, ahol ez elérhető."
     , msg_Index_Proceed <| "Tovább"

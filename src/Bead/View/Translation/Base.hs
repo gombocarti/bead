@@ -3,10 +3,10 @@ module Bead.View.Translation.Base where
 
 import Language.Haskell.TH
 
--- Translation is an enumeration all the possbile messages that could be rendered
+-- Translation is an enumeration of all the possible messages that could be rendered
 -- on every page with the associated value.
 newtype Translation a = T { unT :: (Int, a) }
-  deriving (Show,Read,Ord,Eq)
+  deriving (Show,Ord,Eq)
 
 trans :: Translation a -> a
 trans (T (_,x)) = x

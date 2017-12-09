@@ -35,7 +35,7 @@ languageMenu msg languages = do
       Bootstrap.dropdown (msg $ msg_Login_SelectLanguage "Select a language") $
       for languages $ \(language,info) -> do
         link (queryString changeLanguagePath [requestParam language])
-           (dictionaryInfoCata (\_icon -> fromString) info)
+           (dictionaryInfoCata fromString info)
   where
     for = flip Prelude.map
     link ref text = a ! href ref $ text

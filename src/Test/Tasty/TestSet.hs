@@ -2,6 +2,7 @@
 module Test.Tasty.TestSet (
     TestSet
   , TestName
+  , Message
   , buildTestTree
   , runTestSet
   , group
