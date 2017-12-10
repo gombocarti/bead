@@ -38,8 +38,7 @@ import           Bead.Domain.Entities (UserRegInfo, Username(..))
 import           Bead.Domain.TimeZone
 import           Bead.View.BeadContext hiding (ldapDaemon)
 import           Bead.View.DataDir
-import           Bead.View.Dictionary (Language(..))
-import           Bead.View.DictionaryLoader (loadDictionaries)
+import           Bead.View.Dictionary (dictionaries, Language(..))
 import           Bead.View.Registration (createAdminUser)
 import           Bead.View.Routing
 
@@ -83,19 +82,8 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
 
   ss <- nestSnaplet "context" serviceContext $ contextSnaplet s (logoutDaemon daemons)
 
-  let dictionaryDir = "lang"
-  dExist <- liftIO $ doesDirectoryExist dictionaryDir
-  dictResult <- case dExist of
-    True -> liftIO $ loadDictionaries dictionaryDir
-    False -> return $ Right $ Map.empty
-
-  liftIO $ putStrLn "Searching for dictionaries..."
-  ds <- case dictResult of
-    Left err -> error $ "ERROR: Conflicts while processing dictionaries:\n\n" ++ err
-    Right dictionaries -> do
-      -- TODO: Use a start logger
-      liftIO $ putStrLn $ "Found dictionaries: " ++ (show $ Map.keys dictionaries)
-      nestSnaplet "dictionary" dictionaryContext $
+  liftIO $ putStrLn $ "Available languages: " ++ (show $ Map.keys dictionaries)
+  ds <- nestSnaplet "dictionary" dictionaryContext $
           dictionarySnaplet dictionaries (Language $ defaultLoginLanguage config)
 
 #ifdef EmailEnabled

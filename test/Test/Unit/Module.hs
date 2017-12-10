@@ -17,7 +17,7 @@ import Bead.Persistence.Persist (persistTests)
 import Bead.Persistence.Relations (persistRelationsTests)
 import Bead.View.Content.All (pageContentTest)
 import Bead.View.DataBridge (dataBridgeTests)
-import Bead.View.DictionaryLoader (patchDictionariesTests)
+import Bead.View.Dictionary (patchDictionariesTests)
 #ifdef EmailEnabled
 import Bead.View.EmailTemplate (runEmailTemplateTests)
 #endif

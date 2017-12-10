@@ -112,8 +112,6 @@ Data-Files:
 
   cookie
 
-  lang/DictionaryHu.hs
-
   bead.config
 
 Flag Tests
@@ -130,7 +128,6 @@ Flag SSO
 
 Library
   HS-Source-Dirs: src, snaplets/fay/src
-  GHC-Options: -O2
 
   if flag(MySQL)
     CPP-Options: -DMYSQL
@@ -261,6 +258,7 @@ Library
     AdminMain
     SnapMain
     Bead.View.Dictionary
+    Bead.View.DictionaryFile
     Bead.View.Translation
 
     Paths_Bead
@@ -341,7 +339,6 @@ Library
     Bead.View.ContentHandler
     Bead.View.DataBridge
     Bead.View.DataDir
-    Bead.View.DictionaryLoader
     Bead.View.ErrorPage
     Bead.View.Headers
     Bead.View.Headers.AcceptLanguage
@@ -365,6 +362,8 @@ Library
     Bead.View.Translation.Entries
     Bead.View.Translation.Enum
     Bead.View.Translation.I18N
+    Bead.View.Translation.Language.DictionaryEn
+    Bead.View.Translation.Language.DictionaryHu
     Bead.View.UserActions
     Bead.View.Validators
     Snap.Snaplet.Auth.Backends.SafeJsonFile
@@ -377,7 +376,7 @@ Executable Bead
   Main-is:          Main.hs
   HS-Source-Dirs:   main
   Buildable:        True
-  GHC-Options:      -threaded -with-rtsopts=-N2 -O2
+  GHC-Options:      -threaded -with-rtsopts=-N2
 
 Executable BeadAdmin
   Build-Depends:    base, Bead
