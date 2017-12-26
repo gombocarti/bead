@@ -21,7 +21,6 @@ import           Bead.Daemon.LDAP
 #else
 import           Text.Regex.TDFA
 #endif
-import           Bead.Daemon.Logout
 import           Bead.Daemon.TestAgent
 import           Bead.Persistence.Initialization
 import qualified Bead.Persistence.Persist as Persist (Config(..), configToPersistConfig, createPersistInit, createPersistInterpreter)
@@ -32,14 +31,13 @@ import           Bead.View.Logger
 -- Creates a service context that includes the given logger
 createContext :: L.Logger -> Persist.Config -> IO ServiceContext
 createContext logger cfg = do
-  userContainer <- ioUserContainer
   init <- Persist.createPersistInit cfg
   isPersistSetUp <- isSetUp init
   case isPersistSetUp of
     True -> return ()
     False -> initPersist init
   interpreter <- Persist.createPersistInterpreter cfg
-  S.serviceContext userContainer logger interpreter
+  return $ S.serviceContext logger interpreter
 
 -- Reads the command line arguments, interprets the init tasks and start
 -- the service with the given config
@@ -56,10 +54,9 @@ printConfigInfo :: Config -> IO ()
 #ifdef EmailEnabled
 printConfigInfo = configCata loginConfigPart $ \logfile timeout hostname fromEmail dll dtz zoneInfoDir up lcfg _pcfg -> do
 #else
-printConfigInfo = configCata loginConfigPart $ \logfile timeout dll dtz zoneInfoDir up lcfg _pcfg -> do
+printConfigInfo = configCata loginConfigPart $ \logfile dll dtz zoneInfoDir up lcfg _pcfg -> do
 #endif
   configLn $ "Log file: " ++ logfile
-  configLn $ concat ["Session timeout: ", show timeout, " seconds"]
 #ifdef EmailEnabled
   configLn $ "Hostname included in emails: " ++ hostname
   configLn $ "FROM Address included in emails: " ++ fromEmail
@@ -140,9 +137,6 @@ startService config = do
 
   creating "test comments agent" $ startTestCommentsAgent userActionLogger 30 5 {-s-} context
 
-  logoutDaemon <- creating "logout daemon" $
-    startLogoutDaemon userActionLogger (sessionTimeout config) 30 {-s-} (userContainer context)
-
 #ifdef EmailEnabled
   emailDaemon <- creating "email daemon" $
     startEmailDaemon userActionLogger
@@ -155,15 +149,15 @@ startService config = do
 
 #ifdef SSO
 #ifdef EmailEnabled
-  let daemons = Daemons logoutDaemon emailDaemon ldapDaemon
+  let daemons = Daemons emailDaemon ldapDaemon
 #else
-  let daemons = Daemons logoutDaemon ldapDaemon
+  let daemons = Daemons ldapDaemon
 #endif
 #else
 #ifdef EmailEnabled
-  let daemons = Daemons logoutDaemon emailDaemon
+  let daemons = Daemons emailDaemon
 #else
-  let daemons = Daemons logoutDaemon
+  let daemons = Daemons
 #endif
 #endif
 

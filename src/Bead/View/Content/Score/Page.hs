@@ -66,7 +66,7 @@ scorePage = do
   let uname = u_name user
       uid = u_uid user
   assessmentDesc <- userStory (Story.assessmentDesc ak)
-  return . scoreContent $ PD_NewUserScore uname username uid assessmentDesc
+  setPageContents . scoreContent $ PD_NewUserScore uname username uid assessmentDesc
 
 newScorePostHandler :: POSTContentHandler
 newScorePostHandler = do
@@ -106,7 +106,7 @@ modifyScorePage = do
      return (user,username,assessmentDesc,score)
   let uname = u_name user
       uid = u_uid user
-  return . scoreContent $ PD_ModifyUserScore uname username uid assessmentDesc score sk
+  setPageContents . scoreContent $ PD_ModifyUserScore uname username uid assessmentDesc score sk
 
 modifyScorePostHandler :: POSTContentHandler
 modifyScorePostHandler = do
@@ -173,7 +173,7 @@ viewScorePage :: GETContentHandler
 viewScorePage = do
   sk <- getParameter scoreKeyPrm
   sDesc <- userStory $ Story.scoreDesc sk
-  return $ viewScoreContent sDesc
+  setPageContents $ viewScoreContent sDesc
 
 viewScoreContent :: ScoreDesc -> IHtml
 viewScoreContent sd = do

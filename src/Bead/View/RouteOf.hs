@@ -267,6 +267,7 @@ type PageRoutePath = Page RoutePath RoutePath RoutePath RoutePath RoutePath
 pageRoutePath :: Page a b c d e -> PageRoutePath
 pageRoutePath = pfmap id id id id id . r where
   r = constantsP
+    indexPath
     loginPath
     logoutPath
     homePath
@@ -325,6 +326,7 @@ type PageReqParams = Page [ReqParam] [ReqParam] [ReqParam] [ReqParam] [ReqParam]
 -- Calculates a request parameter list from the given page value
 pageRequestParams :: Page a b c d e -> PageReqParams
 pageRequestParams = liftsP
+  (c []) -- index
   (c []) -- login
   (c []) -- logout
   (c []) -- home

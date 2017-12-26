@@ -993,7 +993,7 @@ userOverwriteFileTest = test $ testCase "Overwrite user's data file" $ do
         assertEquals path path' "The user's file path was changed"
         assertEquals content content' "The user's file content is not copied correctly"
 
-testJobCreationTest = test $ testCase "Test Job cration" $ do
+testJobCreationTest = test $ testCase "Test job creation" $ do
   reinitPersistence
   us <- users 400
   cs <- courses 50

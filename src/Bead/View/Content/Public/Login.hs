@@ -7,8 +7,6 @@ module Bead.View.Content.Public.Login (
 import           Data.String (fromString)
 import           Control.Monad
 
-import           Snap.Snaplet.Auth
-
 import qualified Bead.Controller.Pages as Pages
 #ifndef SSO
 import           Bead.View.Common
@@ -29,7 +27,7 @@ login (Just err) = do
   return $ do
     Bootstrap.rowCol4Offset4 $ do
       p $ fromString $
-        join [msg $ msg_Login_Error "There was an error during login: ", show err]
+        join [msg $ msg_Login_Error "There was an error during login: ", visibleFailure msg err]
     Bootstrap.rowCol4Offset4 $
       Bootstrap.buttonLink (unpack loginPath) (msg $ msg_Login_TryAgain "Try again")
 
@@ -48,7 +46,7 @@ login err langInfos = do
       Bootstrap.textInput     (fieldName loginUsername) (msg $ msg_Login_Username "Username:") ""
       Bootstrap.passwordInput (fieldName loginPassword) (msg $ msg_Login_Password "Password:")
       Bootstrap.submitButton  (fieldName loginSubmitBtn) (msg $ msg_Login_Submit "Login")
-    maybe mempty (Bootstrap.rowCol4Offset4 . (p ! class_ "text-center bg-danger") . fromString . show) err
+    maybe mempty (Bootstrap.rowCol4Offset4 . (p ! class_ "text-center bg-danger") . fromString . visibleFailure msg) err
     Bootstrap.rowCol4Offset4 $ Bootstrap.buttonGroupJustified $ do
       Bootstrap.buttonLink "/reg_request" (msg $ msg_Login_Registration "Registration")
       Bootstrap.buttonLink "/reset_pwd"   (msg $ msg_Login_Forgotten_Password "Forgotten password")
@@ -56,3 +54,7 @@ login err langInfos = do
   where
     login = Pages.login ()
 #endif
+
+visibleFailure :: I18N -> AuthFailure -> String
+visibleFailure msg IncorrectUserOrPassword = msg $ msg_Login_InvalidPasswordOrUser "Invalid user or password!"
+visibleFailure msg UserNotFound            = msg $ msg_Login_InvalidPasswordOrUser "Invalid user or password!"

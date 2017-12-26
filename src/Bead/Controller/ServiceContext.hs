@@ -1,29 +1,29 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Bead.Controller.ServiceContext (
-    UsrToken
-  , UserToken(..)
-  , UserState(..)
+    UserState(..)
   , StatusMessage(..)
   , statusMessage
   , userStateCata
-  , userNotLoggedIn
+  , userStateKindCata
   , userRole
   , getStatus
   , setStatus
   , clearStatus
+  , setLanguage
+  , getLanguage
+  , setTimeZone
+  , getTimeZone
   , usernameInState
-  , InRole(..)
-  , actualPage
-  , UserContainer(..)
+  , userNotLoggedIn
   , ServiceContext(..)
   , serviceContext
-  , ioUserContainer
   ) where
 
-import qualified Data.Map as Map
-
-import           Control.Concurrent.STM
+import qualified Control.Lens as Lens
+import           Control.Lens ((^?))
+import           Data.Semigroup (getFirst)
+import           Data.Time (UTCTime)
+import           Data.UUID (UUID)
 
 import           Bead.Controller.Pages as Pages
 import           Bead.Controller.Logging
@@ -31,142 +31,119 @@ import           Bead.Domain.Entities as Entities
 import           Bead.View.Translation
 import qualified Bead.Persistence.Persist as Persist
 
-newtype UsrToken = UsrToken (Username, String)
-  deriving (Show, Eq, Ord)
-
-class UserToken u where
-  userToken :: u -> UsrToken
-
-instance UserToken (Username, String) where
-  userToken (u,t) = UsrToken (u,t)
-
 data UserState
-  = UserNotLoggedIn
+  = UserNotLoggedIn {
+      _language :: Language -- User's preferred language, set on log-in page
+    }
   | Registration
   | TestAgent
-  | UserState {
-    user :: Username -- Username
-  , uid  :: Uid
-  , page :: PageDesc -- The page descriptor of the last requested one
-  , name :: String   -- User's full name
-  , role :: Role     -- User's role
-  , token :: String  -- Token for the active user session
-  , timezone :: TimeZoneName -- Timezone of the user
-  , status :: Maybe (StatusMessage (Translation String)) -- The last status message
-  } deriving (Show)
+  | UserLoggedIn {
+      user :: Username -- Username
+    , uid  :: Uid
+    , name :: String   -- User's full name
+    , _language :: Language -- User's preferred language
+    , role :: Role     -- User's role
+    , uuid :: UUID     -- Token for the active user session
+    , _timeZone :: TimeZoneName -- Timezone of the user
+    , _status :: Maybe (StatusMessage (Translation String)) -- The last status message
+    } deriving Eq
+
+Lens.makeLenses ''UserState
 
 userStateCata
   userNotLoggedIn
   registration
   testAgent
-  userState
+  userLoggedIn
   s = case s of
-    UserNotLoggedIn -> userNotLoggedIn
+    UserNotLoggedIn language -> userNotLoggedIn language
     Registration -> registration
     TestAgent -> testAgent
-    UserState u ui p n r t tz s -> userState u ui p n r t tz s
+    UserLoggedIn u ui n l r uuid tz s -> userLoggedIn u ui n l r uuid tz s
 
-userNotLoggedIn :: UserState
+userStateKindCata :: a -> a -> a -> a -> UserState -> a
+userStateKindCata
+  userNotLoggedIn
+  registration
+  testAgent
+  userLoggedIn
+  s = case s of
+    UserNotLoggedIn _language -> userNotLoggedIn
+    Registration -> registration
+    TestAgent -> testAgent
+    UserLoggedIn _u _ui _n _l _r _uuid _tz _s -> userLoggedIn
+
+userNotLoggedIn :: Language -> UserState
 userNotLoggedIn = UserNotLoggedIn
 
 -- Converts the user state to a Role
 userRole :: UserState -> Either OutsideRole Role
 userRole = userStateCata
-  (Left EmptyRole) -- userNotLoggedIn
-  (Left RegRole)   -- registration
-  (Left TestAgentRole) -- testAgent
-  (\_u _ui _p _n role _t _tz _s -> Right role) -- userState
+             (const (Left EmptyRole)) -- UserNotLoggedIn
+             (Left RegRole)           -- Registration
+             (Left TestAgentRole)     -- TestAgent
+             (\_u _ui _n _lang role _t _tz _s -> Right role) -- UserLoggedIn
 
 -- Produces a new user state from the old one, setting
 -- the status message to the given one
-setStatus msg = userStateCata UserNotLoggedIn Registration TestAgent userState where
-  userState u ui p n r t tz _ = UserState u ui p n r t tz (Just msg)
+setStatus :: StatusMessage (Translation String)
+          -> UserState
+          -> UserState
+setStatus msg = Lens.set status (Just msg)
 
 -- Produces the status message of the UserState, otherwise Nothing
-getStatus = userStateCata Nothing Nothing Nothing status where
-  status _ _ _ _ _ _ _ s = s
+getStatus :: UserState -> Maybe (StatusMessage (Translation String))
+getStatus = userStateCata
+              (const Nothing)  -- UserNotLoggedIn
+              Nothing          -- Registration
+              Nothing          -- TestAgent
+              (\_u _ui _n _l _r _t _tz s -> s) -- UserLoggedIn
 
 -- Produces a new status expect that the status message is cleared.
-clearStatus = userStateCata UserNotLoggedIn Registration TestAgent userState where
-  userState u ui p n r t tz _ = UserState u ui p n r t tz Nothing
+clearStatus :: UserState -> UserState
+clearStatus = Lens.set status Nothing
 
--- Returns a username stored in the user state, or a description
--- string for the state
-usernameInState = userStateCata
-  (Username "NotLoggedIn")
-  (Username "Registration")
-  (Username "TestAgent")
-  (\user _ui _p _n _r _t _tz _s -> user)
+setLanguage :: Language -> UserState -> UserState
+setLanguage = Lens.set language
 
-instance UserToken UserState where
-  userToken = userStateCata
-    (UsrToken (Username "UNL", "UNL")) -- userNotLoggedIn
-    (UsrToken (Username "REG", "REG")) -- registration
-    (UsrToken (Username "TA", "TA"))   -- testAgent
-    (\user _ui _p _n _r token _tz _s -> UsrToken (user, token))
+getLanguage :: UserState -> Maybe Language
+getLanguage st = st ^? language
+
+getTimeZone :: UserState -> Maybe TimeZoneName
+getTimeZone st = st ^? timeZone
+
+setTimeZone :: TimeZoneName -> UserState -> UserState
+setTimeZone = Lens.set timeZone
+
+-- | Returns a username stored in the user state, or a description
+--   string for the state
+usernameInState :: UserState -> Username
+usernameInState =
+  userStateCata
+    (const (Username "NotLoggedIn"))
+    (Username "Registration")
+    (Username "TestAgent")
+    (\user _ui _p _n _r _t _tz _s -> user)
 
 instance InRole UserState where
-  isAdmin = userStateCata False False False (\_u _ui _p _n role _t _tz _s -> isAdmin role)
-  isCourseAdmin = userStateCata False False False (\_u _ui _p _n role _t _tz _s -> Entities.isCourseAdmin role)
-  isGroupAdmin = userStateCata False False False (\_u _ui _p _n role _t _tz _s -> isGroupAdmin role)
-  isStudent = userStateCata False False False (\_u _ui _p _n role _t _tz _s -> isStudent role)
+  isAdmin = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> isAdmin role)
+  isCourseAdmin = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> Entities.isCourseAdmin role)
+  isGroupAdmin = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> isGroupAdmin role)
+  isStudent = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> isStudent role)
 
--- | The actual page that corresponds to the user's state
-actualPage :: UserState -> PageDesc
-actualPage = userStateCata login' login' login' (\_u _ui page _n _r _t _tz _s -> page)
-  where
-    login' = login ()
-
-data UserContainer a = UserContainer {
-    isUserLoggedIn :: UsrToken -> IO Bool
-  , userLogsIn     :: UsrToken -> a -> IO ()
-  , userLogsOut    :: UsrToken -> IO ()
-  , userData       :: UsrToken -> IO (Maybe a)
-  , modifyUserData :: UsrToken -> (a -> a) -> IO ()
-  }
+uidInState :: UserState -> Uid
+uidInState =
+  userStateCata
+    (const (Uid "NotLoggedIn"))
+    (Uid "Registration")
+    (Uid "TestAgent")
+    (\_user uid _p _n _r _t _tz _s -> uid)
 
 data ServiceContext = ServiceContext {
-    userContainer :: UserContainer UserState
-  , logger        :: Logger
+    logger             :: Logger
   , persistInterpreter :: Persist.Interpreter
   }
 
-serviceContext :: UserContainer UserState -> Logger -> Persist.Interpreter -> IO ServiceContext
-serviceContext u l i = do
-  return $ ServiceContext u l i
-
-ioUserContainer :: IO (UserContainer a)
-ioUserContainer = do
-  v <- newTVarIO Map.empty
-
-  let mvIsUserLoggedIn name = atomically $
-        fmap (Map.member name) (readTVar v)
-
-      mvUserLogsIn name val = atomically $
-        withTVar v (Map.insert name val)
-
-      mvUserLogsOut name = atomically $
-        withTVar v (Map.delete name)
-
-      mvUserData name = atomically $ do
-        fmap (Map.lookup name) (readTVar v)
-
-      mvModifyUserData name f = atomically $ do
-        m <- readTVar v
-        case Map.lookup name m of
-          Nothing -> return ()
-          Just x  -> writeTVar v (Map.insert name (f x) m)
-
-  return UserContainer {
-      isUserLoggedIn = mvIsUserLoggedIn
-    , userLogsIn     = mvUserLogsIn
-    , userLogsOut    = mvUserLogsOut
-    , userData       = mvUserData
-    , modifyUserData = mvModifyUserData
-    }
-  where
-    withTVar :: TVar a -> (a -> a) -> STM ()
-    withTVar var f = do
-      x <- readTVar var
-      writeTVar var (f x)
+serviceContext :: Logger -> Persist.Interpreter -> ServiceContext
+serviceContext = ServiceContext
 

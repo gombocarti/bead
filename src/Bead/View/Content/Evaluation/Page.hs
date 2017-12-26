@@ -64,7 +64,7 @@ evaluationPage = do
     , submissions = subms
     , latestSubmission = listToMaybe subms
     }
-  return $ evaluationContent pageData
+  setPageContents $ evaluationContent pageData
 
 modifyEvaluationPage :: GETContentHandler
 modifyEvaluationPage = do
@@ -83,7 +83,7 @@ modifyEvaluationPage = do
   , submissions = subms
   , latestSubmission = listToMaybe subms
   }
-  return $ evaluationContent pageData
+  setPageContents $ evaluationContent pageData
 
 evalConfigParam = evalConfigParameter (fieldName evaluationConfigField)
 freeFormEvaluationParam = stringParameter (fieldName evaluationFreeFormField) "Free format evaluation"
@@ -147,16 +147,17 @@ abstractEvaluationPostHandler getEvKeyParameter evCommand = do
       CT_Admin
 
     getRole = userStateCata
-      Nothing
+      (const Nothing)
       Nothing
       Nothing
       (\_username _uid _page _name role _token _timezone _status -> Just role)
 
+    getName :: UserState -> Maybe String
     getName = userStateCata
+      (const Nothing)
       Nothing
       Nothing
-      Nothing
-      (\_username _uid _page name _role _token _timezone _status -> Just name)
+      (\_username _uid name _lang _role _token _timezone _status -> Just name)
 
 evaluationPostHandler :: POSTContentHandler
 evaluationPostHandler = abstractEvaluationPostHandler (getParameter submissionKeyPrm) NewEvaluation

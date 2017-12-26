@@ -9,7 +9,7 @@ dictionaryHu = DF.DictionaryFile {
   DF.langName = "Magyar",
   DF.entries =
     [ msg_Index_Header <| "Köszöntjük!"
-    , msg_Index_Body <| "Az oldalt az intézményhez tartozó Active Directory címtárban regisztrált felhasználók tudják használni.\n\nAmennyiben rendelkezünk ilyen hozzáféréssel, a belépéshez kattintsunk a **Tovább** gombra!\n\n*Megjegyzés:* A biztonságos bejelentkezéshez javasolt az [IWA](https://en.wikipedia.org/wiki/Integrated_Windows_Authentication) használata azokban a böngészőkben, ahol ez elérhető."
+    , msg_Index_Body <| "Az oldalt az intézményhez tartozó Active Directory címtárban regisztrált felhasználók tudják használni.\n\nAmennyiben rendelkezünk ilyen hozzáféréssel, a belépéshez kattintsunk a **Tovább** gombra!\n\n*Megjegyzés:* Ne feledkezz meg kijelentkezni megosztott számítógépeken (például géptermekben), mert ez az oldal nem fogja megtenni helyetted."
     , msg_Index_Proceed <| "Tovább"
     , msg_Login_PageTitle <| "Bejelentkezés"
     , msg_Login_Username <| "Felhasználónév:"
@@ -30,9 +30,9 @@ dictionaryHu = DF.DictionaryFile {
     , msg_Login_Error_NoLDAPAttributes <| "A felhasználó (%s) adatai nem kérdezhetők le az LDAP adatbázisból"
     , msg_Routing_InvalidRoute <| "Érvénytelen útvonal"
     , msg_Routing_SessionTimedOut <| "Lejárt a munkamenet"
-    , msg_ErrorPage_Title <| "Error"
-    , msg_ErrorPage_GoBackToLogin <| "Vissza a bejelentkezéshez"
-    , msg_ErrorPage_Header <| "Valami hiba történt... :("
+    , msg_ErrorPage_Title <| "A viharba!"
+    , msg_ErrorPage_GoBackToHome <| "Vissza a főoldalra"
+    , msg_ErrorPage_DefaultMsg <| "Valami hiba történt... :("
     , msg_Input_Group_Name <| "Név"
     , msg_Input_Group_Description <| "Leírás"
     , msg_Input_Group_Evaluation <| "Értékelés"

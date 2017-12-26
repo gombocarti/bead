@@ -20,8 +20,8 @@ import qualified Text.Blaze.Html5.Attributes as A
 import           Text.Blaze.Html5.Attributes hiding (id, span)
 
 import qualified Bead.Controller.Pages as P
-import           Bead.Controller.ServiceContext as ServiceContext (UserState(..))
-import           Bead.Domain.Entities as Entity (statusMessage, usernameCata, uid)
+import           Bead.Controller.ServiceContext as ServiceContext (UserState, getStatus, uid, usernameInState)
+import           Bead.Domain.Entities as Entity (statusMessage, usernameCata, uid, PageSettings(needsLatex))
 import           Bead.View.Fay.Hooks
 import           Bead.View.Fay.JSON.ServerSide
 import qualified Bead.View.I18N as I18N
@@ -43,8 +43,8 @@ css c = H.link ! A.type_ "text/css" ! A.href (fromString c) ! A.rel "stylesheet"
 js :: String -> Html
 js j = H.script ! A.src (fromString j) $ mempty
 
-bootStrapDocument :: UserState -> IHtml -> IHtml
-bootStrapDocument state body' = do
+bootStrapDocument :: Entity.PageSettings -> IHtml -> IHtml
+bootStrapDocument settings body' = do
   body <- body'
   return $ do
     docType
@@ -68,7 +68,7 @@ bootStrapDocument state body' = do
         css "/bootstrap-datetimepicker.min.css"
         js "/bootstrap-datetimepicker.min.js"
         js "/fay/DynamicContents.js"
-        when (needKaTeXBy state) $ do
+        when (needsLatex settings) $ do
           css "/katex/katex.min.css"
           js  "/katex/katex.min.js"
           H.script $ fromString $ unwords
@@ -79,18 +79,9 @@ bootStrapDocument state body' = do
             , "}}"
             ]
     H.body $ body
-  where
-    needKaTeXBy (UserState { page = p }) = P.isPage texPages p
-      where
-        texPages = [ P.isSubmission, P.isSubmissionDetails
-                   , P.isNewGroupAssignmentPreview, P.isNewCourseAssignmentPreview
-                   , P.isModifyAssignmentPreview
-                   ]
 
-    needKaTeXBy _ = False
-
-runBootstrapPage :: UserState -> IHtml -> I18N -> Html
-runBootstrapPage s p i = translate i $ bootStrapDocument s p
+runBootstrapPage :: Entity.PageSettings -> IHtml -> I18N -> Html
+runBootstrapPage settings p i = translate i $ bootStrapDocument settings p
 
 titleAndHead :: (Html -> IHtml -> IHtml) -> Translation String -> IHtml -> IHtml
 titleAndHead doc title content = doc
@@ -103,20 +94,21 @@ titleAndHead doc title content = doc
           H.div ! A.id "title" $ fromString $ msg title
         H.div ! A.id "content" $ content)
 
-bootstrapUserFrame :: UserState -> IHtml -> Int -> Int -> IHtml
-bootstrapUserFrame s content secs newNotifs = withUserFrame' content
+bootstrapUserFrame :: UserState -> P.Page' IHtml -> Int -> IHtml
+bootstrapUserFrame s page newNotifs = withUserFrame' (P.pageValue page)
   where
+    withUserFrame' :: IHtml -> IHtml
     withUserFrame' content = do
-      header <- bootStrapHeader s secs newNotifs
+      header <- bootstrapHeader s newNotifs
       content <- content
-      status <- bootStrapStatus s
+      status <- bootstrapStatus s
       msg <- getI18N
       return $ do
         header
         Bootstrap.container $ do
           Bootstrap.rowColMd12 $ hr
           Bootstrap.rowColMd12 $ Bootstrap.pageHeader $ h2 $
-            fromString $ msg $ linkText $ page s
+            fromString $ msg $ linkText page
           content
           Bootstrap.rowColMd12 $ hr
         status
@@ -289,13 +281,6 @@ startEndCountdownDiv :: String -> String -> String -> UTCTime -> UTCTime -> Html
 startEndCountdownDiv divId daystr overstr now until =
   countdownDiv divId daystr overstr True (floor $ diffUTCTime until now)
 
--- Creates an HTML dic which represents a countdown timer, showing
--- the time left in hours:min format for the given seconds, mainly
--- to show
-minSecCountdown :: String -> String -> Int -> Html
-minSecCountdown divId overstr secs =
-  countdownDiv divId "" overstr False secs
-
 -- Creates an HTML div which represents a countdown timer, showing
 -- the ETA time in days hours:min:secs format from the given
 -- now time in seconds.
@@ -366,6 +351,7 @@ hiddenTableLine value = H.tr . H.td $ value
 
 linkText :: P.Page a b c d e -> Translation String
 linkText = P.pageCata
+  (c $ msg_LinkText_Index "BE-AD")
   (c $ msg_LinkText_Login "Login")
   (c $ msg_LinkText_Logout "Logout")
   (c $ msg_LinkText_Home "Home")
@@ -466,8 +452,8 @@ publicHeader = do
         H.div ! class_ "navbar-header" $ do
          span ! class_ "navbar-brand" $ "BE-AD"
 
-bootStrapHeader :: UserState -> Int -> Int -> IHtml
-bootStrapHeader s secs newNotifs = do
+bootstrapHeader :: UserState -> Int -> IHtml
+bootstrapHeader s newNotifs = do
   msg <- getI18N
   return $ do
         H.div ! class_ "navbar navbar-default navbar-fixed-top" $ do
@@ -486,21 +472,18 @@ bootStrapHeader s secs newNotifs = do
                                     if newNotifs > 0
                                         then linkToPageWithPostfix notifications (" (" ++ show newNotifs ++ ")")
                                         else linkToPage notifications)
-                        li $ minSecCountdown "hdctd" "--:--" secs
                         li $ H.a userId
                         li $ (I18N.i18n msg $ linkToPage profile)
-#ifndef SSO
                         li $ (I18N.i18n msg $ linkToPage logout)
-#endif
   where
     logout = P.logout ()
     profile = P.profile ()
     home = P.home ()
-    userId = fromString $ concat [usernameCata id . user $ s, " / ", Entity.uid id . ServiceContext.uid $ s]
+    userId = fromString $ concat [usernameCata id . ServiceContext.usernameInState $ s, " / ", Entity.uid id . ServiceContext.uid $ s]
     notifications = P.notifications ()
 
-bootStrapStatus :: UserState -> IHtml
-bootStrapStatus = maybe noMessage message . status
+bootstrapStatus :: UserState -> IHtml
+bootstrapStatus = maybe noMessage message . getStatus
   where
     noMessage = return $ return ()
     message m = do

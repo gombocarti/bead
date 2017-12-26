@@ -27,8 +27,8 @@ saveUser = void . insert . fromDomainValue
 personalInfo :: Domain.Username -> Persist Domain.PersonalInfo
 personalInfo username = do
   user <- loadUser username
-  return $! Domain.withUser user $ \role _username _email name timezone _language uid ->
-    Domain.PersonalInfo (role, name, timezone, uid)
+  return $! Domain.withUser user $ \role _username _email name timezone language uid ->
+    Domain.PersonalInfo (role, name, timezone, language, uid)
 
 -- Select users who satiesfies the given predicate
 filterUsers :: (Domain.User -> Bool) -> Persist [Domain.User]

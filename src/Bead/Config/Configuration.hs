@@ -41,9 +41,6 @@ data Config = Config {
     -- Place of log messages coming from the UserStory layer
     -- Entries about the actions performed by the user
     userActionLogFile :: FilePath
-    -- Session time out on the client side, the lifetime of a valid
-    -- value stored in cookies. Measured in seconds, nonnegative value
-  , sessionTimeout :: Second
 #ifdef EmailEnabled
     -- The hostname of the server, this hostname is placed in the registration emails
   , emailHostname :: Hostname
@@ -73,11 +70,11 @@ data Config = Config {
   } deriving (Eq, Show, Read)
 
 #ifdef EmailEnabled
-configCata fcfg f (Config useraction timeout host from dll dtz tz up cfg pcfg) =
-  f useraction timeout host from dll dtz tz up (fcfg cfg) pcfg
+configCata fcfg f (Config useraction host from dll dtz tz up cfg pcfg) =
+  f useraction host from dll dtz tz up (fcfg cfg) pcfg
 #else
-configCata fcfg f (Config useraction timeout dll dtz tz up cfg pcfg) =
-  f useraction timeout dll dtz tz up (fcfg cfg) pcfg
+configCata fcfg f (Config useraction dll dtz tz up cfg pcfg) =
+  f useraction dll dtz tz up (fcfg cfg) pcfg
 #endif
 
 #ifdef MYSQL
@@ -134,7 +131,6 @@ standaloneLoginConfig f (StandaloneLoginConfig reg exp) = f reg exp
 -- The defualt system parameters
 defaultConfiguration = Config {
     userActionLogFile = joinPath ["log", "useractions.log"]
-  , sessionTimeout    = 1200
 #ifdef EmailEnabled
   , emailHostname     = "http://127.0.0.1:8000"
   , emailFromAddress  = "noreply@bead.org"

@@ -16,17 +16,17 @@ import           Prelude hiding (id)
 import           Bead.Domain.Entities (Language(..))
 import           Bead.Domain.Types (readMaybe)
 import           Bead.View.BeadContext
-import           Bead.View.Content hiding (BlazeTemplate, template)
+import           Bead.View.Content hiding (BlazeTemplate, template, getDictionaryInfos)
+import           Bead.View.ContentHandler (setUserLanguage)
 import           Bead.View.Headers (getHeaders)
-import           Bead.View.Session (setLanguageInSession)
 
 #ifdef TEST
 import           Test.Tasty.TestSet
 #endif
 
-setLanguageFromAcceptLanguage :: BeadHandler' b ()
+setLanguageFromAcceptLanguage :: ContentHandler ()
 setLanguageFromAcceptLanguage = do
-  acceptLanguages <- getHeader "Accept-Language" <$> getRequest
+  acceptLanguages <- beadHandler $ getHeader "Accept-Language" <$> getRequest
   case acceptLanguages of
     Nothing -> return ()
     Just val -> do
@@ -34,11 +34,11 @@ setLanguageFromAcceptLanguage = do
       let languages = nub . map acceptLanguageToLanguage
                           . concat
                           $ map (parseAcceptLanguageLine . BS.unpack) ls
-      dictionaryLanguages <- map fst <$> dcGetDictionaryInfos
+      dictionaryLanguages <- beadHandler $ map fst <$> getDictionaryInfos
       let selectedLang = languages `intersect` dictionaryLanguages
       case selectedLang of
         []    -> return ()
-        (l:_) -> setLanguageInSession l
+        (l:_) -> setUserLanguage l
 
 -- The possible accept langauge value in the Accept-Language headers
 data AcceptLanguage

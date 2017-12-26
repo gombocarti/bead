@@ -1,5 +1,8 @@
 module Test.Property.EntityGen where
 
+import           Bead.Controller.ServiceContext (UserState(UserNotLoggedIn, UserLoggedIn))
+import qualified Bead.View.AuthToken as Auth
+import           Bead.View.Translation (Translation(T))
 import           Bead.Domain.Entities
 import qualified Bead.Domain.Entity.Notification as Notification
 import           Bead.Domain.TimeZone (utcZoneInfo, cetZoneInfo)
@@ -10,20 +13,24 @@ import           Test.Tasty.Arbitrary
 import           Control.Monad (join, liftM)
 import           Control.Applicative ((<$>),(<*>),pure)
 import           Data.String (fromString)
+import           Data.UUID (UUID)
+import qualified Data.UUID as UUID
 
 import qualified Data.ByteString.Char8 as BS (pack)
 
 word = listOf1 $ elements ['a' .. 'z' ]
 numbers = listOf1 $ elements ['0' .. '9']
 
+manyWords :: Gen String
 manyWords = do
   w <- word
   ws <- manyWords'
-  return $ w ++ " " ++ ws
+  return $ unwords [w, ws]
 
   where
-    manyWords' = listOf1 $ elements $ ' ':['a' .. 'z']
+    manyWords' = listOf1 $ elements ['a' .. 'z']
 
+usernames :: Gen Username
 usernames = liftM Username (vectorOf 6 $ oneof [capital, digits])
   where
     capital = elements ['A' .. 'Z']
@@ -58,6 +65,51 @@ userAndEPwds = do
   user <- users
   code <- numbers
   return (user, code)
+
+fullNames :: Gen String
+fullNames = manyWords
+
+userStates :: Gen UserState
+userStates = oneof [
+    UserLoggedIn
+      <$> usernames
+      <*> uids
+      <*> fullNames
+      <*> languages
+      <*> roleGen
+      <*> (return UUID.nil)
+      <*> timeZones
+      <*> statusMessages
+  , UserNotLoggedIn
+      <$> languages
+  ]
+
+cookies :: Gen Auth.Cookie
+cookies = oneof [
+    Auth.LoggedInCookie
+      <$> usernames
+      <*> uids
+      <*> fullNames
+      <*> languages
+      <*> roleGen
+      <*> (return UUID.nil)
+      <*> timeZones
+      <*> statusMessages
+  , Auth.NotLoggedInCookie
+      <$> languages
+  ]
+
+statusMessages :: Gen (Maybe (StatusMessage (Translation String)))
+statusMessages = do
+  severity <- elements [SmNormal, SmError]
+  message <- translations
+  elements [Nothing, Just (severity message)]
+    where
+      translations :: Gen (Translation String)
+      translations = do
+        n <- elements [1..20]
+        s <- manyWords
+        return $ T (n, s)
 
 courseCodes = liftM CourseCode word
 

@@ -18,6 +18,7 @@ This module represents the registration pages. The registration process has two 
 -}
 
 import qualified Data.ByteString.Char8 as B
+import           Data.Either (isLeft)
 import           Data.Maybe (fromJust, isJust, isNothing)
 import           Data.String (fromString)
 import           Data.Time hiding (TimeZone, timeZoneName)
@@ -44,48 +45,23 @@ import           Bead.View.EmailTemplate
 #endif
 import           Bead.View.ErrorPage
 import           Bead.View.RouteOf (requestRoute)
-import           Bead.View.Session
 
-createUser :: Persist.Interpreter -> FilePath -> User -> String -> IO ()
-createUser persist usersdb user password = do
+createUser :: Persist.Interpreter -> User -> String -> IO ()
+createUser persist user _password = do
   let name = usernameCata id $ u_username user
-  mgr <- mkJsonAuthMgr usersdb
-  pwd <- encryptPassword . ClearText . fromString $ password
-  let authUser = defAuthUser {
-      userLogin    = fromString name
-    , userPassword = Just pwd
-    }
-  save mgr authUser
-  createdUser <- lookupByLogin mgr (T.pack name)
-  case createdUser of
-    Nothing -> error "There was no user created"
-    Just u' -> case passwordFromAuthUser u' of
-      Nothing  -> error "There was no password given"
-      Just _pwd -> Persist.runPersist persist $ Persist.saveUser user
+  Persist.runPersist persist $ Persist.saveUser user
   return ()
 
 -- Checks if the user exists in the Snap Auth module
-doesUserExist :: String -> FilePath -> IO Bool
-doesUserExist username userdb = do
-  mgr <- mkJsonAuthMgr userdb
-  lg <- lookupByLogin mgr (T.pack username)
-  return $ isJust lg
+doesUserExist :: Persist.Interpreter -> Username -> IO Bool
+doesUserExist persist username =
+  isLeft <$> Persist.runPersist persist (Persist.doesUserExist username)
 
-changeUserPassword :: FilePath -> Username -> Bead.View.Content.Password -> IO ()
-changeUserPassword userdb username password = do
-  let name = usernameCata id username
-  mgr <- mkJsonAuthMgr userdb
-  pwd <- encryptPassword . ClearText . fromString $ password
-  authUser <- lookupByLogin mgr (T.pack name)
-  case authUser of
-    Nothing -> print "No user is found"
-    Just authUser1 -> do
-      let authUser2 = authUser1 { userPassword = Just pwd }
-      save mgr authUser2
-      return ()
+changeUserPassword :: Username -> Bead.View.Content.Password -> IO ()
+changeUserPassword _username _password = return ()
 
-createUserWithRole :: Bead.View.Content.Role -> Persist.Interpreter -> FilePath -> UserRegInfo -> IO ()
-createUserWithRole role persist usersdb = userRegInfoCata $
+createUserWithRole :: Bead.View.Content.Role -> Persist.Interpreter -> UserRegInfo -> IO ()
+createUserWithRole role persist = userRegInfoCata $
   \name uid password email fullName timeZone ->
     let usr = User {
         u_role = role
@@ -96,7 +72,7 @@ createUserWithRole role persist usersdb = userRegInfoCata $
       , u_language = Language "hu" -- TODO: I18N
       , u_uid = Uid uid
       }
-    in createUser persist usersdb usr password
+    in createUser persist usr password
 
 createAdminUser   = createUserWithRole Admin
 createStudentUser = createUserWithRole Student
@@ -344,11 +320,6 @@ registrationErrorPage :: (ErrorPage e) => e -> BeadHandler' b ()
 registrationErrorPage = errorPage (msg_Registration_Title "Registration")
 
 -- * Tools
-
--- Returns true if the given value is Left x, otherwise false
-isLeft :: Either a b -> Bool
-isLeft (Left _)  = True
-isLeft (Right _) = False
 
 -- Return the value from Right x otherwise throws a runtime error
 fromRight :: Either a b -> b

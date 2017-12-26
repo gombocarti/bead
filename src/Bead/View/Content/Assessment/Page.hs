@@ -97,11 +97,11 @@ data UploadResult
 newGroupAssessmentPage :: GETContentHandler
 newGroupAssessmentPage = do
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
-  return $ fillAssessmentTemplate $ PD_NewGroupAssessment gk
+  setPageContents $ fillAssessmentTemplate $ PD_NewGroupAssessment gk
 
 postNewGroupAssessment :: POSTContentHandler
 postNewGroupAssessment = do 
-  msg <- lift i18nH
+  msg <- i18nE
   uploadResult <- uploadFile
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
   title <- getParameter titleParam
@@ -126,11 +126,11 @@ postNewGroupAssessment = do
 newCourseAssessmentPage :: GETContentHandler
 newCourseAssessmentPage = do
   ck <- getParameter $ customCourseKeyPrm courseKeyParamName
-  return $ fillAssessmentTemplate $ PD_NewCourseAssessment ck
+  setPageContents $ fillAssessmentTemplate $ PD_NewCourseAssessment ck
 
 postNewCourseAssessment :: POSTContentHandler
 postNewCourseAssessment = do 
-  msg <- lift i18nH
+  msg <- i18nE
   uploadResult <- uploadFile
   title <- getParameter titleParam
   ck <- getParameter $ customCourseKeyPrm courseKeyParamName
@@ -165,7 +165,7 @@ parseEvaluations msg evalConfig = M.mapMaybe (parseEvaluation msg evalConfig)
 
 parseEvaluation :: I18N -> EvConfig -> String -> Maybe Evaluation
 parseEvaluation _msg _evalConfig "" = Nothing
-parseEvaluation msg evalConfig s   = evConfigCata 
+parseEvaluation msg evalConfig s = evConfigCata 
                                  (mkEval <$> readBinary)
                                  (\_ -> mkEval <$> readPercentage)
                                  (Just . mkEval . freeFormResult $ s)
@@ -198,7 +198,7 @@ evConfigParam = evalConfigParameter "evConfig"
 
 fillNewGroupAssessmentPreviewPage :: ViewPOSTContentHandler
 fillNewGroupAssessmentPreviewPage = do
-  msg <- lift i18nH
+  msg <- i18nE
   uploadResult <- uploadFile
   title <- getParameter titleParam
   description <- getParameter descriptionParam
@@ -209,11 +209,11 @@ fillNewGroupAssessmentPreviewPage = do
     usernames <- Story.subscribedToGroup gk
     mapM Story.loadUserDesc usernames
   let evaluations = toUserDescKey ud_uid users (parseEvaluations msg evConfig (readCsv contents))
-  return $ fillAssessmentTemplate $ PD_PreviewGroupAssessment gk title description evConfig users evaluations
+  setPageContents $ fillAssessmentTemplate $ PD_PreviewGroupAssessment gk title description evConfig users evaluations
 
 uploadFile :: ContentHandler [UploadResult]
 uploadFile = do
-  results <- lift $ do
+  results <- beadHandler $ do
     tmpDir <- getTempDirectory
     size <- maxUploadSizeInKb <$> getConfiguration
     let maxSize = fromIntegral (size * 1024)
@@ -428,7 +428,7 @@ viewAssessmentPage :: GETContentHandler
 viewAssessmentPage = do
   ak <- getParameter assessmentKeyPrm
   aDesc <- userStory $ Story.assessmentDesc ak
-  return $ viewAssessmentContent aDesc
+  setPageContents $ viewAssessmentContent aDesc
 
 viewAssessmentContent :: AssessmentDesc -> IHtml
 viewAssessmentContent aDesc = do
@@ -465,11 +465,11 @@ modifyAssessmentPage = do
     scoreSubmitted <- Story.isThereAScore ak
     cGKey <- Story.courseOrGroupOfAssessment ak
     return (as,cGKey,scoreSubmitted)
-  return . fillAssessmentTemplate $ PD_ModifyAssessment ak as cGKey scoreSubmitted
+  setPageContents . fillAssessmentTemplate $ PD_ModifyAssessment ak as cGKey scoreSubmitted
 
 postModifyAssessment :: POSTContentHandler
 postModifyAssessment = do
-  msg <- lift i18nH
+  msg <- i18nE
   uploadResult <- uploadFile
   ak <- getParameter assessmentKeyPrm
   newTitle <- getParameter titleParam
@@ -499,7 +499,7 @@ postModifyAssessment = do
   
 modifyAssessmentPreviewPage :: ViewPOSTContentHandler
 modifyAssessmentPreviewPage = do
-  msg <- lift i18nH
+  msg <- i18nE
   uploadResult <- uploadFile
   ak <- getParameter assessmentKeyPrm
   selectedEvType <- getParameter evConfigParam
@@ -512,5 +512,5 @@ modifyAssessmentPreviewPage = do
     return (as,cGKey,scoreSubmitted,users)
   let [File _name contents] = uploadResult
       evaluations = toUserDescKey ud_uid users (parseEvaluations msg selectedEvType (readCsv contents))
-  return . fillAssessmentTemplate $ PD_ModifyAssessmentPreview ak as cGKey scoreSubmitted users evaluations
+  setPageContents . fillAssessmentTemplate $ PD_ModifyAssessmentPreview ak as cGKey scoreSubmitted users evaluations
 

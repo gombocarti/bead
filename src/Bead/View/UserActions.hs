@@ -12,8 +12,7 @@ import           Control.Monad (void)
 -- | The user can preform the following actions on the user interface
 data UserAction
   -- Navigation
-  = Logout
-  | LogMessage String
+  = LogMessage String
   | StatusMessage (Translation String)
   | ErrorMessage (Translation String)
 
@@ -73,7 +72,6 @@ data UserAction
 -- TODO: I18N
 -- | UserStory correspondence to the given action
 userStoryFor :: UserAction -> Story.UserStory ()
-userStoryFor Logout             = Story.logout
 userStoryFor (CreateUser u)     = Story.createUser u
 userStoryFor (LogMessage m)     = Story.logErrorMessage m
 userStoryFor (StatusMessage m)  = Story.putStatusMessage m
@@ -107,9 +105,6 @@ userStoryFor (ModifyTestScript tsk s) = Story.modifyTestScript tsk s
 
 -- Saves the email, fullname and timezone in the persistence layer
 -- and set the user's timezone in the service context
-userStoryFor (ChangeUserDetails n t l) =
-  do Story.changeUserDetails n t l
-     Story.setTimeZone t
-     Story.putStatusMessage $ msg_UserActions_ChangedUserDetails "The user's settings has been changed."
+userStoryFor (ChangeUserDetails n tz lang) = Story.changeUserDetails n tz lang
 userStoryFor NoUserAction = return ()
 -- etc ...

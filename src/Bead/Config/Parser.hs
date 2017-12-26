@@ -20,7 +20,6 @@ import Test.Tasty.TestSet
 instance FromJSON Config where
   parseJSON (Object v) = Config
     <$> v.: "user-actions-log"
-    <*> v.: "session-timeout"
 #ifdef EmailEnabled
     <*> v.: "hostname-for-emails"
     <*> v.: "from-email-address"
@@ -127,7 +126,6 @@ parseTests = group "parserTests" $ do
 
   let configStr loginCfg persistCfg = unlines [
           "user-actions-log: 'actions'",
-          "session-timeout: 10",
 #ifdef EmailEnabled
           "hostname-for-emails: 'www.google.com'",
           "from-email-address: 'mail@google.com'",
@@ -147,7 +145,6 @@ parseTests = group "parserTests" $ do
 
   let config lcf pcfg = Config {
          userActionLogFile = "actions"
-       , sessionTimeout = 10
 #ifdef EmailEnabled
        , emailHostname = "www.google.com"
        , emailFromAddress = "mail@google.com"

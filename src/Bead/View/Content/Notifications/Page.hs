@@ -26,7 +26,7 @@ notifications = ViewHandler notificationsPage
 notificationsPage :: GETContentHandler
 notificationsPage = do
   pd <- PageData <$> (userStory Story.notifications) <*> userTimeZoneToLocalTimeConverter
-  return $ notificationsContent pd
+  setPageContents $ notificationsContent pd
 
 notificationsContent :: PageData -> IHtml
 notificationsContent p = do
