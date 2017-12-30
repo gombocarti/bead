@@ -9,7 +9,3 @@ if [ ! -e "${BEAD_SRC}/.stack-work" ]; then
   ln -s "${INIT_DIR}/.stack-work" "${BEAD_SRC}/.stack-work"
 fi
 
-# Start MySQL and create database
-service mysql start
-mysqladmin create bead
-

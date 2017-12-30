@@ -1,17 +1,13 @@
 FROM debian:stretch-slim
 
-# Do not ask input during package install,
-# specifically when installing mysql
-ENV DEBIAN_FRONTEND noninteractive
-
-# Download locales, GHC, stack, cabal and necessary GHC tools
+# Download locales, stack, necessary Haskell tools and libs
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
                        git patch \
                        locales \
                        cpphs haskell-stack \
                        happy alex \
-                       libpcre3 libpcre3-dev mysql-server \
+                       libpcre3 libpcre3-dev \
                        default-libmysqlclient-dev screen \
                        netbase pkg-config
 
@@ -20,15 +16,9 @@ RUN echo en_US.UTF-8 UTF-8 >> /etc/locale.gen && \
     locale-gen
 ENV LC_ALL en_US.UTF-8
 
-# Set up mysql
-RUN service mysql start && \
-    mysqladmin -u root password password
-
 # Create development dirs
-RUN mkdir /development && \
-    mkdir /development/init && \
-    mkdir /development/bead && \
-    mkdir /bead-server
+RUN mkdir -p /development/bead && \
+    mkdir    /bead-server
 
 # Copy cabal file and install dependencies
 COPY "./Bead.cabal" "/development/init/"
@@ -47,6 +37,7 @@ RUN cd development/init && \
 
 # Convenience scripts for development
 COPY "./container-script/build.sh" "/usr/local/bin/build"
+COPY "./container-script/run.sh" "/usr/local/bin/run"
 COPY "./container-script/dev-env-setup.sh" "/development/init/dev-env-setup.sh"
 
 # Directory for sources

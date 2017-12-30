@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings, Rank2Types, TypeFamilies, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE CPP #-}
 
 module Bead.Persistence.SQL.MySQL where
 
@@ -27,7 +28,11 @@ data Config = Config {
 
 defaultConfig = Config {
     dbName = "bead"
+#ifndef TEST
   , host = "localhost"
+#else
+  , host = "mysql"
+#endif
   , port = 3306
   , user = "root"
   , pass = "password"
