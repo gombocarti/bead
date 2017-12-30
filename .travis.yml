@@ -1,16 +1,18 @@
-
 language: c
 
 sudo: required
+group: travis_lts
 services:
   - docker
 
 before_install:
   - grep '\(MemTotal\|SwapTotal\)' /proc/meminfo
   - git show | head -1  # (for matching against commit hash given on the travis log web page)
-  - docker pull poora/bead
 
 script:
   - mkdir server
-  - docker run --rm -it -v `pwd`:/development/bead -v `pwd`/server:/bead-server poora/bead
-    /bin/sh -c "/development/bead/docker/travis-test.sh"
+  - curl -L https://github.com/docker/compose/releases/download/1.18.0/docker-compose-Linux-x86_64 -o ./docker-compose
+  - chmod u+x docker-compose
+  - ./docker-compose run bead-test
+  - ./docker-compose down
+

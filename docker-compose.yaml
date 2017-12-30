@@ -1,0 +1,31 @@
+version: "3.2"
+services:
+  bead-test:
+    image: poora/bead
+    entrypoint: ["/development/bead/docker/travis-test.sh"]
+    depends_on:
+      - mysql
+    networks:
+      - isolated
+    volumes:
+      - type: bind
+        source: ./
+        target: /development/bead
+
+      - type: bind
+        source: ./server
+        target: /bead-server
+
+  mysql:
+    image: "mysql:5.7"
+    ports:
+      - "3306:3306"
+    networks:
+      - isolated
+    environment:
+      - MYSQL_DATABASE=bead
+      - MYSQL_ROOT_PASSWORD=password
+
+networks:
+  isolated:
+    internal: true
