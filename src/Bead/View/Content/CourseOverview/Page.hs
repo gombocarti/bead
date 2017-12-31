@@ -33,7 +33,7 @@ courseSubmissionsPage = do
     stc <- submissionTableContext
     sti <- sortUserLines <$> Story.courseSubmissionTable ck
     return (stc, sti)
-  return . content $ CourseSubmissions now stc sti
+  setPageContents . content $ CourseSubmissions now stc sti
 
 content :: PageData -> IHtml
 content = pageDataCata courseSubmissionsContent

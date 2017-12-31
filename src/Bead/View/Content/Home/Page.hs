@@ -46,7 +46,7 @@ homePage :: GETContentHandler
 homePage = withUserState $ \s -> do
   converter <- userTimeZoneToLocalTimeConverter
   now <- liftIO getCurrentTime
-  fmap homeContent $ do
+  home <- fmap homeContent $ do
     (userStory $ do
        ua <- S.userAssignments
        sbmTables <- (map sortUserLines <$> S.submissionTables)
@@ -65,6 +65,7 @@ homePage = withUserState $ \s -> do
            converter
            stc
            now)
+  setPageContents home    
 
 deleteUsersFromCourseHandler :: POSTContentHandler
 deleteUsersFromCourseHandler =

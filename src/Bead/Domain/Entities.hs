@@ -1,7 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 module Bead.Domain.Entities (
-    Submission(..)
+    AuthFailure(..)
+  , Submission(..)
   , submissionCata
   , withSubmission
   , SubmissionValue(..)
@@ -25,7 +26,6 @@ module Bead.Domain.Entities (
   , courseAppAna
   , Group(..)
   , groupCata
-  , Workflow(..)
   , Role(..)
   , roleCata
   , roles
@@ -93,6 +93,8 @@ module Bead.Domain.Entities (
   , fileInfoAppAna
   , Score(..)
   , score
+  , PageSettings(..)
+  , defaultPageSettings
   , CompareHun(..)
   , sortHun
   , StatusMessage(..)
@@ -241,15 +243,11 @@ data Group = Group {
 groupCata group (Group name desc)
   = group name desc
 
--- | Workflows can happen to exams
-data Workflow
-  = W_Created
-  | W_Open
-  | W_Closed
-  | W_Expired
-  deriving (Eq, Show)
-
 -- * Authorization and authentication
+
+data AuthFailure
+  = IncorrectUserOrPassword
+  | UserNotFound
 
 -- | Login roles
 data Role
@@ -460,24 +458,30 @@ data User = User {
   , u_uid      :: Uid
   } deriving (Eq, Ord, Show)
 
-userCata f (User role username email name timezone language uid) =
-  f role username email name timezone language uid
+userCata f (User role username email name timeZone language uid) =
+  f role username email name timeZone language uid
 
 withUser = flip userCata
 
-userAna role username email name timezone language = User
+userAna role username email name timeZone language = User
   <$> role
   <*> username
   <*> email
   <*> name
-  <*> timezone
+  <*> timeZone
   <*> language
 
-newtype PersonalInfo = PersonalInfo (Role, String, TimeZoneName, Uid)
+newtype PersonalInfo = PersonalInfo (Role, String, TimeZoneName, Language, Uid)
 
-personalInfoCata f (PersonalInfo (role, name, timezone, uid))
-  = f role name timezone uid
+personalInfoCata :: (Role -> String -> TimeZoneName -> Language -> Uid -> a)
+                 -> PersonalInfo
+                 -> a
+personalInfoCata f (PersonalInfo (role, name, timeZone, language, uid))
+  = f role name timeZone language uid
 
+withPersonalInfo :: PersonalInfo
+                 -> (Role -> String -> TimeZoneName -> Language -> Uid -> a)
+                 -> a
 withPersonalInfo p f = personalInfoCata f p
 
 data UserDesc = UserDesc {
@@ -653,8 +657,12 @@ sortHun = sortBy compareHun
 -- Status message is shown for the user on the UI
 data StatusMessage a
   = SmNormal a -- Normal message
-  | SmError a  -- Some none several error happened, the user needs to be informed about.
-  deriving (Show, Eq)
+  | SmError a  -- Some several error happened, the user needs to be informed about.
+#ifdef TEST
+  deriving (Eq, Show)
+#else
+  deriving Eq
+#endif
 
 statusMessage
   normal
@@ -663,6 +671,12 @@ statusMessage
   = case sm of
     SmNormal x -> normal x
     SmError x -> err x
+
+-- | PageSettings controls how a HTML page is rendered.
+newtype PageSettings = PageSettings { needsLatex :: Bool }
+
+defaultPageSettings :: PageSettings
+defaultPageSettings = PageSettings { needsLatex = False }
 
 #ifdef TEST
 

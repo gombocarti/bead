@@ -28,10 +28,11 @@ evaluationTable :: ViewHandler
 evaluationTable = ViewHandler evaluationTablePage
 
 evaluationTablePage :: GETContentHandler
-evaluationTablePage =
-  evaluationTableContent
-  <$> userTimeZoneToLocalTimeConverter
-  <*> userStory openSubmissions
+evaluationTablePage = do
+  evalTable <- evaluationTableContent
+               <$> userTimeZoneToLocalTimeConverter
+               <*> userStory openSubmissions
+  setPageContents evalTable
 
 evaluationTableContent :: UserTimeConverter -> OpenedSubmissions -> IHtml
 evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup related -> do

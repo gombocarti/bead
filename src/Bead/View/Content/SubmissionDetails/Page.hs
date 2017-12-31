@@ -52,7 +52,7 @@ submissionDetailsPage = do
   -- getSubmission ak sk $ \submission -> do
   tc <- userTimeZoneToLocalTimeConverter
   currentTime <- liftIO getCurrentTime
-  return $
+  setPageContents $
     submissionDetailsContent PageData {
         smKey = sk
       , aKey  = ak
@@ -84,11 +84,12 @@ submissionDetailsPostHandler = do
                    , commentType = CT_Student
                    }
   where
+    getName :: UserState -> Maybe String
     getName = userStateCata
+      (const Nothing)
       Nothing
       Nothing
-      Nothing
-      (\_username _uid _page name _role _token _timezone _status -> Just name)
+      (\_username _uid name _lang _role _uuid _timezone _status -> Just name)
 
 submissionDetailsContent :: PageData -> IHtml
 submissionDetailsContent p = do

@@ -12,7 +12,7 @@ import qualified Bead.View.ContentHandler as CH
 
 import           Control.Monad (forM)
 import           Control.Monad.Trans (lift)
-import qualified Data.ByteString.Lazy.UTF8 as LBsUTF8 (fromString)
+import qualified Data.Text as Text (pack)
 import           Data.Function (on)
 import           Data.String (fromString)
 import           Data.List (sortBy,intercalate)
@@ -22,39 +22,36 @@ getGroupCsv :: DataHandler
 getGroupCsv = DataHandler $ do
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
   maybeAk  <- getOptionalParameter assessmentKeyPrm
-  msg <- lift i18nH
+  msg <- i18nE
   let filename = groupKeyMap id gk ++ ".csv"
   case maybeAk of
     Just ak -> do
       let filename = concat [groupKeyMap id gk, "_", assessmentKey id ak, ".csv"]
       groupScores <- userStory (Story.scoresOfGroup gk ak)
-      downloadFile filename (csvFilled msg groupScores)
+      downloadText filename (Text.pack $ csvFilled msg groupScores)
     Nothing -> do 
       let filename = concat [groupKeyMap id gk,".csv"]
       users <- userStory $ do
         usernames <- Story.subscribedToGroup gk
         mapM Story.loadUserDesc usernames
-      downloadFile filename (csvEmpty msg users)
+      downloadText filename (Text.pack $ csvEmpty msg users)
 
 getCourseCsv :: DataHandler
 getCourseCsv = DataHandler $ do
   ck <- getParameter $ customCourseKeyPrm courseKeyParamName
   maybeAk  <- getOptionalParameter assessmentKeyPrm
-  msg <- lift i18nH
+  msg <- i18nE
   case maybeAk of
     Just ak -> do
       let filename = concat [courseKeyMap id ck, "_", assessmentKey id ak, ".csv"]
       courseScores <- userStory (Story.scoresOfCourse ck ak)      
-      downloadFile filename (csvFilled msg courseScores)
+      downloadText filename (Text.pack $ csvFilled msg courseScores)
     Nothing -> do
       let filename = concat [courseKeyMap id ck,".csv"]
       users <- userStory $ do
         usernames <- Story.subscribedToCourse ck
         mapM Story.loadUserDesc usernames
-      downloadFile filename (csvEmpty msg users)
-
-downloadFile :: FilePath -> String -> ContentHandler ()
-downloadFile filename content = CH.downloadFile filename (LBsUTF8.fromString content) CH.MimePlainText
+      downloadText filename (Text.pack $ csvEmpty msg users)
 
 csvEmpty :: I18N -> [UserDesc] -> String
 csvEmpty msg users = (information msg) ++ unlines (header : body)
@@ -86,7 +83,7 @@ csvFilled msg users = (information msg) ++ unlines (header : body)
           where score = case mScoreInfo of
                           Nothing        -> ""
                           Just scoreInfo -> scoreInfoToRawText "" msg scoreInfo
-      userid = uid id . ud_uid 
+      userid = uid id . ud_uid
       fullName = ud_fullname
 
 information :: I18N -> String

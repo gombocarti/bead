@@ -18,7 +18,8 @@ import           Test.QuickCheck.Arbitrary (arbitrary)
 -- persistence layer. Mainly for information propagation
 -- for the user.
 data ViewPage a
-  = Login a
+  = Index a
+  | Login a
   | Logout a
   | Home a
   | CourseOverview CourseKey a
@@ -32,6 +33,7 @@ data ViewPage a
   deriving (Eq, Ord, Show, Functor)
 
 viewPageCata
+  index
   login
   logout
   home
@@ -44,6 +46,7 @@ viewPageCata
   viewUserScore
   notifications
   p = case p of
+    Index a -> index a
     Login a -> login a
     Logout a -> logout a
     Home a -> home a
@@ -58,6 +61,7 @@ viewPageCata
 
 viewPageValue :: ViewPage a -> a
 viewPageValue = viewPageCata
+  id -- index
   id -- login
   id -- logout
   id -- home
@@ -340,13 +344,19 @@ pageCata' = pageKindCata
 pageValue :: Page a a a a a -> a
 pageValue = pageCata' viewPageValue userViewPageValue viewModifyPageValue modifyPageValue dataPageValue
 
+setPageValue :: a -> Page b c d e f -> Page a a a a a
+setPageValue a = pfmap (const a) (const a) (const a) (const a) (const a)
+
 type Page' a = Page a a a a a
 
 type PageDesc = Page' ()
 
+pageToPageDesc :: Page a b c d e -> PageDesc
 pageToPageDesc = pfmap unit unit unit unit unit where
+  unit :: a -> ()
   unit = const ()
 
+index                   = View . Index
 login                   = View . Login
 logout                  = View . Logout
 home                    = View . Home
@@ -407,6 +417,7 @@ unsubscribeFromCourse gk          = Modify . UnsubscribeFromCourse gk
 
 -- Template method for the page data structure
 pageCata
+  index
   login
   logout
   home
@@ -460,6 +471,7 @@ pageCata
   viewAssessment
   notifications
   p = case p of
+    (View (Index a)) -> index a
     (View (Login a)) -> login a
     (View (Logout a)) -> logout a
     (View (Home a)) -> home a
@@ -515,6 +527,7 @@ pageCata
 
 -- Constants that attached each of the page constructor
 constantsP
+  index_
   login_
   logout_
   home_
@@ -568,6 +581,7 @@ constantsP
   viewAssessment_
   notifications_
   = pageCata
+      (c $ index index_)
       (c $ login login_)
       (c $ logout logout_)
       (c $ home home_)
@@ -625,6 +639,7 @@ constantsP
 
 
 liftsP
+  index_
   login_
   logout_
   home_
@@ -678,6 +693,7 @@ liftsP
   viewAssessment_
   notifications_
   = pageCata
+      (index . index_)
       (login . login_)
       (logout . logout_)
       (home . home_)
@@ -730,6 +746,9 @@ liftsP
       (\ak a -> modifyAssessmentPreview ak (modifyAssessmentPreview_ ak a))
       (\ak a -> viewAssessment ak (viewAssessment_ ak a))
       (notifications . notifications_)
+
+isIndex (View (Index _)) = True
+isIndex _ = False
 
 isLogin (View (Login _)) = True
 isLogin _ = False
@@ -896,6 +915,7 @@ f <||> g = \x -> case f x of
 
 regularPages = [
     isHome
+  , isLogout
   , isProfile
   , isChangePassword
   , isSubmission
@@ -905,6 +925,7 @@ regularPages = [
   , isViewAssessment
   , isViewUserScore
   , isNotifications
+  , isUnsubscribeFromCourse
   ]
 
 groupAdminPages = [
@@ -930,6 +951,10 @@ groupAdminPages = [
   , isExportSubmissionsOfGroups
   , isExportSubmissionsOfOneGroup
   , isGetGroupCsv
+  , isEvaluation
+  , isModifyEvaluation
+  , isDeleteUsersFromCourse
+  , isDeleteUsersFromGroup
   ]
 
 courseAdminPages = [
@@ -966,6 +991,10 @@ courseAdminPages = [
   , isExportSubmissionsOfOneGroup
   , isGetCourseCsv
   , isGetGroupCsv
+  , isEvaluation
+  , isModifyEvaluation
+  , isDeleteUsersFromCourse
+  , isDeleteUsersFromGroup
   ]
 
 adminPages = [
@@ -974,16 +1003,6 @@ adminPages = [
   , isUserDetails
   , isAssignCourseAdmin
   , isUploadFile
-  ]
-
--- Pages that can not be displayed only, modifies the
--- persistented data somehow
-dataModificationPages = [
-    isEvaluation
-  , isModifyEvaluation
-  , isDeleteUsersFromCourse
-  , isDeleteUsersFromGroup
-  , isUnsubscribeFromCourse
   ]
 
 isUserViewPage :: Page a b c d e -> Bool
@@ -997,11 +1016,9 @@ isUserViewPage = pageCata'
     false = const False
     true  = const True
 
--- Pages that not part of the site content
-
-nonActivePages = [
-    isLogin
-  , isLogout
+publicPages = [
+    isIndex
+  , isLogin
   ]
 
 menuPageList = map ($ ()) [
@@ -1017,7 +1034,7 @@ menuPageList = map ($ ()) [
 
 -- Returns a page predicate function depending on the role, which page transition is allowed,
 -- from a given page
-allowedPage :: E.Role -> (Page a b c d e -> Bool)
+allowedPage :: E.Role -> Page a b c d e -> Bool
 allowedPage = E.roleCata student groupAdmin courseAdmin admin
   where
     student     = isPage regularPages
@@ -1084,8 +1101,9 @@ parentPage = pageCata'
 pageDescTest = assertProperty
   "Total page union: Regular, Admin and NonMenu"
   (isPage ((join [ regularPages, groupAdminPages, courseAdminPages
-                 , adminPages, dataModificationPages, menuPagePred
-                 , nonActivePages ])))
+                 , adminPages, menuPagePred
+                 , publicPages
+                 ])))
   pageGen
   "Regular, Admin and NonMenu pages should cover all pages"
   where
@@ -1110,7 +1128,8 @@ pageGen = oneof [
       username      = E.Username <$> arbitrary
 
       nonParametricPages = elements [
-          login ()
+          index ()
+        , login ()
         , logout ()
         , home ()
         , profile ()

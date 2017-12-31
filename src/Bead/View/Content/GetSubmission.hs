@@ -6,8 +6,7 @@ module Bead.View.Content.GetSubmission (
 
 import           Control.Monad.Trans (lift)
 import           Data.String (fromString)
-import qualified Data.ByteString.Lazy as LBs
-import qualified Data.ByteString.Lazy.UTF8 as LBsUTF8 (fromString)
+import qualified Data.ByteString.UTF8 as BsUTF8 (fromString)
 import           System.FilePath ((<.>))
 
 import           Bead.Domain.Entities (usernameCata)
@@ -22,10 +21,10 @@ getSubmission = DataHandler $ do
   (s, description) <- userStory (Story.getSubmission sk)
   let submission = solution s
       (fname, ext) = submissionFilename description
-      downloadFile = CH.downloadFile (fname <.> ext)
+      designateFile = downloadStrict (fname <.> ext)
   submissionValue
-    (\s -> downloadFile (LBsUTF8.fromString s) CH.MimePlainText)
-    (\s -> downloadFile (LBs.fromStrict s) CH.MimeZip)
+    (\s -> designateFile CH.MimePlainText (BsUTF8.fromString s))
+    (\s -> designateFile CH.MimeZip s)
     submission
 
 -- | Returns a pair of filename and extension from a `SubmissionDesc`.

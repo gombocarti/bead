@@ -6,7 +6,6 @@ module Bead.View.BeadContextInit (
   , beadConfigFileName
   , InitTasks
   , Daemons(..)
-  , usersJson
   ) where
 
 import           Control.Applicative
@@ -17,10 +16,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 
 import           Snap hiding (Config(..))
-import           Snap.Snaplet.Auth
-import           Snap.Snaplet.Auth.Backends.SafeJsonFile
 import           Snap.Snaplet.Fay
-import           Snap.Snaplet.Session.Backends.CookieSession
 import           System.FilePath ((</>))
 import           System.Directory
 
@@ -32,10 +28,10 @@ import           Bead.Daemon.Email
 #ifdef SSO
 import           Bead.Daemon.LDAP
 #endif
-import           Bead.Daemon.Logout
 import           Bead.Domain.Entities (UserRegInfo, Username(..))
 
 import           Bead.Domain.TimeZone
+import qualified Bead.View.AuthToken as Auth
 import           Bead.View.BeadContext hiding (ldapDaemon)
 import           Bead.View.DataDir
 import           Bead.View.Dictionary (dictionaries, Language(..))
@@ -49,9 +45,6 @@ beadConfigFileName = "bead.config"
 iconFileName :: String
 iconFileName = "icon.ico"
 
-usersJson :: String
-usersJson = "users.json"
-
 -- During the initialization what other tasks need to be done.
 -- Just userRegInfo means that a new admin user should be craeted
 -- Nothing means there is no additional init task to be done.
@@ -61,12 +54,15 @@ type InitTasks = Maybe UserRegInfo
 -- application
 -- TODO: Use lenses for optional fields.
 data Daemons = Daemons {
-    logoutDaemon :: LogoutDaemon
 #ifdef EmailEnabled
-  , emailDaemon  :: EmailDaemon
+    emailDaemon  :: EmailDaemon
 #endif
 #ifdef SSO
+#ifdef EmailEnabled
   , ldapDaemon   :: LDAPDaemon
+#else
+    ldapDaemon   :: LDAPDaemon
+#endif
 #endif
   }
 
@@ -74,13 +70,10 @@ beadContextInit :: Config -> ServiceContext -> Daemons -> FilePath -> SnapletIni
 beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDir $ do
   copyDataContext
 
-  sm <- nestSnaplet "session" sessionManager $
-          initCookieSessionManager "cookie" "session" Nothing (Just (sessionTimeout config)) -- TODO cookie domain
+  authTokenManager <- liftIO $ Auth.createAuthTokenManager
+  auth <- nestSnaplet "authentication" authContext $ createAuthTokenContext authTokenManager
 
-  as <- nestSnaplet "auth" auth $
-          initSafeJsonFileAuthManager defAuthSettings sessionManager usersJson
-
-  ss <- nestSnaplet "context" serviceContext $ contextSnaplet s (logoutDaemon daemons)
+  ss <- nestSnaplet "context" serviceContext $ contextSnaplet s
 
   liftIO $ putStrLn $ "Available languages: " ++ (show $ Map.keys dictionaries)
   ds <- nestSnaplet "dictionary" dictionaryContext $
@@ -121,15 +114,15 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
   return $
 #ifdef SSO
 #ifdef EmailEnabled
-    BeadContext sm as ss ds se rp fs ts cs tz dl ldap
+    BeadContext auth ss ds se rp fs ts cs tz dl ldap
 #else
-    BeadContext sm as ss ds rp fs ts cs tz dl ldap
+    BeadContext auth ss ds rp fs ts cs tz dl ldap
 #endif
 #else
 #ifdef EmailEnabled
-    BeadContext sm as ss ds se rp fs ts cs un tz dl
+    BeadContext auth ss ds se rp fs ts cs un tz dl
 #else
-    BeadContext sm as ss ds rp fs ts cs un tz dl
+    BeadContext auth ss ds rp fs ts cs un tz dl
 #endif
 #endif
   where

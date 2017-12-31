@@ -100,12 +100,12 @@ runCommand cmd = do
   let createAdmin = do
         lift $ putStrLn "Creating Admin ..."
         userRegInfo <- readUserRegInfo
-        lift $ Registration.createAdminUser persist usersJson userRegInfo
+        lift $ Registration.createAdminUser persist userRegInfo
 
       createStudent = do
         lift $ putStrLn "Creating Student ..."
         userRegInfo <- readUserRegInfo
-        lift $ Registration.createStudentUser persist usersJson userRegInfo
+        lift $ Registration.createStudentUser persist userRegInfo
 
       changePassword username = do
         putStrLn $ concat ["Change password for ", username, " ..."]
@@ -125,7 +125,7 @@ runCommand cmd = do
                  putStrLn "Passwords do not match!"
                  changePassword username
                True -> do
-                 Registration.changeUserPassword usersJson (Username username) pwd
+                 Registration.changeUserPassword (Username username) pwd
 
 #ifdef SSO
       importUser username = do
@@ -144,7 +144,7 @@ runCommand cmd = do
                [Just uid, Just fullName, Just email] -> do
                  let regInfo = UserRegInfo (username, uid, "password", email, fullName,
                                  TimeZoneName $ defaultRegistrationTimezone cfg)
-                 Registration.createStudentUser persist usersJson regInfo
+                 Registration.createStudentUser persist regInfo
                  putStrLn "DONE"
                _ -> putStrLn "ERROR: Failed to map LDAP attributes to user details.")
           (putStrLn "ERROR: LDAP query could not run as it was invalid.")

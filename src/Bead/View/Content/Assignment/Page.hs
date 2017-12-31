@@ -18,7 +18,7 @@ import           Data.Time (getCurrentTime)
 import qualified Bead.Controller.UserStories as S
 import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Content
-import           Bead.View.ContentHandler (getJSONParameters, contentHandlerError)
+import           Bead.View.ContentHandler (getJSONParameters, contentHandlerError, modifyPageSettings)
 import           Bead.View.RequestParams
 
 import           Bead.View.Content.Assignment.Data
@@ -49,7 +49,7 @@ newCourseAssignmentPage = do
     return ((ck, course), nonEmptyList tss', ufs)
   now <- liftIO $ getCurrentTime
   tz <- userTimeZoneToLocalTimeConverter
-  return $ newAssignmentContent $ PD_Course tz now c tss ufs
+  setPageContents $ newAssignmentContent $ PD_Course tz now c tss ufs
 
 postCourseAssignment :: POSTContentHandler
 postCourseAssignment = do
@@ -71,7 +71,8 @@ newCourseAssignmentPreviewPage = do
     return ((ck, course), nonEmptyList tss', ufs)
   now <- liftIO $ getCurrentTime
   tz <- userTimeZoneToLocalTimeConverter
-  return $ newAssignmentContent $
+  modifyPageSettings (\settings -> settings { needsLatex = True })
+  setPageContents $ newAssignmentContent $
     PD_Course_Preview tz now c tss ufs assignment tc
 
 -- Tries to create a TCCreation descriptive value. If the test script, usersfile and testcase
@@ -132,7 +133,7 @@ newGroupAssignmentPage = do
     ufs  <- map fst <$> S.listUsersFiles
     return ((gk, group), nonEmptyList tss', ufs)
   tz <- userTimeZoneToLocalTimeConverter
-  return $ newAssignmentContent $ PD_Group tz now g tss ufs
+  setPageContents $ newAssignmentContent $ PD_Group tz now g tss ufs
 
 postGroupAssignment :: POSTContentHandler
 postGroupAssignment = do
@@ -154,7 +155,8 @@ newGroupAssignmentPreviewPage = do
     return ((gk, group), nonEmptyList tss', ufs)
   tz <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ getCurrentTime
-  return $ newAssignmentContent $
+  modifyPageSettings (\settings -> settings { needsLatex = True })
+  setPageContents $ newAssignmentContent $
     PD_Group_Preview tz now g tss ufs assignment tc
 
 -- * Modify Assignment
@@ -171,7 +173,7 @@ modifyAssignmentPage = do
     ev   <- not <$> S.isThereASubmission ak
     return (as, nonEmptyList tss', ufs, tc, ev)
   tz <- userTimeZoneToLocalTimeConverter
-  return $ newAssignmentContent $
+  setPageContents $ newAssignmentContent $
     PD_Assignment tz ak as tss ufs tc ev
 
 postModifyAssignment :: POSTContentHandler
@@ -194,7 +196,8 @@ modifyAssignmentPreviewPage = do
     ev   <- not <$> S.isThereASubmission ak
     return (nonEmptyList tss', ufs, tc, ev)
   tz <- userTimeZoneToLocalTimeConverter
-  return $ newAssignmentContent $
+  modifyPageSettings (\settings -> settings { needsLatex = True })
+  setPageContents $ newAssignmentContent $
     PD_Assignment_Preview tz ak as tss ufs tc tm ev
 
 viewAssignmentPage :: GETContentHandler
@@ -209,15 +212,17 @@ viewAssignmentPage = do
   tz <- userTimeZoneToLocalTimeConverter
   let ti = do (_tck, _tc, tsk) <- tc
               Map.lookup tsk $ Map.fromList tss
-  return $ newAssignmentContent $ PD_ViewAssignment tz ak as ti tc
+  setPageContents $ newAssignmentContent $ PD_ViewAssignment tz ak as ti tc
 
 -- * Helpers
 
 -- | Returns Nothing if the given list was empty, otherwise Just list
+nonEmptyList :: [a] -> Maybe [a]
 nonEmptyList [] = Nothing
 nonEmptyList xs = Just xs
 
 -- Get Assignment Value
+getAssignment :: ContentHandler Assignment
 getAssignment = do
   converter <- userTimeZoneToUTCTimeConverter
   startDate <- converter <$> getParameter assignmentStartPrm

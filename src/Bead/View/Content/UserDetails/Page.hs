@@ -29,11 +29,11 @@ userDetailPage = do
     True -> do
       user      <- userStory $ loadUser username
       languages <- getDictionaryInfos
-      ts <- lift foundTimeZones
+      ts <- beadHandler foundTimeZones
       return (userDetailForm ts user languages)
 
     False -> return (userDoesNotExist username)
-  return page
+  setPageContents page
 
 userDataChange :: POSTContentHandler
 userDataChange = do
