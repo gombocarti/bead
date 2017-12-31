@@ -118,7 +118,7 @@ registrationRequest config = method GET renderForm <|> method POST saveUserRegDa
     , reg_timeout  = timeout 2 now
     }
 
-  renderForm = renderBootstrapPublicPage $ publicFrame View.registrationFirstStep
+  renderForm = renderBootstrapPublicPage View.registrationFirstStep
 
   saveUserRegData = do
     u <- checkUsernamePrm
@@ -151,7 +151,7 @@ registrationRequest config = method GET renderForm <|> method POST saveUserRegDa
                     regUsername = reg_username userRegData
                   , regUrl = createUserRegAddress key language userRegData
                   }
-            lift $ renderBootstrapPublicPage $ publicFrame View.registrationFirstStepEmailSent
+            lift $ renderBootstrapPublicPage View.registrationFirstStepEmailSent
         _ -> throwSError . i18n $
                msg_Registration_RequestParameterIsMissing "Some request parameter is missing."
 
@@ -246,7 +246,7 @@ finalizeRegistration = method GET renderForm <|> method POST createStudent where
                 (i18n $ msg_RegistrationFinalize_UserAlreadyExist "This user already exists.")
               (False, False) -> do
                 timeZones <- map (\t -> (t, timeZoneName id t)) <$> foundTimeZones
-                renderBootstrapPublicPage . publicFrame $
+                renderBootstrapPublicPage $
                   View.registrationPasswordStep utcZoneInfo timeZones key token username language
 
   hiddenParam parameter value = hiddenInput (DataBridge.name parameter) (DataBridge.encode parameter value)

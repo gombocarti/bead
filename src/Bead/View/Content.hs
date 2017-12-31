@@ -138,7 +138,7 @@ type GETContentHandler  = ContentHandler (PageContents IHtml)
 type POSTContentHandler = ContentHandler UserAction
 type ViewPOSTContentHandler = ContentHandler (PageContents IHtml)
 
-setPageContents :: IHtml -> ContentHandler (PageContents IHtml)
+setPageContents :: html -> ContentHandler (PageContents html)
 setPageContents = return . Right
 
 redirectTo :: RedirectionTarget -> ContentHandler (PageContents a)

@@ -41,7 +41,7 @@ serveMarkdown = do
   rq <- getRequest
   let path = "markdown" </> (BS.unpack $ rqPathInfo rq)
   exists <- liftIO $ doesFileExist path
-  let serve settings = bootstrapPublicPage settings . publicFrame >=> blaze
+  let serve settings = bootstrapPublicPage settings >=> blaze
       withLatex = PageSettings { needsLatex = True }
       withoutLatex = PageSettings { needsLatex = False }
   if exists

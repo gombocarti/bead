@@ -75,7 +75,7 @@ import qualified Bead.View.BeadContext as BeadContext
 import           Bead.View.DataBridge
 import           Bead.View.Dictionary hiding (defaultLanguage)
 import           Bead.View.I18N (IHtml, translate)
-import           Bead.View.Pagelets (runBootstrapPage, bootstrapUserFrame)
+import           Bead.View.Pagelets (runBootstrapPage, bootstrapUserFrame, publicFrame)
 import qualified Bead.Controller.Pages as P
 import           Bead.View.RouteOf (ReqParam(..))
 import           Bead.View.Translation
@@ -227,7 +227,7 @@ bootstrapPublicPage settings p = do
   language <- getOrDefaultLanguage
   t <- getDictionary language
   let translator = maybe trans unDictionary t
-  return $ runBootstrapPage settings p translator
+  return $ runBootstrapPage settings (publicFrame p) translator
 
 -- Tries to decode the given value with the parameter description, if
 -- fails throws an error, otherwise returns the value
