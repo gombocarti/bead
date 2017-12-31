@@ -152,7 +152,7 @@ index :: BeadHandler ()
 index =
   ifTop $ requireUser
             (redirect (routeOf $ P.home ()))
-            (I.index Nothing >>= bootstrapPublicPage defaultPageSettings . publicFrame >>= serve)
+            (I.index Nothing >>= bootstrapPublicPage defaultPageSettings >>= serve)
 #else
 index =
   ifTop $ requireUser

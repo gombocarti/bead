@@ -18,7 +18,6 @@ import           Bead.View.BeadContext (BeadHandler')
 import qualified Bead.View.Content.Public.ErrorPage as View
 import           Bead.View.ContentHandler
 import           Bead.View.I18N (IHtml, getI18N)
-import           Bead.View.Pagelets (publicFrame)
 import           Bead.View.Translation
 
 class ErrorPage e where
@@ -61,4 +60,4 @@ publicErrorPage :: Translation String -> String -> BeadHandler' b H.Html
 publicErrorPage title msg = publicPage $ page title (Just msg)
 
 publicPage :: IHtml -> BeadHandler' b H.Html
-publicPage = bootstrapPublicPage (PageSettings { needsLatex = False }) . publicFrame
+publicPage = bootstrapPublicPage (PageSettings { needsLatex = False })

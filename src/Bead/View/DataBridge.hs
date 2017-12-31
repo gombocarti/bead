@@ -317,7 +317,7 @@ regEmailPrm = emailPrm (fieldName regEmailAddress)
 passwordPrm :: String -> String -> Parameter String
 passwordPrm fieldName paramName = Parameter {
     encode = id
-  , decode = Just . id
+  , decode = Just
   , name = fieldName
   , decodeError = const "Invalid password"
   , notFound    = join [paramName, " is not found."]
@@ -330,10 +330,10 @@ regPasswordAgainPrm :: Parameter String
 regPasswordAgainPrm = validateBy isPassword $ passwordPrm (fieldName regPasswordAgain) "Password (again)"
 
 loginPasswordPrm :: Parameter String
-loginPasswordPrm = validateBy isPassword $ passwordPrm (fieldName loginPassword) "Login password"
+loginPasswordPrm = passwordPrm (fieldName loginPassword) "Login password"
 
 oldPasswordPrm :: Parameter String
-oldPasswordPrm = validateBy isPassword $ passwordPrm (fieldName oldPasswordField) "Old password"
+oldPasswordPrm = passwordPrm (fieldName oldPasswordField) "Old password"
 
 newPasswordPrm :: Parameter String
 newPasswordPrm = validateBy isPassword $ passwordPrm (fieldName newPasswordField) "New password"
