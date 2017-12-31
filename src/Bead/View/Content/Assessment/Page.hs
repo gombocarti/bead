@@ -290,7 +290,7 @@ fillAssessmentTemplate pdata = do
     downloadCsvButton msg = Bootstrap.blockButtonLink
                         getCsvLink
                         (msg . msg_NewAssessment_GetCsvButton $ "Get CSV")
-    commitButton msg = Bootstrap.submitButtonWithAttr
+    commitButton msg = Bootstrap.submitButtonWithAttrColorful
                    (formAction commit "multipart/form-data")
                    (msg . msg_NewAssessment_SaveButton $ "Commit")
 

@@ -157,6 +157,9 @@ buttonLink ref text = customButtonLink ["btn-default"] ref "" text
 -- | Creates a block button styled link
 blockButtonLink ref text = customButtonLink ["btn-default", "btn-block"] ref "" text
 
+-- | Creates a primary block button styled link
+primaryBlockButtonLink ref text = customButtonLink ["btn-primary", "btn-block"] ref "" text
+
 -- | Warning button with a given text
 warningButtonLink ref text = customButtonLink ["btn-warning"] ref "" text
 
@@ -267,18 +270,30 @@ submitButton nameValue text =
          ! class_ "btn btn-block btn-default"
          $ fromString text
 
--- | Creates a submit button with a given attrbute and a given text
+submitButtonColorful nameValue text =
+  button ! type_ "submit"
+         ! (name $ fromString nameValue)
+         ! class_ "btn btn-block btn-primary"
+         $ fromString text
+
 submitButtonWithAttr attr text =
   button ! type_ "submit"
          ! class_ "btn btn-block btn-default"
          ! attr
          $ fromString text
 
+submitButtonWithAttrColorful attr text =
+  button ! type_ "submit"
+         ! class_ "btn btn-block btn-primary"
+         ! attr
+         $ fromString text
+
+
 -- | Creates a submit small button with a given name and the given text
 smallSubmitButton nameValue text =
   button ! type_ "submit"
          ! (name $ fromString nameValue)
-         ! class_ "btn btn-default"
+         ! class_ "btn btn-primary"
          $ fromString text
 
 -- | Turns the selection into combobox like selections
@@ -310,7 +325,7 @@ optionalTextInputFieldWithDefault paramName value =
             ! A.value (fromString value)
 
 -- | Creates a text input with the given name as id, a given label and a placeholder text
-textInput paramName labelText placeholderText =
+textInputWithAttr paramName labelText placeholderText attr =
   formGroup $ do
     labelFor paramName labelText
     H.input ! formControl
@@ -319,6 +334,10 @@ textInput paramName labelText placeholderText =
             ! A.name (fromString paramName)
             ! A.id (fromString paramName)
             ! A.placeholder (fromString placeholderText)
+            ! attr
+
+textInput paramName labelText placeholderText =
+  textInputWithAttr paramName labelText placeholderText mempty
 
 -- | Creates an optional text input with the given name as id, a given label and a placeholder text
 optionalTextInput paramName labelText placeholderText =

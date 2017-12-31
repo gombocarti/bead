@@ -914,8 +914,7 @@ f <||> g = \x -> case f x of
                    False -> g x
 
 regularPages = [
-    isIndex
-  , isHome
+    isHome
   , isLogout
   , isProfile
   , isChangePassword
@@ -926,6 +925,7 @@ regularPages = [
   , isViewAssessment
   , isViewUserScore
   , isNotifications
+  , isUnsubscribeFromCourse
   ]
 
 groupAdminPages = [
@@ -951,6 +951,10 @@ groupAdminPages = [
   , isExportSubmissionsOfGroups
   , isExportSubmissionsOfOneGroup
   , isGetGroupCsv
+  , isEvaluation
+  , isModifyEvaluation
+  , isDeleteUsersFromCourse
+  , isDeleteUsersFromGroup
   ]
 
 courseAdminPages = [
@@ -987,6 +991,10 @@ courseAdminPages = [
   , isExportSubmissionsOfOneGroup
   , isGetCourseCsv
   , isGetGroupCsv
+  , isEvaluation
+  , isModifyEvaluation
+  , isDeleteUsersFromCourse
+  , isDeleteUsersFromGroup
   ]
 
 adminPages = [
@@ -995,16 +1003,6 @@ adminPages = [
   , isUserDetails
   , isAssignCourseAdmin
   , isUploadFile
-  ]
-
--- Pages that can not be displayed only, modifies the
--- persistented data somehow
-dataModificationPages = [
-    isEvaluation
-  , isModifyEvaluation
-  , isDeleteUsersFromCourse
-  , isDeleteUsersFromGroup
-  , isUnsubscribeFromCourse
   ]
 
 isUserViewPage :: Page a b c d e -> Bool
@@ -1018,11 +1016,9 @@ isUserViewPage = pageCata'
     false = const False
     true  = const True
 
--- Pages that not part of the site content
-
-nonActivePages = [
-    isLogin
-  , isLogout
+publicPages = [
+    isIndex
+  , isLogin
   ]
 
 menuPageList = map ($ ()) [
@@ -1105,8 +1101,9 @@ parentPage = pageCata'
 pageDescTest = assertProperty
   "Total page union: Regular, Admin and NonMenu"
   (isPage ((join [ regularPages, groupAdminPages, courseAdminPages
-                 , adminPages, dataModificationPages, menuPagePred
-                 , nonActivePages ])))
+                 , adminPages, menuPagePred
+                 , publicPages
+                 ])))
   pageGen
   "Regular, Admin and NonMenu pages should cover all pages"
   where

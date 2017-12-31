@@ -116,7 +116,8 @@ pages = do
             translationErrorPage
               (msg_Login_PageTitle "Login")
               (msg_Login_InternalError "Some internal error happened, please contact the administrators."))
-        loginSubmit
+        (do result <- loginSubmit
+            beadHandler $ traverse (bootstrapPublicPage defaultPageSettings) result)
         (SC.userNotLoggedIn (fromMaybe lang (SC.getLanguage state)))
       either (redirect . routeOf) serve result
 
@@ -151,7 +152,7 @@ index :: BeadHandler ()
 index =
   ifTop $ requireUser
             (redirect (routeOf $ P.home ()))
-            (getDictionaryInfos >>= bootstrapPublicPage defaultPageSettings . publicFrame . I.index >>= serve)
+            (I.index Nothing >>= bootstrapPublicPage defaultPageSettings . publicFrame >>= serve)
 #else
 index =
   ifTop $ requireUser

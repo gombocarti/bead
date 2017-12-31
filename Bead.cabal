@@ -177,7 +177,8 @@ Library
 
     Build-Depends:
       base64-bytestring,
-      either
+      either,
+      gssapi
 
     Exposed-Modules:
       Bead.Daemon.LDAP
@@ -312,7 +313,6 @@ Library
     Bead.View.Content.Profile.Page
     Bead.View.Content.Public.ErrorPage
     Bead.View.Content.Public.Index
-    Bead.View.Content.Public.Login
     Bead.View.Content.Public.Registration
     Bead.View.Content.Public.ResetPassword
     Bead.View.Content.Score.Page

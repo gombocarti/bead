@@ -9,7 +9,7 @@ dictionaryHu = DF.DictionaryFile {
   DF.langName = "Magyar",
   DF.entries =
     [ msg_Index_Header <| "Köszöntjük!"
-    , msg_Index_Body <| "Az oldalt az intézményhez tartozó Active Directory címtárban regisztrált felhasználók tudják használni.\n\nAmennyiben rendelkezünk ilyen hozzáféréssel, a belépéshez kattintsunk a **Tovább** gombra!\n\n*Megjegyzés:* Ne feledkezz meg kijelentkezni megosztott számítógépeken (például géptermekben), mert ez az oldal nem fogja megtenni helyetted."
+    , msg_Index_Body <| "Az oldalt csak az intézményhez tartozó Active Directory címtárban regisztrált adatokkal lehet használni."
     , msg_Index_Proceed <| "Tovább"
     , msg_Login_PageTitle <| "Bejelentkezés"
     , msg_Login_Username <| "Felhasználónév:"

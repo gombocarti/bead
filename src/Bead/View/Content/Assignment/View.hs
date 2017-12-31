@@ -319,7 +319,7 @@ newAssignmentContent pd = do
                    Bootstrap.colMd6 $
                       onlyOnEdit pd $ Bootstrap.submitButtonWithAttr (formAction $ pagePreview pd) (msg $ msg_NewAssignment_PreviewButton "Preview")
                    Bootstrap.colMd6 $
-                      onlyOnEdit pd $ Bootstrap.submitButtonWithAttr (formAction $ page pd) (msg $ msg_NewAssignment_SaveButton "Commit")
+                      onlyOnEdit pd $ Bootstrap.submitButtonWithAttrColorful (formAction $ page pd) (msg $ msg_NewAssignment_SaveButton "Commit")
 
             Bootstrap.turnSelectionsOn
 

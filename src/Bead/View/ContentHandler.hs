@@ -219,17 +219,6 @@ bootstrapPage page = do
   changeUserState SC.clearStatus
   i18nE >>= (return . runBootstrapPage settings (bootstrapUserFrame state page notifs))
 
--- | Renders the public page selecting the I18N translation based on the
---   language stored in the session, if there is no such value, the
---   default translator function is used
-publicPage :: IHtml -> ContentHandler Html
-publicPage p = do
-  language <- userLanguage
-  beadHandler $ do
-    dict <- getDictionary language
-    let translator = maybe trans unDictionary dict
-    return $ translate translator p
-
 -- | Translates a public page selecting the I18N translation based on the
 --   language stored in the session, if there is no such value, the
 --   default translator function is used.
