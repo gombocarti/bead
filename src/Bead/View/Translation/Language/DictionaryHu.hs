@@ -20,7 +20,7 @@ dictionaryHu = DF.DictionaryFile {
     , msg_Login_Forgotten_Password <| "Elfelejtett jelszó"
     , msg_Login_InternalError <| "Belső hiba történt, jelezzük az üzemeltetőknek!"
     , msg_Login_SelectLanguage <| "Nyelvek"
-    , msg_Login_InvalidPasswordOrUser <| "Ismeretlen felhasználó vagy jelszó!"
+    , msg_Login_InvalidPasswordOrUser <| "Ismeretlen felhasználónév vagy rossz jelszó."
     , msg_Login_On_SSO <| "Ezt az oldalt single sign-on módban nem lenne szabad elérni.  Jelezzük az üzemeltetőknek!"
     , msg_Login_Error <| "Sajnos hiba történt a bejelentkezés során: "
     , msg_Login_TryAgain <| "Próbáljuk újra!"
