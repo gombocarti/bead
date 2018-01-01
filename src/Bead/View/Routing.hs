@@ -74,6 +74,7 @@ routes config = join
     , (changeLanguagePath, changeLanguage)
     ]
   , registrationRoutes config
+  , [ ("/fay", with fayContext fayServe) ]
   , [ (markdownPath, serveMarkdown) ]
     -- Add static handlers
   , [ (staticPath,         serveDirectory "static") ]

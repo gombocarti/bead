@@ -56,5 +56,5 @@ index authError = do
         languageMenu msg languages
 
 visibleFailure :: I18N -> AuthFailure -> String
-visibleFailure msg IncorrectUserOrPassword = msg $ msg_Login_InvalidPasswordOrUser "Invalid user or password."
-visibleFailure msg UserNotFound            = msg $ msg_Login_InvalidPasswordOrUser "Invalid user or password."
+visibleFailure msg IncorrectUserOrPassword = msg $ msg_Login_InvalidPasswordOrUser "Incorrect username or password."
+visibleFailure msg UserNotFound            = msg $ msg_Login_InvalidPasswordOrUser "Incorrect username or password."
