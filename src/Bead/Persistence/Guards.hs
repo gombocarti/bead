@@ -187,17 +187,18 @@ doesBlockSubmissionView = assignmentOfSubmission >=> doesBlockAssignmentView
 doesBlockAssignmentView :: AssignmentKey -> Persist Bool
 doesBlockAssignmentView ak = do
   key <- courseOrGroupOfAssignment ak
-  others <- filter (/= ak) <$> case key of
-    Left  ck -> courseAssignments ck
-    Right gk -> do ck <- courseOfGroup gk
-                   aks  <- courseAssignments ck
-                   aks' <- groupAssignments gk
-                   return (nub $ (aks ++ aks'))
   asg <- loadAssignment ak
   case (isIsolated $ aspects asg) of
     True  -> return True
     False -> do
       now <- liftIO getCurrentTime
+      others <- filter (/= ak) <$> case key of
+        Left  ck -> courseAssignments ck
+        Right gk -> do
+          ck <- courseOfGroup gk
+          aks  <- courseAssignments ck
+          aks' <- groupAssignments gk
+          return (nub $ (aks ++ aks'))
       asgs <- mapM loadAssignment others
       let otherOpenIsolated = isNothing $ find (\a -> and [isActive a now, isIsolated $ aspects a]) asgs
       return $! otherOpenIsolated

@@ -51,7 +51,6 @@ data UploadResult
   | File FilePath !ByteString
   | InvalidFile
   | UnnamedFile
-  deriving (Eq,Show)
 
 submissionPage :: GETContentHandler
 submissionPage = do
@@ -60,6 +59,8 @@ submissionPage = do
   now <- liftIO $ getCurrentTime
   size <- fmap maxUploadSizeInKb $ beadHandler getConfiguration
   (limit, aDesc, asg, submissions) <- userStory $ do
+    Story.doesBlockAssignmentView ak
+    Story.isUsersAssignment ak
     (aDesc, asg) <- Story.userAssignmentForSubmission ak
     lmt <- Story.assignmentSubmissionLimit ak
     submissions <- Story.userSubmissionInfos ak
@@ -83,6 +84,10 @@ submissionPage = do
 
 submissionPostHandler :: POSTContentHandler
 submissionPostHandler = do
+  ak <- getParameter assignmentKeyPrm
+  userStory $ do
+    Story.doesBlockAssignmentView ak
+    Story.isUsersAssignment ak
   uploadResult <- beadHandler $ do
     tmpDir <- getTempDirectory
     size <- maxUploadSizeInKb <$> getConfiguration
@@ -90,7 +95,6 @@ submissionPostHandler = do
     let uploadPolicy = setMaximumFormInputSize maxSize defaultUploadPolicy
     let perPartUploadPolicy = const $ allowWithMaximumSize maxSize
     handleFileUploads tmpDir uploadPolicy perPartUploadPolicy handlePart
-  ak <- getParameter assignmentKeyPrm
   (_desc,asg) <- userStory $ Story.userAssignmentForSubmission ak
   -- Assignment is for the user
   let aspects = Assignment.aspects asg

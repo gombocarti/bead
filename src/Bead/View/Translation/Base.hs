@@ -526,6 +526,7 @@ labels =
  , "msg_UserStoryError_NonAdministratedTestScript"
  , "msg_UserStoryError_NonCommentableSubmission"
  , "msg_UserStoryError_NonAccessibleSubmission"
+ , "msg_UserStoryError_BlockedAssignment"
  , "msg_UserStoryError_BlockedSubmission"
  , "msg_UserStoryError_NonAccessibleScore"
  , "msg_UserStoryError_ScoreAlreadyExists"

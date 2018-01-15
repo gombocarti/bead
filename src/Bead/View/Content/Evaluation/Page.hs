@@ -262,7 +262,7 @@ evaluationContent pd = do
             "The submission may be downloaded as a plain text file by clicking on the link."
           downloadSubmissionButton
           H.br
-          H.div # submissionTextDiv $ seeMoreSubmission "submission-text-" msg maxLength maxLines (eSolution sd)
+          H.div # submissionTextDiv $ seeMoreSubmission "submission-text-" msg (eSolution sd)
 
     Bootstrap.rowColMd12 $
       H.p $ fromString . msg $ msg_Evaluation_Info $ concat
@@ -306,9 +306,6 @@ evaluationContent pd = do
 
     evPage (Just ek) = Pages.modifyEvaluation submissionKey ek ()
     evPage Nothing   = Pages.evaluation submissionKey ()
-
-    maxLength = 2048
-    maxLines  = 100
 
     notTheLatestWarning :: I18N -> SubmissionInfo -> H.Html
     notTheLatestWarning msg si = 

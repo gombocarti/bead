@@ -16,21 +16,22 @@ import qualified Data.Text as Text (pack)
 import           Data.Function (on)
 import           Data.String (fromString)
 import           Data.List (sortBy,intercalate)
-import           System.FilePath (FilePath)
+import           System.FilePath (FilePath, (<.>))
 
 getGroupCsv :: DataHandler
 getGroupCsv = DataHandler $ do
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
+  group <- userStory $ do
+    Story.isAdministratedGroup gk
+    Story.loadGroup gk
   maybeAk  <- getOptionalParameter assessmentKeyPrm
   msg <- i18nE
-  let filename = groupKeyMap id gk ++ ".csv"
+  let filename = groupName group <.> "csv"
   case maybeAk of
     Just ak -> do
-      let filename = concat [groupKeyMap id gk, "_", assessmentKey id ak, ".csv"]
       groupScores <- userStory (Story.scoresOfGroup gk ak)
       downloadText filename (Text.pack $ csvFilled msg groupScores)
     Nothing -> do 
-      let filename = concat [groupKeyMap id gk,".csv"]
       users <- userStory $ do
         usernames <- Story.subscribedToGroup gk
         mapM Story.loadUserDesc usernames
@@ -39,15 +40,17 @@ getGroupCsv = DataHandler $ do
 getCourseCsv :: DataHandler
 getCourseCsv = DataHandler $ do
   ck <- getParameter $ customCourseKeyPrm courseKeyParamName
+  course <- userStory $ do
+    Story.isAdministratedCourse ck
+    fst <$> Story.loadCourse ck
   maybeAk  <- getOptionalParameter assessmentKeyPrm
   msg <- i18nE
+  let filename = courseName course <.> "csv"
   case maybeAk of
     Just ak -> do
-      let filename = concat [courseKeyMap id ck, "_", assessmentKey id ak, ".csv"]
       courseScores <- userStory (Story.scoresOfCourse ck ak)      
       downloadText filename (Text.pack $ csvFilled msg courseScores)
     Nothing -> do
-      let filename = concat [courseKeyMap id ck,".csv"]
       users <- userStory $ do
         usernames <- Story.subscribedToCourse ck
         mapM Story.loadUserDesc usernames

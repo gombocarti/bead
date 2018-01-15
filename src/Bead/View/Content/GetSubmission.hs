@@ -18,7 +18,10 @@ import qualified Bead.View.ContentHandler as CH
 getSubmission :: DataHandler
 getSubmission = DataHandler $ do
   sk <- getParameter submissionKeyPrm
-  (s, description) <- userStory (Story.getSubmission sk)
+  (s, description) <- userStory $ do
+    Story.doesBlockSubmissionView sk
+    Story.isAccessibleBallotBoxSubmission sk
+    Story.getSubmission sk
   let submission = solution s
       (fname, ext) = submissionFilename description
       designateFile = downloadStrict (fname <.> ext)

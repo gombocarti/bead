@@ -244,8 +244,10 @@ availableAssignments pd timeconverter studentAssignments
               let areIsolateds = areOpenAndIsolatedAssignments as
               let assignments = if areIsolateds then (isolatedAssignments as) else as
               let isLimited = isLimitedAssignments assignments
-              when areIsolateds $ p $ fromString . msg $ msg_Home_ThereIsIsolatedAssignment $ concat
-                [ "ISOLATED MODE: There is at least one assignment which hides the normal assignments for "
+              when areIsolateds $
+                Bootstrap.alert Bootstrap.Warning $
+                markdownToHtml . msg $ msg_Home_ThereIsIsolatedAssignment $ concat
+                [ "**Isolated mode**: There is at least one assignment which hides the normal assignments for "
                 , "this course."
                 ]
               Bootstrap.table $ do

@@ -468,11 +468,11 @@ bootstrapHeader s newNotifs = do
                         H.span ! class_ "icon-bar" $ mempty
                 H.div ! class_ "collapse navbar-collapse navbar-ex1-collapse" $ do
                     ul ! class_ "nav navbar-nav navbar-right" $ do
+                        li $ H.a userId
                         li $ do (I18N.i18n msg $
                                     if newNotifs > 0
                                         then linkToPageWithPostfix notifications (" (" ++ show newNotifs ++ ")")
                                         else linkToPage notifications)
-                        li $ H.a userId
                         li $ (I18N.i18n msg $ linkToPage profile)
                         li $ (I18N.i18n msg $ linkToPage logout)
   where

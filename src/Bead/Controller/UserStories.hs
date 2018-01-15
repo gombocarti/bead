@@ -1786,8 +1786,8 @@ doesBlockSubmissionView = guard
 doesBlockAssignmentView :: AssignmentKey -> UserStory ()
 doesBlockAssignmentView = guard
   (const Persist.doesBlockAssignmentView)
-  "The user tries to access a blocked submissions (%s)."
-  (userError blockedSubmission)
+  "The user tries to access a blocked assignment (%s)."
+  (userError blockedAssignment)
 
 -- * User Story combinators
 
@@ -1868,8 +1868,9 @@ nonAdministratedAssignment = msg_UserStoryError_NonAdministratedAssignment "This
 nonAdministratedAssessment = msg_UserStoryError_NonAdministratedAssessment "This assessment is not administrated by you."
 nonAdministratedSubmission = msg_UserStoryError_NonAdministratedSubmission "The submission is not administrated by you."
 nonAdministratedTestScript = msg_UserStoryError_NonAdministratedTestScript "The test script is not administrated by you."
-nonRelatedAssignment = msg_UserStoryError_NonRelatedAssignment "The assignment does not belong to you."
-nonAccessibleSubmission = msg_UserStoryError_NonAccessibleSubmission "The submission does not belong to you."
+nonRelatedAssignment = msg_UserStoryError_NonRelatedAssignment "You can not access the assignment."
+nonAccessibleSubmission = msg_UserStoryError_NonAccessibleSubmission "You can not access the submission."
+blockedAssignment = msg_UserStoryError_BlockedAssignment "The assignment is blocked by an isolated assignment."
 blockedSubmission = msg_UserStoryError_BlockedSubmission "The submission is blocked by an isolated assignment."
 nonAccessibleScore = msg_UserStoryError_NonAccessibleScore "The score does not belong to you."
 
