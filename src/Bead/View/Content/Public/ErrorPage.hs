@@ -14,23 +14,22 @@ import qualified Text.Blaze.Html5 as H
 
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.I18N (IHtml, getI18N)
-import           Bead.View.RouteOf (loginPath)
+import           Bead.View.RouteOf (indexPath)
 import           Bead.View.Translation
 
 template :: (e -> H.Html) -> Translation String -> Maybe e -> IHtml
-template content t e = do
+template content title errorMsg = do
   msg <- getI18N
   return $ do
     Bootstrap.rowCol4Offset4 $ Bootstrap.pageHeader $ H.h2 $
-      fromString $ msg t
-    Bootstrap.rowCol4Offset4 $ do
-      H.h3 $ fromString $ msg $ msg_ErrorPage_Header "Some error happened... :("
-      H.p $ maybe mempty content e
+      fromString $ msg title
     Bootstrap.rowCol4Offset4 $
-      Bootstrap.buttonLink loginLink (msg $ msg_ErrorPage_GoBackToLogin "Back to login")
+      H.p $ maybe (defaultErrorMsg msg) content errorMsg
+    Bootstrap.rowCol4Offset4 $
+      Bootstrap.buttonLink loginLink (msg $ msg_ErrorPage_GoBackToHome "Back to the home page")
   where
-#ifdef SSO
-    loginLink = unpack loginPath
-#else
-    loginLink = "/"
-#endif
+    defaultErrorMsg :: I18N -> H.Html
+    defaultErrorMsg msg =
+      fromString $ msg $ msg_ErrorPage_DefaultMsg "Some error happened... :("
+
+    loginLink = unpack indexPath

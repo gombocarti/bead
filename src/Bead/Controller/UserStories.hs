@@ -10,7 +10,8 @@ import qualified Bead.Domain.Entity.Assessment as Assessment
 import qualified Bead.Domain.Entity.Notification as Notification
 import           Bead.Domain.Relationships
 import           Bead.Domain.RolePermission (permission)
-import           Bead.Controller.ServiceContext
+import           Bead.Controller.ServiceContext (ServiceContext, UserState)
+import qualified Bead.Controller.ServiceContext as SC
 import           Bead.Controller.Logging  as L
 import           Bead.Controller.Pages    as P hiding (modifyEvaluation,modifyAssessment)
 import           Bead.Persistence.Persist (Persist)
@@ -35,11 +36,14 @@ import           Data.Function (on)
 import           Data.List (nub, (\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Data.Maybe (catMaybes)
+import           Data.Maybe (catMaybes, fromMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String
 import           Data.Time (UTCTime(..), getCurrentTime)
+import           Data.UUID (UUID)
+import qualified Data.UUID as UUID (toString) 
+import qualified Data.UUID.V4 as UUID
 import           Numeric (showHex)
 import           Text.Printf (printf)
 
@@ -47,7 +51,9 @@ import           Text.Printf (printf)
 -- a parametrized message with a string parameter that needs
 -- to be resolved in the place where the message is rendered
 newtype UserError = UserError TransMsg
-  deriving (Show)
+#ifdef TEST
+  deriving Show
+#endif
 
 -- Template method for the UserError functions
 userErrorCata f (UserError t) = f t
@@ -103,53 +109,33 @@ runUserStory
 runUserStory context i18n userState
   = CME.runExceptT
   . flip CMS.runStateT userState
-  . flip CMR.runReaderT (context,i18n)
+  . flip CMR.runReaderT (context, i18n)
   . unStory
 
 -- * High level user stories
 
--- | The user logs in with a given username and password
---   QUESTION: Is there multiple login for the given user?
---   ANSWER:   No, the user can log in once at a time
-login :: Username -> String -> UserStory ()
-login username token = do
-  withUsername username $ \uname ->
-    logMessage INFO $ concat [uname, " is trying to login, with session ", token, " ."]
-  usrContainer <- asksUserContainer
-  validUser    <- persistence $ Persist.doesUserExist username
-  notLoggedIn  <- liftIO $ isUserLoggedIn usrContainer (userToken (username, token))
-  case (validUser, notLoggedIn) of
-    (True, False) -> do
-      loadUserData username token home'
-      s <- userState
-      liftIO $ userLogsIn usrContainer (userToken s) s
-    (True , True)  -> errorPage . userError $ msg_UserStoryError_SameUserIsLoggedIn "This user is logged in somewhere else."
-    (False,    _)  -> errorPage . userError $ msg_UserStoryError_InvalidUsernameOrPassword "Invalid username or password."
-  where
-    home' = home ()
+-- | The user logs in with a given username
+login :: Username -> UserStory ()
+login username = 
+  withUsername username $ \uname -> do
+    logMessage INFO $ unwords [uname, "is trying to log in"]
+    validUser <- persistence $ Persist.doesUserExist username
+    if validUser
+      then do
+        sessionId <- liftIO $ UUID.nextRandom
+        logMessage INFO $ concat [uname, " logs in with session ", UUID.toString sessionId]
+        loadUserData username sessionId
+      else
+        errorPage . userError $ msg_UserStoryError_InvalidUsernameOrPassword "Invalid username or password."
 
--- | The user logs out
-logout :: UserStory ()
-logout = do
-  state <- userState
-  users <- asksUserContainer
-  liftIO $ userLogsOut users (userToken state)
-  CMS.put userNotLoggedIn
+logout :: Language -> UserStory ()
+logout defaultLanguage = logAction INFO "logs out" $
+  changeUserState (SC.userNotLoggedIn . fromMaybe defaultLanguage . SC.getLanguage)
 
 doesUserExist :: Username -> UserStory Bool
 doesUserExist u = logAction INFO ("searches after user " ++ show u) $ do
   authorize P_Open P_User
   persistence $ Persist.doesUserExist u
-
--- | The user navigates to the next page
-changePage :: P.PageDesc -> UserStory ()
-changePage p = do
-  authorize P_Open (pageAsPermObj p)
-  changeUserState $ \userState -> userState { page = p }
-  where
-    pageAsPermObj p
-      | isAdministration p = P_AdminPage
-      | otherwise          = P_PlainPage
 
 -- | The authorized user creates a new user
 createUser :: User -> UserStory ()
@@ -159,16 +145,11 @@ createUser newUser = do
   logger      <- asksLogger
   liftIO $ log logger INFO $ "User is created: " ++ show (u_username newUser)
 
--- Updates the timezone of the current user
-setTimeZone :: TimeZoneName -> UserStory ()
-setTimeZone tz = do
-  changeUserState $ \userState -> userState { timezone = tz }
-  putStatusMessage $ msg_UserStory_SetTimeZone "The time zone has been set."
-
 -- Updates the current user's full name, timezone and language in the persistence layer
 changeUserDetails :: String -> TimeZoneName -> Language -> UserStory ()
 changeUserDetails name timezone language = logAction INFO ("changes fullname, timezone and language") $ do
   user <- currentUser
+  changeUserState $ SC.setTimeZone timezone . SC.setLanguage language
   persistence $ Persist.updateUser user { u_name = name , u_timezone = timezone , u_language = language }
   putStatusMessage $ msg_UserStory_ChangedUserDetails "The user details have been updated."
 
@@ -196,12 +177,12 @@ loadUserDesc u = mkUserDescription <$> loadUser u
 
 -- Returns the username who is active in the current userstory
 username :: UserStory Username
-username = CMS.gets user
+username = CMS.gets SC.usernameInState
 
 -- The UserStory calculation returns the current user's profile data
 currentUser :: UserStory User
 currentUser = logAction INFO "Load the current user's data" $ do
-  u <- user <$> userState
+  u <- SC.usernameInState <$> userState
   persistence $ Persist.loadUser u
 
 -- Saves (copies) a file to the user's directory from the given filepath.
@@ -524,7 +505,7 @@ createGroupAdmin user gk = logAction INFO "sets user as a group admin of a group
   admin <- username
   join . persistence $ do
     info <- Persist.personalInfo user
-    withPersonalInfo info $ \role _name _tz _ui -> do
+    withPersonalInfo info $ \role _name _tz _lang _ui -> do
       admined <- Persist.isAdministratedCourseOfGroup admin gk
       if (and [groupAdmin role, admined])
         then do Persist.createGroupAdmin user gk
@@ -598,14 +579,14 @@ isUserInGroup :: GroupKey -> UserStory Bool
 isUserInGroup gk = logAction INFO ("checks if user is in the group " ++ show gk) $ do
   authorize P_Open P_Group
   state <- userState
-  persistence $ Persist.isUserInGroup (user state) gk
+  persistence $ Persist.isUserInGroup (SC.usernameInState state) gk
 
 -- | Checks if the user is subscribed for the course
 isUserInCourse :: CourseKey -> UserStory Bool
 isUserInCourse ck = logAction INFO ("checks if user is in the course " ++ show ck) $ do
   authorize P_Open P_Course
   state <- userState
-  persistence $ Persist.isUserInCourse (user state) ck
+  persistence $ Persist.isUserInCourse (SC.usernameInState state) ck
 
 -- | Lists all users subscribed for the given course
 subscribedToCourse :: CourseKey -> UserStory [Username]
@@ -631,7 +612,7 @@ subscribeToGroup gk = logAction INFO ("subscribes to the group " ++ (show gk)) $
   authorize P_Open P_Group
   state <- userState
   message <- persistence $ do
-    let u = user state
+    let u = SC.usernameInState state
     ck  <- Persist.courseOfGroup gk
     gks <- Persist.groupsOfUsersCourse u ck
     hasSubmission <- isThereASubmission u gks
@@ -1099,15 +1080,11 @@ scoreBoards = logAction INFO "lists scoreboards" $ do
 
 -- Puts the given status message to the actual user state
 putStatusMessage :: Translation String -> UserStory ()
-putStatusMessage = changeUserState . setStatus . SmNormal
+putStatusMessage = changeUserState . SC.setStatus . SmNormal
 
 -- Puts the given message as the error status message to the actual user state
 putErrorMessage :: Translation String -> UserStory ()
-putErrorMessage = changeUserState . setStatus . SmError
-
--- Clears the status message of the user
-clearStatusMessage :: UserStory ()
-clearStatusMessage = changeUserState clearStatus
+putErrorMessage = changeUserState . SC.setStatus . SmError
 
 -- Logs the error message into the logfile and, also throw as an error
 errorPage :: UserError -> UserStory a
@@ -1125,7 +1102,7 @@ authPerms = mapM_ (uncurry authorize) . permissions
 --   for the given operation
 authorize :: Permission -> PermissionObject -> UserStory ()
 authorize p o = do
-  er <- CMS.gets userRole
+  er <- CMS.gets SC.userRole
   case er of
 
     Left EmptyRole ->
@@ -1175,7 +1152,7 @@ logErrorMessage = logMessage ERROR
 logMessage :: LogLevel -> String -> UserStory ()
 logMessage level msg = do
   CMS.get >>=
-    userStateCata
+    SC.userStateCata
       userNotLoggedIn
       registration
       testAgent
@@ -1184,33 +1161,29 @@ logMessage level msg = do
     logMsg preffix =
       asksLogger >>= (\lgr -> (liftIO $ log lgr level $ join [preffix, " ", msg, "."]))
 
-    userNotLoggedIn    = logMsg "[USER NOT LOGGED IN]"
+    userNotLoggedIn _  = logMsg "[USER NOT LOGGED IN]"
     registration       = logMsg "[REGISTRATION]"
     testAgent          = logMsg "[TEST AGENT]"
-    loggedIn _ u _ _ _ t _ _ = logMsg (join [Entity.uid id u, " ", t])
+    loggedIn _ u _ _ _ uuid _ _ = logMsg (join [Entity.uid id u, " ", UUID.toString uuid])
 
 
--- | Change user state, if the user state is logged in
+-- | Change user state
 changeUserState :: (UserState -> UserState) -> UserStory ()
-changeUserState f = do
-  state <- CMS.get
-  case state of
-    UserNotLoggedIn -> return ()
-    state' -> CMS.put (f state')
+changeUserState = CMS.modify
 
-loadUserData :: Username -> String -> PageDesc -> UserStory ()
-loadUserData uname t p = do
+loadUserData :: Username -> UUID -> UserStory ()
+loadUserData uname sessionId = do
   info <- persistence $ Persist.personalInfo uname
-  flip personalInfoCata info $ \r n tz ui -> do
-    CMS.put $ UserState {
-        user = uname
-      , uid = ui
-      , page = p
-      , name = n
-      , role = r
-      , token = t
-      , timezone = tz
-      , status = Nothing
+  flip personalInfoCata info $ \r n tz lang ui -> do
+    CMS.put $ SC.UserLoggedIn {
+        SC.user = uname
+      , SC.uid = ui
+      , SC.name = n
+      , SC._language = lang
+      , SC.role = r
+      , SC.uuid = sessionId
+      , SC._timeZone = tz
+      , SC._status = Nothing
       }
 
 userState :: UserStory UserState
@@ -1824,14 +1797,11 @@ doesBlockAssignmentView = guard
 violation :: String -> String
 violation = ("[GUARD VIOLATION]: " ++)
 
-asksUserContainer :: UserStory (UserContainer UserState)
-asksUserContainer = CMR.asks (userContainer . fst)
-
 asksLogger :: UserStory Logger
-asksLogger = CMR.asks (logger . fst)
+asksLogger = CMR.asks (SC.logger . fst)
 
 asksPersistInterpreter :: UserStory Persist.Interpreter
-asksPersistInterpreter = CMR.asks (persistInterpreter . fst)
+asksPersistInterpreter = CMR.asks (SC.persistInterpreter . fst)
 
 asksI18N :: UserStory I18N
 asksI18N = CMR.asks snd
@@ -1883,12 +1853,12 @@ persistence m = do
     encodeMessage :: String -> String
     encodeMessage = flip showHex "" . abs . hash
 
-    userPart = (userStateCata userNotLoggedIn registration testAgent loggedIn) <$> CMS.get
+    userPart = (SC.userStateCata userNotLoggedIn registration testAgent loggedIn) <$> CMS.get
       where
-        userNotLoggedIn    = "Not logged in user!"
+        userNotLoggedIn _  = "Not logged in user!"
         registration       = "Registration"
         testAgent          = "Test Agent"
-        loggedIn _ ui _ _ _ t _ _ = concat [Entity.uid id ui, " ", t]
+        loggedIn _ ui _ _ _ uuid _ _ = concat [Entity.uid id ui, " ", UUID.toString uuid]
 
 -- * User Error Messages
 

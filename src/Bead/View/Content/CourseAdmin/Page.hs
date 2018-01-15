@@ -47,7 +47,7 @@ courseAdminPage = do
       , groupAdmins = ps
       , assignedGroups = gs
       }
-  return $ courseAdminContent pageData
+  setPageContents $ courseAdminContent pageData
   where
     group_admin = groupAdmin . u_role
 

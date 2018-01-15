@@ -45,7 +45,7 @@ administrationPage = do
     , courseAdmins = filter courseAdmin ausers
     , assignedCourseAdmins = assigned
     }
-  return $ administrationContent info
+  setPageContents $ administrationContent info
   where
     each _ _ = True
 
@@ -154,6 +154,7 @@ submitCourse = UA.CreateCourseAdmin
 createCourse :: ModifyHandler
 createCourse = ModifyHandler $ UA.CreateCourse <$> getCourse
 
+getCourse :: ContentHandler Course
 getCourse = Course
   <$> getParameter (stringParameter (fieldName courseNameField) "Course name")
   <*> getParameter (stringParameter (fieldName courseDescField) "Course description")

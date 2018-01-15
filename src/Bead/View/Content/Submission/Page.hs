@@ -26,6 +26,7 @@ import qualified Bead.Domain.Entity.Assignment as Assignment
 import qualified Bead.Domain.Shared.Evaluation as Eval
 import           Bead.View.Content hiding (submissionForm)
 import qualified Bead.View.Content as C
+import           Bead.View.ContentHandler (modifyPageSettings)
 import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import qualified Bead.View.Content.SubmissionState as St
@@ -56,7 +57,7 @@ submissionPage = do
   ak <- getParameter assignmentKeyPrm
   ut <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ getCurrentTime
-  size <- fmap maxUploadSizeInKb $ lift getConfiguration
+  size <- fmap maxUploadSizeInKb $ beadHandler getConfiguration
   (limit, aDesc, asg, submissions) <- userStory $ do
     Story.doesBlockAssignmentView ak
     Story.isUsersAssignment ak
@@ -66,18 +67,20 @@ submissionPage = do
     return $! (lmt, aDesc, asg, submissions)
 
   if (now < Assignment.start asg)
-    then return assignmentNotAvailableYetContent
-    else return $ submissionContent $
-           PageData {
-               asKey = ak
-             , asValue = asg
-             , asDesc = aDesc
-             , asTimeConv = ut
-             , asNow = now
-             , asMaxFileSize = size
-             , asLimit = limit
-             , asSubmissions = submissions
-             }
+    then setPageContents assignmentNotAvailableYetContent
+    else do
+      modifyPageSettings (\settings -> settings { needsLatex = True })
+      setPageContents $ submissionContent $
+        PageData {
+            asKey = ak
+          , asValue = asg
+          , asDesc = aDesc
+          , asTimeConv = ut
+          , asNow = now
+          , asMaxFileSize = size
+          , asLimit = limit
+          , asSubmissions = submissions
+          }
 
 submissionPostHandler :: POSTContentHandler
 submissionPostHandler = do
@@ -85,7 +88,7 @@ submissionPostHandler = do
   userStory $ do
     Story.doesBlockAssignmentView ak
     Story.isUsersAssignment ak
-  uploadResult <- lift $ do
+  uploadResult <- beadHandler $ do
     tmpDir <- getTempDirectory
     size <- maxUploadSizeInKb <$> getConfiguration
     let maxSize = fromIntegral (size * 1024)

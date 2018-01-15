@@ -10,34 +10,42 @@ module Bead.View.Routing (
   ) where
 
 import           Control.Arrow
+import           Control.Monad (void)
+
+import           Control.Monad.IO.Class (liftIO)
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy.Char8 as BC
+
+import           Control.Monad.State (runStateT)
+import           Data.Either (either)
 import           Data.Maybe
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.String (fromString)
+import qualified Data.Text as T
 import           Prelude hiding (id)
 import qualified Prelude
+import qualified Text.Blaze.Html5 as H
 
 import qualified Data.ByteString.Char8 as BS
-import           Snap.Snaplet.Auth as A
 import           Snap.Snaplet.Fay
-import           Snap.Snaplet.Session
 import           Snap.Util.FileServe (serveDirectory)
 
 import           Bead.Config (Config(..))
 import           Bead.Controller.Logging as L
-import           Bead.Controller.ServiceContext as SC hiding (serviceContext)
+import qualified Bead.Controller.ServiceContext as SC
 import qualified Bead.Controller.Pages as P
 import qualified Bead.Controller.UserStories as S
 import           Bead.Domain.Entities as E
+import qualified Bead.View.AuthToken as Auth
 import           Bead.View.BeadContext
 import           Bead.View.Common
-import qualified Bead.View.Command.Fayax as Command
-import           Bead.View.Content hiding (BlazeTemplate, template, void)
-import           Bead.View.ContentHandler as ContentHandler hiding (void)
+import           Bead.View.Content hiding (Response, BlazeTemplate, template, withUserState, getDictionaryInfos)
+import           Bead.View.ContentHandler hiding (withUserState, getDictionaryInfos)
+import qualified Bead.View.ContentHandler as ContentHandler
 import           Bead.View.Content.All
 import           Bead.View.ErrorPage
 import           Bead.View.Login as L
-import           Bead.View.LoggedInFilter
 import           Bead.View.Markdown
 import           Bead.View.Pagelets
 import qualified Bead.View.Content.Public.Index as I
@@ -63,13 +71,10 @@ routes :: Config -> [(ByteString, BeadHandler ())]
 routes config = join
   [ -- Add login handlers
     [ (indexPath,          index)
-    , (logoutPath,         logoutAndResetRoute)
     , (changeLanguagePath, changeLanguage)
     ]
   , registrationRoutes config
-  , [ ("/fay", with fayContext fayServe)
-    , Command.routeHandler Command.ping
-    ]
+  , [ ("/fay", with fayContext fayServe) ]
   , [ (markdownPath, serveMarkdown) ]
     -- Add static handlers
   , [ (staticPath,         serveDirectory "static") ]
@@ -97,125 +102,194 @@ pages = do
     -- No Page value is calculated from the request, pass to other handler
     Nothing -> pass
     Just pd
-      | P.isLogin pd -> loginSubmit
-      | otherwise ->  handlePage $ renderResponse $ pageContent pd
+      | P.isLogin pd -> handleLogin
+      | otherwise -> handlePage $ renderResponse $ pageContent pd
+  where
+    -- Logs the user in, invalidating its previous logins (if any)
+    -- but keeps the language information (if any).
+    handleLogin :: BeadHandler ()
+    handleLogin = do
+      lang <- configuredDefaultDictionaryLanguage
+      result <- withUserState $ \state ->
+        getPageContents
+        (\err -> do
+            logMessage ERROR $ "Error happened during log in: " ++ contentHandlerErrorMsg err
+            translationErrorPage
+              (msg_Login_PageTitle "Login")
+              (msg_Login_InternalError "Some internal error happened, please contact the administrators."))
+        (do result <- loginSubmit
+            beadHandler $ traverse (bootstrapPublicPage defaultPageSettings) result)
+        (SC.userNotLoggedIn (fromMaybe lang (SC.getLanguage state)))
+      either (redirect . routeOf) serve result
+
+serve :: H.Html -> BeadHandler ()
+serve = blaze
+
+downloadFile :: File -> BeadHandler ()
+downloadFile (fname, mime, writeContents) = do
+  modifyResponse $
+    setHeader "Content-Disposition" (fromString $ concat ["attachment; filename=\"", escapeQuotes fname,"\""])
+  modifyResponse $
+    setHeader "Content-Type" (fromString contentType)
+  writeContents
+  where
+    contentType :: String
+    contentType = ContentHandler.mimeCata
+      "application/zip, application/octet-stream"
+      "text/plain; charset=\"UTF-8\""
+      mime
+
+    escapeQuotes :: String -> String
+    escapeQuotes = concatMap escape
+      where
+        escape :: Char -> String
+        escape '\"' = "\\\""
+        escape c    = [c]
 
 -- * Handlers
 
 index :: BeadHandler ()
 #ifdef SSO
 index =
-  ifTop $ requireUser auth
-            (setDefaultLanguage >>=
-              renderBootstrapPublicPage . publicFrame . I.index)
+  ifTop $ requireUser
             (redirect (routeOf $ P.home ()))
+            (I.index Nothing >>= bootstrapPublicPage defaultPageSettings >>= serve)
 #else
 index =
-  ifTop $ requireUser auth
-            (with auth $ login Nothing)
+  ifTop $ requireUser
             (redirect (routeOf $ P.home ()))
+            (login Nothing)
 #endif
+  where
+    requireUser :: BeadHandler () -> BeadHandler () -> BeadHandler ()
+    requireUser authenticated unauthenticated = do
+      eCookie <- getCookie
+      either
+        handleCookieError
+        (\cookie -> if Auth.isLoggedIn cookie
+                    then authenticated
+                    else unauthenticated)
+        eCookie
+
+        where
+          handleCookieError :: T.Text -> BeadHandler ()
+          handleCookieError err = do
+            logMessage ERROR ("Cookie reading error: " ++ T.unpack err)
+            unauthenticated
+
+-- | Change language in the session
+changeLanguage :: BeadHandler ()
+changeLanguage = method GET handler <|> method POST (redirect indexPath)
+  where
+    handler :: BeadHandler ()
+    handler = do
+      withUserState $
+        evalHandlerError logError return setLanguage
+      redirect $ routeOf $ P.index ()
+
+    setLanguage :: ContentHandler ()
+    setLanguage = setUserLanguage =<< getParameter changeLanguagePrm
+
+    logError :: ContentError -> BeadHandler ()
+    logError err = 
+      logMessage ERROR ("Change language: " ++ contentHandlerErrorMsg err)
 
 -- Redirects to the parent page of the given page
-redirectToParentPage :: P.PageDesc -> ContentHandler ()
-redirectToParentPage = maybe (return ()) (lift . redirect . routeOf) . P.parentPage
-
-hfailure :: BeadHandler' a b -> BeadHandler' a (HandlerResult b)
-hfailure h = h >> (return HFailure)
+redirectToParentPage :: P.PageDesc -> ContentHandler (PageContents H.Html)
+redirectToParentPage = redirectTo . fromMaybe (P.home ()) . P.parentPage
 
 evalHandlerError
   :: (ContentError -> BeadHandler a)
   -> (c -> BeadHandler a)
   -> ContentHandler c
-  -> BeadHandler a
-evalHandlerError onError onSuccess h = do
-  x <- runExceptT h
-  case x of
-    Left e  -> onError e
-    Right s -> onSuccess s
+  -> SC.UserState
+  -> BeadHandler (a, SC.UserState)
+evalHandlerError onError onSuccess h uState = do
+  (x, (uState', _pageSettings)) <- runStateT (runExceptT h) (uState, E.defaultPageSettings)
+  addState uState' $
+    case x of
+      Left e  -> onError e
+      Right s -> onSuccess s
 
--- Runs the handler and clears the status message, if any error occurs
--- the onError handler is run, in both cases returns information about
--- success.
-runGETHandler
-  :: (ContentError -> BeadHandler a)
-  -> ContentHandler a
-  -> BeadHandler (HandlerResult a)
-runGETHandler onError handler
-  = evalHandlerError
-      (hfailure . onError)
-      (return . HSuccess)
-      (do x <- handler
-          userStory S.clearStatusMessage
-          lift . with sessionManager $ do
-            touchSession
-            commitSession
-          return x)
+  where
+    addState :: UserState -> BeadHandler a -> BeadHandler (a, UserState)
+    addState s h = (,) <$> h <*> pure s
 
--- Runs the 'h' handler if no error occurs during the run of the handler
--- calculates the parent page for the given 'p', and runs the attached userstory
--- from the calculated user action
--- and redirects at the end to the parent page, if the page is not
--- a temporary view page, otherwise runs the onError handler
--- in both ways returns information about the successfulness.
-runPOSTHandler
-  :: (ContentError -> BeadHandler ())
+-- Runs the 'h' handler if no error occurs during the run of the
+-- handler calculates the parent page for the given 'p', and runs the
+-- attached userstory from the calculated user action and redirects to
+-- the parent page at the end, otherwise runs the onError handler.
+runAction
+  :: (ContentError -> BeadHandler H.Html)
   -> P.PageDesc
   -> ContentHandler UserAction
-  -> BeadHandler (HandlerResult ())
-runPOSTHandler onError p h
+  -> SC.UserState
+  -> BeadHandler (PageContents H.Html, SC.UserState)
+runAction onError p h uState
   = evalHandlerError
-      (hfailure . onError)
-      (return . HSuccess)
+      ((Right <$>) . onError)
+      return
       (do userAction <- h
-          let userView = P.isUserViewPage p
-          userStory $ do
-            userStoryFor userAction
-            unless userView $ changeToParentPage p
-          lift . with sessionManager $ do
-            touchSession
-            commitSession
-          unless userView $ redirectToParentPage p)
-  where
-    changeToParentPage = maybe (return ()) S.changePage . P.parentPage
+          userStory $ userStoryFor userAction
+          redirectToParentPage p)
+      uState
 
-runUserViewPOSTHandler
-  :: (ContentError -> BeadHandler a)
-  -> ContentHandler a
-  -> BeadHandler (HandlerResult a)
-runUserViewPOSTHandler onError userViewHandler
+getPageContents
+  :: (ContentError -> BeadHandler H.Html)
+  -> ContentHandler (PageContents H.Html)
+  -> SC.UserState
+  -> BeadHandler (PageContents H.Html, SC.UserState)
+getPageContents onError ch uState
   = evalHandlerError
-      (hfailure . onError)
-      (return . HSuccess)
-      (do x <- userViewHandler
-          lift . with sessionManager $ do
-            touchSession
-            commitSession
-          return x)
+      ((Right <$>) . onError)
+      return
+      ch
+      uState
 
-logoutAndResetRoute :: BeadHandler ()
-logoutAndResetRoute = do
-  ContentHandler.logout
-  redirect indexPath
+getData
+  :: (ContentError -> BeadHandler H.Html)
+  -> ContentHandler File
+  -> SC.UserState
+  -> BeadHandler (Either H.Html File, SC.UserState)
+getData onError ch uState
+  = evalHandlerError
+      ((Left <$>) . onError)
+      (return . Right)
+      ch
+      uState
 
-logoutAndErrorPage :: String -> BeadHandler ()
-logoutAndErrorPage msg = do
-  ContentHandler.logout
-  msgErrorPage msg
+data Response
+  = Html H.Html
+  | Redirection RedirectionTarget
+  | File File
+
+responseCata :: (H.Html -> a) -> (RedirectionTarget -> a) -> (File -> a) -> Response -> a
+responseCata html redirection file response =
+  case response of
+    Html h -> html h
+    Redirection page -> redirection page
+    File f -> file f
 
 -- Helper type synonyms
-type CH   = ContentHandler ()
-type CHUA = ContentHandler UserAction
 
-type PageRenderer = P.Page CH CH (CH,CHUA) CHUA CH
+type CH     = ContentHandler (PageContents H.Html)
+type CHUA   = ContentHandler UserAction
+type CHData = ContentHandler File
+
+type PageRenderer = P.Page CH CH (CH,CHUA) CHUA CHData
 
 renderResponse :: PageHandler -> PageRenderer
-renderResponse = P.pfmap
-  (viewHandlerCata (>>= renderBootstrapPage))
-  (userViewHandlerCata (>>= renderBootstrapPage))
-  (viewModifyHandlerCata (\get post -> (get >>= renderBootstrapPage, post)))
+renderResponse p = P.pfmap
+  (viewHandlerCata (>>= \result -> traverse addBootstrap result))
+  (userViewHandlerCata (>>= \result -> traverse addBootstrap result))
+  (viewModifyHandlerCata (\get post -> (get >>= \result -> traverse addBootstrap result, post)))
   (modifyHandlerCata Prelude.id)
   (dataHandlerCata Prelude.id)
+  p
+
+  where
+    addBootstrap :: IHtml -> ContentHandler H.Html
+    addBootstrap contents = bootstrapPage (P.setPageValue contents p)
 
 {- When a user logs in the home page is shown for her. An universal handler
    is used. E.g "/home" -> handlePage P.Home.
@@ -223,76 +297,144 @@ renderResponse = P.pfmap
    intended page from its state, it's state is going to change in his session
    and in the server side as well.
    * When a user submits information with a POST request, from the submitted information
-   we calculate the appropiate user action and runs it
+   we calculate the appropiate user action and run it
 -}
 handlePage :: PageRenderer -> BeadHandler ()
 handlePage page = P.pageKindCata view userView viewModify modify data_ page where
   pageDesc = P.pageToPageDesc page
 
-  loggedInFilter m = userIsLoggedInFilter
-    m
-    -- Not logged in user tries to get some data
-    (logoutAndResetRoute' ("Routing.loggedInFilter1" :: String))
-    -- Some internal error happened
-    (logoutAndErrorPage' ("Routing.loggedInFilter2" :: String))
-
+  invalidPOSTMethodCall :: BeadHandler ()
   invalidPOSTMethodCall = do
      logMessage DEBUG $ "Invalid POST handler " ++ show pageDesc
-     (logoutAndResetRoute' "Rounting.invalidPOSTMethodCall")
+     redirect homePath
 
+  invalidGETMethodCall :: BeadHandler ()
   invalidGETMethodCall = do
      logMessage DEBUG $ "Invalid GET handler" ++ show pageDesc
-     (logoutAndResetRoute' "Routing.invalidGETMethodCall")
+     redirect homePath
 
-  changePage handler =
-    allowedPageByTransition pageDesc
-      ((lift $ runStory $ S.changePage pageDesc) >> handler)
-      notAllowedPage
+  checkClearance :: UserState -> a -> a -> a
+  checkClearance s handler voilationHandler =
+    if P.allowedPage (role s) page
+    then handler
+    else voilationHandler
 
-  notAllowedPage = withUserState $ \s -> do
-    lift $ logMessage ERROR . join $ [
-        usernameCata show (user s)
-      , ": Page transition is not allowed "
-      , show (SC.page s), " -> ", show pageDesc
+  notAllowed :: UserState -> BeadHandler (Response, UserState)
+  notAllowed s = do
+    logMessage ERROR . join $ [
+        usernameCata Prelude.id (SC.usernameInState s)
+      , ": Loading of page "
+      , show pageDesc
+      , " is not allowed"
       ]
-    lift $ (logoutAndResetRoute' "Routing.notAllowedPage")
+    return (Redirection (P.home ()), s)
 
-  logoutAndResetRoute' name = do
-    logoutAndResetRoute
+  get :: BeadHandler () -> BeadHandler ()
+  get h = method GET h <|> method POST invalidPOSTMethodCall
 
-  logoutAndErrorPage' name msg = do
-    logoutAndErrorPage msg
-
-
-  get  h = method GET h <|> method POST invalidPOSTMethodCall
+  post :: BeadHandler () -> BeadHandler ()
   post h = method GET invalidGETMethodCall <|> method POST h
+
+  getPost :: BeadHandler () -> BeadHandler () -> BeadHandler ()
   getPost g p = method GET g <|> method POST p
 
-  runGetOrError h = runGETHandler defErrorPage (changePage h)
+  serveContents :: PageContents H.Html -> BeadHandler ()
+  serveContents = either (redirect . routeOf) serve
 
-  runPostOrError h = do
-    runStory $ S.changePage pageDesc
-    runPOSTHandler defErrorPage pageDesc h
+  serveResponse :: Response -> BeadHandler ()
+  serveResponse = responseCata
+                    serve
+                    (redirect . routeOf)
+                    downloadFile
 
-  runUserViewPostOrError h = do
-    runStory $ S.changePage pageDesc
-    runUserViewPOSTHandler defErrorPage h
+  getContentsOrError :: ContentHandler (PageContents H.Html)
+                     -> UserState
+                     -> BeadHandler (PageContents H.Html, SC.UserState)
+  getContentsOrError = getPageContents defErrorPage  --TODO I18N
 
-  view       = get . void . loggedInFilter . runGetOrError . P.viewPageValue
-  data_      = get . void . loggedInFilter . runGetOrError . P.dataPageValue
-  userView   = post . void . loggedInFilter . runUserViewPostOrError . P.userViewPageValue
-  viewModify = void . uncurry (\get post -> getPost (loggedInFilter $ runGetOrError get)
-                                                    (loggedInFilter $ runPostOrError post))
-                    . P.viewModifyPageValue
-  modify     = post . void . loggedInFilter . runPostOrError . P.modifyPageValue
+  getDataOrError :: ContentHandler File
+                 -> UserState
+                 -> BeadHandler (Either H.Html File, SC.UserState)
+  getDataOrError = getData defErrorPage
 
-allowedPageByTransition
-  :: P.Page a b c d e -> ContentHandler a -> ContentHandler a -> ContentHandler a
-allowedPageByTransition p allowed restricted = withUserState $ \state ->
-  let allow = P.allowedPage (role state) p
-  in case allow of
-    False -> restricted
-    True  -> allowed
+  runActionOrError :: ContentHandler UserAction
+                   -> SC.UserState
+                   -> BeadHandler (PageContents H.Html, SC.UserState)
+  runActionOrError = runAction defErrorPage pageDesc
+
+  contentsToResponse :: PageContents H.Html -> Response
+  contentsToResponse = either Redirection Html
+
+  dataToResponse :: Either H.Html File -> Response
+  dataToResponse = either Html File
+
+  view :: P.ViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
+  view p = get . serveResponse =<< loggedInFilter (\s -> checkClearance s (first contentsToResponse <$> getContentsOrError (P.viewPageValue p) s) (notAllowed s))
+
+  data_ :: P.DataPage (ContentHandler File) -> BeadHandler ()
+  data_ p = get . serveResponse =<< loggedInFilter (\s -> checkClearance s (first dataToResponse <$> getDataOrError (P.dataPageValue p) s) (notAllowed s))
+  
+  userView :: P.UserViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
+  userView p = post . serveResponse =<< loggedInFilter (\s -> checkClearance s ((first contentsToResponse) <$> getContentsOrError (P.userViewPageValue p) s) (notAllowed s))
+
+  viewModify :: P.ViewModifyPage (ContentHandler (PageContents H.Html), ContentHandler UserAction)
+             -> BeadHandler ()
+  viewModify = (\(get, post) ->
+                   getPost
+                     (serveResponse =<< loggedInFilter (\s -> checkClearance s ((first contentsToResponse) <$> getContentsOrError get s) (notAllowed s)))
+                     (serveResponse =<< loggedInFilter (\s -> checkClearance s ((first contentsToResponse) <$> runActionOrError post s) (notAllowed s))))
+                 . P.viewModifyPageValue
+
+  modify :: P.ModifyPage (ContentHandler UserAction) -> BeadHandler ()
+  modify p = post . serveResponse =<< loggedInFilter (\s -> checkClearance s (first contentsToResponse <$> runActionOrError (P.modifyPageValue p) s) (notAllowed s))
+
+withUserState :: (UserState -> BeadHandler (a, UserState)) -> BeadHandler a
+withUserState f = do
+  eCookieData <- getCookie
+  state <- case eCookieData of
+             Left err -> do
+               logMessage ERROR ("Cookie reading error: " ++ T.unpack err)
+               defaultUserState
+             Right cookie ->
+               return $ cookieToState cookie
+  (a, state') <- f state
+  when (state' /= state) $ saveState state'
+  return a
+  where
+    cookieToState :: Auth.Cookie -> SC.UserState
+    cookieToState = Auth.cookieCata
+                      SC.UserNotLoggedIn
+                      SC.UserLoggedIn
+
+    saveState :: SC.UserState -> BeadHandler ()
+    saveState new = do
+      cookie <- SC.userStateCata
+                  (return . Auth.NotLoggedInCookie)
+                  defaultCookie
+                  defaultCookie
+                  (\u ui n l r uuid tz s -> return $ Auth.LoggedInCookie u ui n l r uuid tz s)
+                  new
+      result <- setCookie cookie
+      case result of
+        Left err ->
+          logMessage ERROR ("Cookie saving error: " ++ T.unpack err)
+        Right _ ->
+          return ()
+
+loggedInFilter :: (UserState -> BeadHandler (Response, UserState)) -> BeadHandler Response
+loggedInFilter f = withUserState $ \s ->
+    SC.userStateKindCata
+      (addState s notLoggedIn)   -- UserNotLoggedIn
+      (addState s notLoggedIn)   -- Registration
+      (addState s notLoggedIn)   -- TestAgent
+      (f s)                      -- UserLoggedIn
+      s
+  where
+    notLoggedIn :: BeadHandler Response
+    notLoggedIn = return . Redirection $ P.index ()
+
+    addState :: UserState -> BeadHandler a -> BeadHandler (a, UserState)
+    addState s h = (,) <$> h <*> pure s
 
 -- Creates a handler, that tries to calculate a Page value
 -- from the requested route and the parameters of the request uri
@@ -309,7 +451,8 @@ requestToPage path params = do
 
 routeToPageMap :: Map RoutePath (Params -> Maybe P.PageDesc)
 routeToPageMap = Map.fromList [
-    (loginPath       , j $ P.login ())
+    (indexPath       , j $ P.index ())
+  , (loginPath       , j $ P.login ())
   , (logoutPath      , j $ P.logout ())
   , (homePath        , j $ P.home ())
   , (profilePath     , j $ P.profile ())
@@ -379,12 +522,8 @@ routeToPageMap = Map.fromList [
       -- otherwise Nothing
       value key params = Map.lookup key params >>= oneValue
         where
-          oneValue []  = Nothing
           oneValue [l] = Just l
           oneValue _   = Nothing
-
-void :: Monad m => m a -> m ()
-void m = m >> return ()
 
 #ifdef TEST
 

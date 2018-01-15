@@ -353,8 +353,8 @@ doesUserExist = hasNoRollback . doesDirectoryExist . dirName
 personalInfo :: Username -> Persist PersonalInfo
 personalInfo uname = do
   user <- loadUser uname
-  return $ flip userCata user $ \role _username _email name timezone _lang uid ->
-    PersonalInfo (role, name, timezone, uid)
+  return $ flip userCata user $ \role _username _email name timezone lang uid ->
+    PersonalInfo (role, name, timezone, lang, uid)
 
 isUserDir :: FilePath -> Persist Bool
 isUserDir = isCorrectDirStructure userDirStructure

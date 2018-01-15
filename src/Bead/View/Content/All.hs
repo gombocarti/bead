@@ -7,9 +7,9 @@ module Bead.View.Content.All (
 #endif
   ) where
 
-
 import qualified Bead.Controller.Pages as Pages hiding (invariants)
 import Bead.View.Content
+import qualified Bead.View.ContentHandler as ContentHandler (logout)
 import Bead.View.Content.Home.Page
 import Bead.View.Content.Profile.Page
 import Bead.View.Content.CourseAdmin.Page
@@ -34,14 +34,17 @@ import Bead.View.Content.GetCsv
 import Bead.View.Content.Assessment.Page
 import Bead.View.Content.Score.Page
 
+import Data.Monoid (mempty)
+
 #ifdef TEST
 import Test.Tasty.TestSet
 #endif
 
 pageContent :: Pages.Page a b c d e -> PageHandler
 pageContent = Pages.constantsP
+  nullViewHandler -- index
   nullViewHandler -- login
-  nullViewHandler -- logout
+  logout
   home
   profile
   administration
@@ -93,8 +96,11 @@ pageContent = Pages.constantsP
   viewAssessment
   notifications
   where
+    logout :: ViewHandler
+    logout = ViewHandler (ContentHandler.logout >> redirectTo (Pages.index ()))
     -- Returns an empty handler that computes an empty I18N Html monadic value
-    nullViewHandler = ViewHandler (return (return (return ())))
+    nullViewHandler :: ViewHandler
+    nullViewHandler = ViewHandler (setPageContents $ return mempty)
 
 
 #ifdef TEST

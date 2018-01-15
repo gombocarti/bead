@@ -57,12 +57,12 @@ register = testCase "User registration" $ do
 
 loginAndLogout = testCase "Login And Logout" $ do
   c <- context
-  (_,state) <- runStory c UserNotLoggedIn $ login (Username "student") "token"
+  (_,state) <- runStory c (UserNotLoggedIn lang) $ login (Username "student")
   assertUserState state student
-  (_,state) <- runStory c state $ logout
+  (_,state) <- runStory c state $ logout lang
   case state of
-    UserState {} -> error "User is remained logged in"
-    UserNotLoggedIn -> return ()
+    UserLoggedIn {} -> error "User is remained logged in"
+    UserNotLoggedIn {} -> return ()
     Registration -> error "Registration state is returned"
     TestAgent -> error "TestAgent state is returned"
 

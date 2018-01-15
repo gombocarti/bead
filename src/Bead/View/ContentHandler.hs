@@ -1,14 +1,13 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module Bead.View.ContentHandler (
-    logMessage
+    beadHandler
+  , logMessage
   , withUserState
-  , runStory
   , userStory
   , registrationStory
   , getParameter
   , getParameterWithDefault
   , getParameterValues -- Calculates a list of values for the given parameter
-  , getParameterOrError
   , getOptionalParameter -- Calculates the value of the given parameter if it is defined
   , getOptionalOrNonEmptyParameter
   , getJSONParam
@@ -16,16 +15,15 @@ module Bead.View.ContentHandler (
   , getDictionaryInfos -- Calculates a list of language and dictionaryInfo
   , i18nE
   , i18nH
-  , blazeI18n
-  , renderBootstrapPage
-  , renderBootstrapPublicPage
-  , renderPublicPage
-  , setInSessionE
-  , downloadFile
+  , bootstrapPage
+  , bootstrapPublicPage
   , Mime(..)
-  , setReqParamInSession
-  , sessionToken
+  , mimeCata
+  , pageSettings
+  , modifyPageSettings
   , userState
+  , userLanguage
+  , setUserLanguage
   , userTimeZone
   , userTimeZoneToLocalTimeConverter
   , userTimeZoneToUTCTimeConverter
@@ -44,12 +42,15 @@ module Bead.View.ContentHandler (
   ) where
 
 import           Control.Applicative
+import           Control.Monad (void)
 import           Control.Monad.Except
+import           Control.Monad.State (StateT, gets, modify, put)
+import           Data.Bifunctor (first, second)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.UTF8  as BU
 import qualified Data.ByteString.Lazy  as LB
 import qualified Data.Map as Map (lookup)
-import           Data.Maybe (isNothing, fromJust)
+import           Data.Maybe (isNothing, fromJust, fromMaybe)
 import           Data.String (IsString(..))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -58,33 +59,30 @@ import qualified Data.Time as Time
 
 import           Snap hiding (get)
 import           Snap.Blaze (blaze)
-import           Snap.Snaplet.Auth hiding (logout)
-import qualified Snap.Snaplet.Auth as A (logout)
-import           Snap.Snaplet.Session
 import           Snap.Util.FileUploads
 import           Text.Blaze.Html5 (Html)
 
 import           Bead.Config
 import           Bead.Controller.Logging as L
 import           Bead.Controller.Logging
-import           Bead.Controller.ServiceContext hiding (serviceContext, name)
+import           Bead.Controller.ServiceContext (UserState)
+import qualified Bead.Controller.ServiceContext as SC
 import qualified Bead.Controller.UserStories as S
-import           Bead.Daemon.Logout
-import           Bead.Domain.Entities (TimeZoneName)
+import           Bead.Domain.Entities (TimeZoneName, PageSettings)
 import           Bead.Domain.TimeZone
-import           Bead.View.BeadContext
+import           Bead.View.BeadContext hiding (getDictionaryInfos)
+import qualified Bead.View.BeadContext as BeadContext
 import           Bead.View.DataBridge
-import           Bead.View.Dictionary
+import           Bead.View.Dictionary hiding (defaultLanguage)
 import           Bead.View.I18N (IHtml, translate)
-import           Bead.View.Pagelets (runBootstrapPage, bootstrapUserFrame)
+import           Bead.View.Pagelets (runBootstrapPage, bootstrapUserFrame, publicFrame)
+import qualified Bead.Controller.Pages as P
 import           Bead.View.RouteOf (ReqParam(..))
-import           Bead.View.Session
 import           Bead.View.Translation
 
 import           Bead.View.Fay.JSON.ServerSide
 
 newtype ContentError = ContentError (Maybe String)
-  deriving (Show)
 
 contentError
   nothing
@@ -101,7 +99,23 @@ contentHandlerErrorMap f (ContentError x) = f x
 
 contentHandlerErrorMsg = contentHandlerErrorMap (maybe "Unknown message" id)
 
-type ContentHandler' b c = ExceptT ContentError (BeadHandler' b) c
+{-
+
+TODO: consider
+
+-- | ContentHandler is a handler for rendering Bead pages or
+--   information to the client. Mostly used for serving pages for
+--   authenticated users.
+type ContentHandler a = forall v. StateT (SC.UserState, PageSettings) (BeadHandler' v) a
+
+-- | RequestHandler is a ContentHandler equipped with error handling,
+--   since a request can be malformed or permission issues may
+--   arise. It is used for handling GET and POST requests.
+type RequestHandler a = ExceptT RequestError ContentHandler a
+
+-}
+
+type ContentHandler' b c = ExceptT ContentError (StateT (UserState, PageSettings) (BeadHandler' b)) c
 
 -- ContentHandler is a handler for render Bead pages or information to the client
 -- also equiped with error handling, mainly used for render inner pages.
@@ -111,32 +125,50 @@ type ContentHandler c = ContentHandler' BeadContext c
 logMessage :: LogLevel -> String -> BeadHandler' b ()
 logMessage lvl msg = do
   context <- getServiceContext
-  liftIO $ L.log (logger context) lvl msg
+  liftIO $ L.log (SC.logger context) lvl msg
 
-sessionToken :: BeadHandler' b String
-sessionToken = T.unpack <$> csrfTokenTop
+beadHandler :: BeadHandler a -> ContentHandler a
+beadHandler = lift . lift
 
 userState :: ContentHandler UserState
-userState = do
-  context   <- lift $ getServiceContext
-  mUsername <- lift $ usernameFromSession
-  token     <- lift $ sessionToken
-  case mUsername of
-    Nothing -> do
-      lift $ logMessage ERROR "User is not logged in the session"
-      throwError . contentHandlerError $ "User is not logged in the session"
-    Just user -> do
-      let users = userContainer context
-      userData <- liftIO $ users `userData` (userToken (user, token))
-      case userData of
-        Nothing -> do
-          lift $ logMessage ERROR "No data found for the user"
-          throwError . contentHandlerError $ "No data found for the user"
-        Just ud -> return ud
+userState = gets fst
+
+withUserState :: (UserState -> ContentHandler c) -> ContentHandler c
+withUserState = (userState >>=)
+
+changeUserState :: (UserState -> UserState) -> ContentHandler ()
+changeUserState = modify . first
+
+-- | Returns the user's language from the session.
+--   For registration and test agent, it returns the default language.
+userLanguage :: ContentHandler Language
+userLanguage = do
+  s <- userState
+  maybe defaultLanguage return (SC.getLanguage s)
+
+setUserLanguage :: Language -> ContentHandler ()
+setUserLanguage lang = changeUserState (SC.setLanguage lang)
+
+defaultLanguage :: ContentHandler Language
+defaultLanguage = beadHandler $ configuredDefaultDictionaryLanguage
+
+setUserTimezone :: TimeZoneName -> ContentHandler ()
+setUserTimezone timezone = changeUserState (SC.setTimeZone timezone)
+
+pageSettings :: ContentHandler PageSettings
+pageSettings = gets snd
+
+modifyPageSettings :: (PageSettings -> PageSettings) -> ContentHandler ()
+modifyPageSettings f = modify (second f)
 
 -- Produces a handler that returns the user's actual time zone
 userTimeZone :: ContentHandler TimeZoneName
-userTimeZone = timezone <$> userState
+userTimeZone = do
+  tz <- SC.getTimeZone <$> userState
+  maybe defaultTimeZone return tz
+  where
+    defaultTimeZone :: ContentHandler TimeZoneName
+    defaultTimeZone = beadHandler configuredDefaultTimeZone
 
 -- Represents a functions that converts a given UTC time into
 -- the user's timezone
@@ -145,7 +177,7 @@ type UserTimeConverter = UTCTime -> LocalTime
 withUserTimeZoneContext :: (TimeZoneConverter -> TimeZoneName -> a) -> ContentHandler a
 withUserTimeZoneContext f = do
   zi  <- userTimeZone
-  tzc <- lift getTimeZoneConverter
+  tzc <- beadHandler getTimeZoneConverter
   return (f tzc zi)
 
 -- Produces the a UserTimeZoneConverter function for the user's time zone
@@ -161,61 +193,41 @@ userTimeZoneToUTCTimeConverter = withUserTimeZoneContext zoneInfoToUTCTimeSafe
 foundTimeZones :: BeadHandler' b [TimeZoneName]
 foundTimeZones = zoneInfos <$> getTimeZoneConverter
 
+{-# SPECIALIZE i18nE :: ContentHandler (Translation String -> String) #-}
 i18nE :: (IsString s) => ContentHandler (Translation String -> s)
 i18nE = do
-  lang <- lift languageFromSession
-  when (isNothing lang) . throwError . contentHandlerError $ "Language was not defined in session"
+  lang <- userLanguage
   -- If the dictionary is not found for the language stored in session
   -- the identical dictionary is returned. The fromString is necessary
   -- for the Attribute names and values used in html templating engines
-  d <- lift . getDictionary . fromJust $ lang
+  d <- beadHandler . getDictionary $ lang
   return (fromString . (unDictionary $ maybe idDictionary id d)) -- TODO: I18N
 
 i18nH :: BeadHandler' a (Translation String -> String)
 i18nH = do
-  language <- languageFromSession
-  t <- maybe (return Nothing) getDictionary language
-  return $ maybe trans unDictionary t
+  language <- getOrDefaultLanguage
+  dict <- getDictionary language
+  return $ maybe trans unDictionary dict
 
-blazeI18n :: (I18N -> Html) -> ContentHandler ()
-blazeI18n h = i18nE >>= lift . blaze . h
-
--- Renders a Page from the given IHtml function which
--- needs the session timeout seconds
-renderBootstrapPage :: IHtml -> ContentHandler ()
-renderBootstrapPage page = do
+-- | Renders a Page with the given IHtml contents.
+--   Implicit 'UserState' and 'PageSettings' influences the result.
+bootstrapPage :: P.Page' IHtml -> ContentHandler Html
+bootstrapPage page = do
   state <- userState
-  secs <- fmap sessionTimeout $ lift getConfiguration
+  settings <- pageSettings
   notifs <- userStory S.noOfUnseenNotifications
-  i18nE >>= lift . blaze . (runBootstrapPage state (bootstrapUserFrame state page secs notifs))
+  changeUserState SC.clearStatus
+  i18nE >>= (return . runBootstrapPage settings (bootstrapUserFrame state page notifs))
 
--- Renders the public page selecting the I18N translation based on the
--- language stored in the session, if there is no such value, the
--- default translator function is used
-renderPublicPage :: IHtml -> BeadHandler' b ()
-renderPublicPage p = do
-  language <- languageFromSession
-  t <- maybe (return Nothing) getDictionary language
+-- | Translates a public page selecting the I18N translation based on the
+--   language stored in the session, if there is no such value, the
+--   default translator function is used.
+bootstrapPublicPage :: PageSettings -> IHtml -> BeadHandler' b Html
+bootstrapPublicPage settings p = do
+  language <- getOrDefaultLanguage
+  t <- getDictionary language
   let translator = maybe trans unDictionary t
-  blaze $ translate translator p
-
--- Renders the public page selecting the I18N translation based on the
--- language stored in the session, if there is no such value, the
--- default translator function is used
-renderBootstrapPublicPage :: IHtml -> BeadHandler' b ()
-renderBootstrapPublicPage p = do
-  language <- languageFromSession
-  t <- maybe (return Nothing) getDictionary language
-  let translator = maybe trans unDictionary t
-  blaze (runBootstrapPage UserNotLoggedIn p translator)
-
-withUserState :: (UserState -> ContentHandler c) -> ContentHandler c
-withUserState = (userState >>=)
-
-getParameterOrError :: Parameter a -> BeadHandler' b (Either String a)
-getParameterOrError param
-  = either (Left . contentHandlerErrorMsg) (Right . id)
-     <$> (runExceptT $ getParameter param)
+  return $ runBootstrapPage settings (publicFrame p) translator
 
 -- Tries to decode the given value with the parameter description, if
 -- fails throws an error, otherwise returns the value
@@ -317,40 +329,13 @@ getJSONParameters param msg = do
 
 -- Computes a list that contains language and dictionary info pairs
 getDictionaryInfos :: ContentHandler DictionaryInfos
-getDictionaryInfos = lift dcGetDictionaryInfos
+getDictionaryInfos = beadHandler $ BeadContext.getDictionaryInfos
 
-setReqParamInSession :: ReqParam -> ContentHandler ()
-setReqParamInSession (ReqParam (k,v)) = setInSessionE k v
-
-setInSessionE :: String -> String -> ContentHandler ()
-setInSessionE k v
-  = lift $ setInSessionTop (T.pack k) (T.pack v)
-
-downloadFile :: String -> LB.ByteString -> Mime -> ContentHandler ()
-downloadFile fname contents mime = lift $ do
-  modifyResponse $
-    setHeader "Content-Disposition" (fromString $ concat ["attachment; filename=\"", escapeQuotes fname,"\""])
-  modifyResponse $
-    setHeader "Content-Type" (fromString contentType)
-  writeLBS contents
-  where
-    contentType :: String
-    contentType = mimeCata
-      "application/zip, application/octet-stream"
-      "text/plain; charset=\"UTF-8\""
-      mime
-
-    escapeQuotes :: String -> String
-    escapeQuotes = concatMap escape
-      where
-        escape :: Char -> String
-        escape '\"' = "\\\""
-        escape c    = [c]
-
-data Mime =
-    MimeZip
+data Mime
+  = MimeZip
   | MimePlainText
 
+mimeCata :: a -> a -> Mime -> a
 mimeCata zip plainText mime =
   case mime of
     MimeZip -> zip
@@ -361,79 +346,29 @@ mimeCata zip plainText mime =
 -- otherwise returns the computed value
 userStory :: S.UserStory a -> ContentHandler a
 userStory story = do
-  i18n <- lift i18nH
-  x <- lift . runStory $ story
+  context <- beadHandler $ getServiceContext
+  i18n <- i18nE
+  uState <- userState
+  x <- liftIO $ S.runUserStory context i18n uState story
   case x of
-    Left e  -> throwError . contentHandlerError . S.translateUserError i18n $ e
-    Right y -> return y
+    Left e  ->
+      throwError . contentHandlerError . S.translateUserError i18n $ e
+    Right (y, uState') -> do
+      changeUserState (const uState')
+      return y
+
+logout :: ContentHandler ()
+logout = (userStory . S.logout) =<< defaultLanguage
 
 -- Runs a UserStory in the registration context
-registrationStory :: S.UserStory a -> BeadHandler' b (Either S.UserError a)
-registrationStory s = getServiceContext >>=
-  \context -> do i18n <- i18nH; liftIO $ (forgetUserState <$> S.runUserStory context i18n Registration s)
+registrationStory :: S.UserStory a -> ContentHandler a
+registrationStory s = localState SC.Registration (userStory s)
   where
-    forgetUserState = either Left (Right . fst)
+    localState :: UserState -> ContentHandler a -> ContentHandler a
+    localState s handler = do
+      uState <- userState
+      changeUserState (const s)
+      x <- handler
+      changeUserState (const uState)
+      return x
 
--- | Runs a user story for authenticated user and saves the new user state
---   into the service context
-runStory :: S.UserStory a -> BeadHandler' b (Either S.UserError a)
-runStory story = do
-  result <- serviceContextAndUserData $ \context logoutDaemon users authUser -> do
-      let unameFromAuth = usernameFromAuthUser authUser
-      token  <- sessionToken
-      let usrToken = userToken (unameFromAuth, token)
-      ustate <- liftIO $ userData users usrToken
-      case ustate of
-        Nothing -> return . Left . S.userErrorWithMsg $ "The user is timed out: " ++ show unameFromAuth
-        Just state -> do
-          liftIO $ do
-            now <- Time.getCurrentTime
-            userActivity logoutDaemon usrToken now
-          i18n <- i18nH
-          eResult <- liftIO $ S.runUserStory context i18n state story
-          case eResult of
-            Left e -> return . Left $ e
-            Right (a,state') -> do
-              liftIO $ modifyUserData users usrToken (const state')
-              refreshSession
-              return $ Right a
-  case result of
-    Left e -> return . Left . S.userErrorWithMsg $ e
-    Right x -> return x
-
-  where
-    refreshSession = do
-      commitSessionTop
-      touchSessionTop
-
-    serviceContextAndUserData
-      :: (ServiceContext -> LogoutDaemon -> UserContainer UserState -> AuthUser -> BeadHandler' b a)
-      -> BeadHandler' b (Either String a)
-    serviceContextAndUserData f = do
-      (context, logoutDaemon) <- getServiceContextAndLogoutDaemon
-      let users = userContainer context
-      um <- currentUserTop
-      case um of
-        Nothing -> return . Left $ "Unauthenticated user"
-        Just authUser -> liftM Right $ f context logoutDaemon users authUser
-
-logout :: BeadHandler' b ()
-logout = do
-  debugMessage "Logout is called!"
-  um <- currentUserTop
-  case um of
-    Nothing -> do
-      logMessage ERROR "There is no user logged in to log out."
-      resetPrivateSessionData
-
-    Just authUser -> do
-      let unameFromAuth = usernameFromAuthUser authUser
-      (context, logoutDaemon) <- getServiceContextAndLogoutDaemon
-      let users = userContainer context
-      token <- sessionToken
-      liftIO $ do
-        let usrToken = userToken (unameFromAuth, token)
-        users `userLogsOut` usrToken
-        userLogout logoutDaemon usrToken
-      resetPrivateSessionData
-      logoutTop

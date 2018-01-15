@@ -60,8 +60,8 @@ labels =
  , "msg_Routing_SessionTimedOut"
 
  , "msg_ErrorPage_Title"
- , "msg_ErrorPage_GoBackToLogin"
- , "msg_ErrorPage_Header"
+ , "msg_ErrorPage_GoBackToHome"
+ , "msg_ErrorPage_DefaultMsg"
 
  , "msg_Input_Group_Name"
  , "msg_Input_Group_Description"
@@ -533,6 +533,7 @@ labels =
 
  , "msg_UserActions_ChangedUserDetails"
 
+ , "msg_LinkText_Index"
  , "msg_LinkText_Login"
  , "msg_LinkText_Logout"
  , "msg_LinkText_Home"

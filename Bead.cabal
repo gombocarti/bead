@@ -16,7 +16,6 @@ Data-Files:
   snaplets/fay/src/Fay/JQueryUI.hs,
   snaplets/fay/src/DynamicContents.hs,
   snaplets/fay/src/Bead/Domain/Shared/Evaluation.hs,
-  snaplets/fay/src/Bead/Shared/Command.hs,
   snaplets/fay/src/Bead/View/Validators.hs,
   snaplets/fay/src/Bead/View/Fay/HookIds.hs,
   snaplets/fay/src/Bead/View/Fay/Hooks.hs,
@@ -178,7 +177,8 @@ Library
 
     Build-Depends:
       base64-bytestring,
-      either
+      either,
+      gssapi
 
     Exposed-Modules:
       Bead.Daemon.LDAP
@@ -199,7 +199,6 @@ Library
     blaze-html,
     blaze-markup,
     bytestring,
-    clientsession,
     containers,
     cpphs,
     deepseq,
@@ -215,6 +214,7 @@ Library
     filepath,
     hastache,
     json,
+    jose-jwt,
     lens,
     mime-mail,
     MissingH,
@@ -251,6 +251,7 @@ Library
     xmlhtml,
     utf8-string,
     unix,
+    uuid,
     yaml,
     zip-archive
 
@@ -269,7 +270,6 @@ Library
     Bead.Controller.Pages
     Bead.Controller.ServiceContext
     Bead.Controller.UserStories
-    Bead.Daemon.Logout
     Bead.Daemon.TestAgent
     Bead.Domain.Entity.Assessment
     Bead.Domain.Entity.Assignment
@@ -289,11 +289,10 @@ Library
     Bead.Persistence.Initialization
     Bead.Persistence.Persist
     Bead.Persistence.Relations
-    Bead.Shared.Command
     Bead.View.Anchor
+    Bead.View.AuthToken
     Bead.View.BeadContext
     Bead.View.BeadContextInit
-    Bead.View.Command.Fayax
     Bead.View.Common
     Bead.View.Content
     Bead.View.Content.Administration.Page
@@ -314,7 +313,6 @@ Library
     Bead.View.Content.Profile.Page
     Bead.View.Content.Public.ErrorPage
     Bead.View.Content.Public.Index
-    Bead.View.Content.Public.Login
     Bead.View.Content.Public.Registration
     Bead.View.Content.Public.ResetPassword
     Bead.View.Content.Score.Page
@@ -346,7 +344,6 @@ Library
     Bead.View.Fay.HookIds
     Bead.View.Fay.JSON.ServerSide
     Bead.View.I18N
-    Bead.View.LoggedInFilter
     Bead.View.Login
     Bead.View.Logger
     Bead.View.Markdown
@@ -355,7 +352,6 @@ Library
     Bead.View.RequestParams
     Bead.View.RouteOf
     Bead.View.Routing
-    Bead.View.Session
     Bead.View.Style
     Bead.View.TemplateAndComponentNames
     Bead.View.Translation.Base
@@ -366,7 +362,6 @@ Library
     Bead.View.Translation.Language.DictionaryHu
     Bead.View.UserActions
     Bead.View.Validators
-    Snap.Snaplet.Auth.Backends.SafeJsonFile
     Test.Tasty.Arbitrary
     Test.Tasty.RandomData
     Test.Tasty.TestSet
@@ -403,7 +398,8 @@ Executable BeadTest
     tasty-quickcheck,
     temporary,
     time,
-    transformers
+    transformers,
+    uuid
   if flag(SSO)
     CPP-Options: -DSSO -DTEST
   else
@@ -424,6 +420,7 @@ Executable BeadTest
     Test.Property.EntityGen
     Test.Property.Persistence
     Test.Regression.UserStory
+    Test.Unit.AuthToken
     Test.Unit.Module
     Test.Unit.Persistence
     Test.Unit.UserStory

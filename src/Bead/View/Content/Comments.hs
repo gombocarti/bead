@@ -5,7 +5,6 @@ module Bead.View.Content.Comments (
   , submissionDetailsDescToCFs
   , commentsToCFs
   , commentsDiv
-  , commentPostForm
   , commentOrFeedbackTime
   , commentOrFeedbackText
   , commentOrFeedbackAuthor
@@ -165,22 +164,3 @@ commentOrFeedbackAuthor i18n =
     adminTestScript = i18n $ msg_Comments_AuthorTestScript_Private "Test Script (seen by only admins)"
     testScript = i18n $ msg_Comments_AuthorTestScript_Public "Test Script"
     result = testScript
-
-
--- Creates a post form for the given route assignment key and submission key, where
--- a comment can be placed and the result is submitted to the given page, which is
--- need to understand the given parameters
-commentPostForm :: Page a b c d e -> AssignmentKey -> IHtml
-commentPostForm p ak = do
-  msg <- getI18N
-  return $ postForm (routeOf p) $ do
-    H.div ! formDiv $ do
-      textAreaInput (fieldName commentValueField) Nothing ! fillDiv ! A.required ""
-      hiddenInput (fieldName assignmentKeyField) (paramValue ak)
-    H.br
-    submitButton (fieldName commentBtn) (msg $ msg_Comments_SubmitButton "Submit")
-
--- * CSS section
-
-fillDiv = A.style "width: 98%; height: 98%"
-formDiv = A.style "width: 100%; height: 100px"

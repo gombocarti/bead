@@ -5,6 +5,7 @@ module Bead.View.Content.UploadFile.Page (
 
 import           Control.Monad (forM)
 import           Control.Monad.Trans (lift)
+import qualified Control.Monad.Except as Except
 import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.ByteString as B
@@ -19,6 +20,7 @@ import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
 import           Bead.View.BeadContext
 import           Bead.View.Content
+import           Bead.View.ContentHandler (ContentError, contentHandlerErrorMsg)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 
 data PageData = PageData [(UsersFile FilePath, FileInfo)] Int
@@ -30,8 +32,8 @@ uploadFile = ViewModifyHandler getUploadFile postUploadFile
 getUploadFile :: GETContentHandler
 getUploadFile = do
   fs <- userStory Story.listUsersFiles
-  size <- fmap maxUploadSizeInKb $ lift getConfiguration
-  return $ uploadFileContent (PageData fs size)
+  size <- fmap maxUploadSizeInKb $ beadHandler getConfiguration
+  setPageContents $ uploadFileContent (PageData fs size)
 
 data Success a
   = PolicyFailure String
@@ -64,20 +66,20 @@ isFailure = not . isSuccess
 -- case we run the saveUsersFile story manually.
 postUploadFile :: POSTContentHandler
 postUploadFile = do
-  uploadResults <- lift $ do
+  uploadResults <- beadHandler $ do
     cfg <- getConfiguration
     let sizeLimit = (fromIntegral $ maxUploadSizeInKb cfg) * 1024
     let perPartUploadPolicy = const $ allowWithMaximumSize sizeLimit
     let uploadPolicy = setMaximumFormInputSize sizeLimit defaultUploadPolicy
     tmpDir <- getTempDirectory
     handleFileUploads tmpDir uploadPolicy perPartUploadPolicy handlePart
-  results <- lift $ forM
-                      uploadResults
-                      (successCata (return . PolicyFailure)
-                                   (return UnnamedFile)
-                                   (return . StoryError)
-                                   (uncurry saveFile)
-                      )
+  results <- forM
+               uploadResults
+               (successCata (return . PolicyFailure)
+                 (return UnnamedFile)
+                 (return . StoryError)
+                 (uncurry saveFile)
+               )
   return . StatusMessage $
     if (null $ filter isFailure results)
       then (msg_UploadFile_Successful "File upload was successful.")
@@ -93,13 +95,12 @@ postUploadFile = do
         _                         -> return UnnamedFile
 
                                      
-    saveFile :: FilePath -> B.ByteString -> Handler BeadContext BeadContext (Success ())
-    saveFile name contents = do
-      i18n <- i18nH
-      r <- runStory $ Story.saveUsersFile name (UsersPublicFile contents)
-      case r of
-        Left e  -> return . StoryError $ Story.translateUserError i18n e
-        Right _ -> return (Success ())
+    saveFile :: FilePath -> B.ByteString -> ContentHandler (Success ())
+    saveFile name contents =
+      (Success () <$ userStory (Story.saveUsersFile name (UsersPublicFile contents))) `Except.catchError` handleError
+      where
+        handleError :: ContentError -> ContentHandler (Success ())
+        handleError err = return . StoryError . contentHandlerErrorMsg $ err
 
 uploadFileContent :: PageData -> IHtml
 uploadFileContent pd = do

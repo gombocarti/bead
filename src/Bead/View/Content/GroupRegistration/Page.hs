@@ -41,7 +41,7 @@ groupRegistrationPage = do
         groups = gs
       , groupsRegistered = as
       }
-  return $ groupRegistrationContent desc
+  setPageContents $ groupRegistrationContent desc
   where
     fst3 (f,_,_) = f
 

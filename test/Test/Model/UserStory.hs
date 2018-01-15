@@ -3,6 +3,7 @@ module Test.Model.UserStory where
 import           Control.Monad (when)
 import           Control.Monad.Trans (lift)
 import           Control.Monad.Trans.Reader
+import qualified Data.UUID as UUID
 import           Prelude hiding (log)
 
 import           Bead.Controller.Logging
@@ -20,9 +21,8 @@ import           Test.HUnit hiding (Test(..), test)
 
 context :: IO ServiceContext
 context = do
-  container <- ioUserContainer
   interp <- createPersistInterpreter defaultConfig
-  serviceContext container errorLogger interp
+  return $ serviceContext errorLogger interp
   where
     errorLogger = Logger {
         log = \e msg -> case e of
@@ -31,15 +31,15 @@ context = do
       }
 
 adminUserState :: UserState
-adminUserState = UserState {
+adminUserState = UserLoggedIn {
     user = Username "admin"
-  , page = P.home ()
-  , name = "Admin"
-  , role = E.Admin
-  , token = "token"
-  , timezone = utcZoneInfo
-  , status = Nothing
   , uid = Uid "admin"
+  , name = "Admin"
+  , _language = lang
+  , role = E.Admin
+  , uuid = UUID.nil
+  , _timeZone = utcZoneInfo
+  , _status = Nothing
   }
 
 student :: User
@@ -109,13 +109,16 @@ runStory c u s = do
 userStoryTestContext steps = do
   context >>= runReaderT steps
 
+lang :: Language
+lang = Language "en"
+
 -- Runs a UserStory computation in the given context with a user bracketed
 -- with login/logout
 userStory username story = do
   c <- ask
-  (_,state1) <- lift $ runStory c UserNotLoggedIn $ login username "token"
+  (_,state1) <- lift $ runStory c (UserNotLoggedIn lang) $ login username
   (value,state2) <- lift $ runStory c state1 story
-  (_, _) <- lift $ runStory c state2 logout
+  (_, _) <- lift $ runStory c state2 (logout lang)
   return value
 
 runStoryWithState state story = do
@@ -133,7 +136,7 @@ testAgentStory = runStoryWithState TestAgent
 registrationStory = runStoryWithState Registration
 
 assertUserState :: UserState -> User -> IO ()
-assertUserState UserNotLoggedIn _ = error "User is not logged in"
+assertUserState (UserNotLoggedIn _) _ = error "User is not logged in"
 assertUserState state usr = do
   assertBool "Invalid user is logged in" $ (user state) == (u_username usr)
   assertBool "Invalid person name: "     $ (name state) == (u_name usr)

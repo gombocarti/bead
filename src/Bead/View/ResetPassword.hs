@@ -151,7 +151,7 @@ address. The user fills out the form, and clicks on "Reset password" button
 and submit the requests.
 -}
 resetPasswordGET :: BeadHandler ()
-resetPasswordGET = renderBootstrapPublicPage $ publicFrame View.resetPassword
+resetPasswordGET = renderBootstrapPublicPage View.resetPassword
 
 {- Reset password POST handler
 Reads out the parameters for the username and the email address, checks
@@ -182,7 +182,7 @@ resetPasswordPOST = renderErrorPage $ runErrorT $ do
         (either (throwError . strMsg . S.translateUserError i18n) return)
 
 pageContent :: BeadHandler' a ()
-pageContent = renderBootstrapPublicPage $ publicFrame View.emailSent
+pageContent = renderBootstrapPublicPage View.emailSent
 
 readParameter :: (MonadSnap m) => Parameter a -> m (Maybe a)
 readParameter param = do

@@ -9,36 +9,42 @@ import           Control.Monad.IO.Class
 import           Control.Monad.State
 
 import           Control.Lens.TH
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char (isAlphaNum, toUpper)
 import           Data.IORef
 import qualified Data.Map as Map
+import           Data.Maybe (maybe)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String (fromString)
-import qualified Data.Text as DT
-import qualified Data.Text.Lazy as LT
+import           Data.Time (UTCTime)
+import qualified Data.Time as Time
+import qualified Data.Time.Calendar as Cal
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import           Network.Mail.Mime
 import           System.Random
 import           Text.Regex.TDFA
 
-import           Snap hiding (Config(..))
-import           Snap.Snaplet.Auth
+import           Snap hiding (Config(..), getCookie)
+import qualified Snap
 import           Snap.Snaplet.Fay
-import           Snap.Snaplet.Session
 
-import           Bead.Config
+import           Bead.Config as Config
 import           Bead.Controller.Logging
-import           Bead.Controller.ServiceContext hiding (serviceContext)
+import           Bead.Controller.ServiceContext (ServiceContext, UserState)
+import qualified Bead.Controller.ServiceContext as SC
 #ifdef EmailEnabled
 import           Bead.Daemon.Email as EmailDaemon
 #endif
 #ifdef SSO
 import           Bead.Daemon.LDAP as LDAPDaemon
 #endif
-import           Bead.Daemon.Logout
 import           Bead.Domain.Entities
 import           Bead.Domain.TimeZone
+import qualified Bead.View.AuthToken as Auth
 import           Bead.View.Dictionary
 #ifdef EmailEnabled
 import           Bead.View.EmailTemplate
@@ -77,16 +83,16 @@ configurationServiceContext = makeSnapContext
   "A snaplet providin the service context of the configuration"
 
 
-type SnapletServiceContext = SnapContext (ServiceContext, LogoutDaemon)
+type SnapletServiceContext = SnapContext ServiceContext
 
-contextSnaplet :: ServiceContext -> LogoutDaemon -> SnapletInit b SnapletServiceContext
-contextSnaplet s l = makeSnapContext
+contextSnaplet :: ServiceContext -> SnapletInit b SnapletServiceContext
+contextSnaplet = makeSnapContext
   "ServiceContext"
   "A snaplet providing the service context of the user stories"
-  (s,l)
 
 -- * Mini snaplet : Dictionary snaplet
 
+-- | Available dictionaries and the default configured language
 type DictionaryContext = SnapContext (Dictionaries, Language)
 
 -- Create a Dictionary context from the given dictionaries and a defualt language
@@ -120,7 +126,7 @@ type EmailSender = Email -> Subject -> Message -> IO ()
 -- one of the email senders.
 type SendEmailContext = SnapContext EmailSender
 
-verySimpleMail :: Address -> Address -> DT.Text -> LT.Text -> IO Mail
+verySimpleMail :: Address -> Address -> T.Text -> TL.Text -> IO Mail
 verySimpleMail to from subject plainBody = do
   return Mail
         { mailFrom = from
@@ -130,7 +136,7 @@ verySimpleMail to from subject plainBody = do
         , mailHeaders = [ ("Subject", subject) ]
         , mailParts =
             [[ Part "text/plain; charset=UTF-8" Base64 Nothing []
-             $ BL.pack . LT.unpack $ plainBody
+             $ BL.pack . TL.unpack $ plainBody
             ]]
         }
 
@@ -269,11 +275,19 @@ createLDAPContext = makeSnapContext
   "A snaplet holding a reference to the ldap configuration"
 #endif
 
+-- * Authentication
+
+type AuthTokenContext = SnapContext Auth.AuthTokenManager
+
+createAuthTokenContext :: Auth.AuthTokenManager -> SnapletInit a AuthTokenContext
+createAuthTokenContext = makeSnapContext
+  "Authentication"
+  "A snaplet that manages token-based authentication"
+
 -- * Application
 
 data BeadContext = BeadContext {
-    _sessionManager :: Snaplet SessionManager
-  , _auth           :: Snaplet (AuthManager BeadContext)
+    _authContext :: Snaplet AuthTokenContext
   , _serviceContext :: Snaplet SnapletServiceContext
   , _dictionaryContext :: Snaplet DictionaryContext
 #ifdef EmailEnabled
@@ -323,14 +337,12 @@ ldapQuery username = withTop ldapContext . snapContextHandlerCata $ \l -> do
 getTimeZoneConverter :: BeadHandler' b TimeZoneConverter
 getTimeZoneConverter = withTop timeZoneContext $ snapContextCata id
 
+configuredDefaultTimeZone :: BeadHandler' b TimeZoneName
+configuredDefaultTimeZone =
+  (TimeZoneName . Config.defaultRegistrationTimezone) <$> getConfiguration
+
 getServiceContext :: BeadHandler' b ServiceContext
-getServiceContext = withTop serviceContext $ snapContextCata fst
-
-getLogoutDaemon :: BeadHandler' b LogoutDaemon
-getLogoutDaemon = withTop serviceContext $ snapContextCata snd
-
-getServiceContextAndLogoutDaemon :: BeadHandler' b (ServiceContext, LogoutDaemon)
-getServiceContextAndLogoutDaemon = withTop serviceContext $ snapContextCata id
+getServiceContext = withTop serviceContext $ snapContextCata id
 
 -- Calculates the default language which comes from the configuration
 configuredDefaultDictionaryLanguage :: BeadHandler' b Language
@@ -343,8 +355,8 @@ getDictionary :: Language -> BeadHandler' b (Maybe Dictionary)
 getDictionary l = withTop dictionaryContext $ snapContextCata (fmap fst . Map.lookup l . fst)
 
 -- Computes a list with the defined languages and dictionary info
-dcGetDictionaryInfos :: BeadHandler' b DictionaryInfos
-dcGetDictionaryInfos = withTop dictionaryContext $ snapContextCata (Map.toList . Map.map snd . fst)
+getDictionaryInfos :: BeadHandler' b DictionaryInfos
+getDictionaryInfos = withTop dictionaryContext $ snapContextCata (Map.toList . Map.map snd . fst)
 
 #ifdef EmailEnabled
 -- Send email with a subject to the given address, using the right
@@ -376,13 +388,58 @@ debugMessage :: String -> BeadHandler' a ()
 debugMessage msg = withTop debugLoggerContext . snapContextHandlerCata $ \logger ->
   liftIO (log (SnapLogger.snapLogger logger) DEBUG msg)
 
--- * Helper top level functions
+-- * Cookie-related functions
 
-currentUserTop :: BeadHandler' a (Maybe AuthUser)
-currentUserTop = withTop auth currentUser
+encryptCookie :: Auth.Cookie -> BeadHandler' a (Either T.Text B.ByteString)
+encryptCookie c = withTop authContext $ do
+  authMgr <- snapContextCata id
+  liftIO $ Auth.encryptCookie authMgr c
 
-logoutTop :: BeadHandler' a ()
-logoutTop = withTop auth logout
+setCookie :: Auth.Cookie -> BeadHandler' a (Either T.Text ())
+setCookie c = do
+  eEncrypted <- encryptCookie c
+  case eEncrypted of
+    Left encryptionError ->
+      return $ Left encryptionError
+    Right encrypted -> do
+      now <- liftIO Time.getCurrentTime
+      let sixMonths = now { Time.utctDay = Cal.addGregorianMonthsRollOver 6 (Time.utctDay now) }
+      Right <$> modifyResponse (addResponseCookie (cookie encrypted sixMonths))
+    where
+      cookie :: B.ByteString -> UTCTime -> Snap.Cookie
+      cookie contents expiration = Snap.Cookie {
+          Snap.cookieName = BC.pack "token"
+        , Snap.cookieValue = contents
+        , Snap.cookieExpires = Just expiration
+        , Snap.cookieDomain = Nothing
+        , Snap.cookiePath = Nothing
+        , Snap.cookieSecure = False
+        , Snap.cookieHttpOnly = True
+        }
 
-usernameExistsTop :: DT.Text -> BeadHandler' a Bool
-usernameExistsTop = withTop auth . usernameExists
+decryptCookie :: B.ByteString -> BeadHandler' a (Either T.Text Auth.Cookie)
+decryptCookie contents = withTop authContext $ do
+  authMgr <- snapContextCata id
+  liftIO $ Auth.decryptCookie authMgr contents
+
+getCookie :: BeadHandler' v (Either T.Text Auth.Cookie)
+getCookie = do
+  mCookie <- Snap.getCookie (BC.pack "token")
+  maybe (Right <$> defaultCookie) (decryptCookie . Snap.cookieValue) mCookie
+
+defaultCookie :: BeadHandler' v Auth.Cookie
+defaultCookie =
+  Auth.NotLoggedInCookie <$> configuredDefaultDictionaryLanguage
+
+getOrDefaultLanguage :: BeadHandler' v Language
+getOrDefaultLanguage = do
+  eCookie <- getCookie
+  either
+    (const configuredDefaultDictionaryLanguage)
+    (return . Auth.cookieLanguage)
+    eCookie
+
+defaultUserState :: BeadHandler' v UserState
+defaultUserState = do
+  defaultLanguage <- configuredDefaultDictionaryLanguage
+  return $ SC.userNotLoggedIn defaultLanguage

@@ -141,6 +141,7 @@ instance SnapFieldName ChangePwdField where
 
 menuId :: P.Page a b c d e -> String
 menuId = P.pageCata
+  (c "link-index")
   (c "link-login")
   (c "link-logout")
   (c "link-home")

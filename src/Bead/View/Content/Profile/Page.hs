@@ -13,10 +13,10 @@ import qualified Bead.Controller.Pages as Pages
 import           Bead.Controller.UserStories (currentUser)
 import           Bead.Domain.Entities hiding (name)
 import           Bead.View.Content hiding (name, option)
+import           Bead.View.ContentHandler (setUserLanguage)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import qualified Bead.View.DataBridge as B
 import           Bead.View.Dictionary
-import           Bead.View.Session (setLanguageInSession)
 
 #ifndef SSO
 import           Bead.View.ResetPassword
@@ -28,19 +28,15 @@ profilePage :: GETContentHandler
 profilePage = do
   user <- userStory currentUser
   languages <- getDictionaryInfos
-  ts <- lift foundTimeZones
-  return $ profileContent ts user languages
+  ts <- beadHandler foundTimeZones
+  setPageContents $ profileContent ts user languages
 
 changeUserDetails :: POSTContentHandler
-changeUserDetails = do
-  language <- getParameter userLanguagePrm
-  setLanguage language
+changeUserDetails =
   ChangeUserDetails
     <$> getParameter regFullNamePrm
     <*> getParameter userTimeZonePrm
-    <*> (return language)
-  where
-    setLanguage = lift . setLanguageInSession
+    <*> getParameter userLanguagePrm
 
 #ifdef SSO
 changePassword = ModifyHandler $ do

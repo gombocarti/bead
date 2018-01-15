@@ -40,7 +40,7 @@ modifyTestScript = ViewModifyHandler modifyTestScriptPage postModifyTestScript
 newTestScriptPage :: GETContentHandler
 newTestScriptPage = do
   cs <- userStory Story.administratedCourses
-  return $ testScriptContent (Create cs)
+  setPageContents $ testScriptContent (Create cs)
 
 postNewTestScript :: POSTContentHandler
 postNewTestScript = do
@@ -64,7 +64,7 @@ modifyTestScriptPage = do
     (script, ck)  <- Story.loadTestScript tsk
     (course, _gk) <- Story.loadCourse ck
     return (course, script)
-  return $ testScriptContent (Modify (courseName course) tsk script)
+  setPageContents $ testScriptContent (Modify (courseName course) tsk script)
 
 postModifyTestScript :: POSTContentHandler
 postModifyTestScript = do

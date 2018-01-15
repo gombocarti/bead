@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeApplications #-}
 module Bead.View.Content.ExportSubmissions (
     exportSubmissions
   , exportSubmissionsOfGroups
@@ -29,7 +30,7 @@ import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Content.GetSubmission (submissionFilename)
 import qualified Bead.View.Content.Comments as C
 import           Bead.View.Content
-import           Bead.View.ContentHandler (Mime(MimeZip), downloadFile)
+import           Bead.View.ContentHandler (Mime(MimeZip))
 import           Bead.View.RequestParams (groupKeyParamName)
 
 exportSubmissions :: DataHandler
@@ -37,7 +38,7 @@ exportSubmissions = DataHandler $ do
   ak <- getParameter assignmentKeyPrm
   exportAllSubmissions ak
 
-exportAllSubmissions :: AssignmentKey -> ContentHandler ()
+exportAllSubmissions :: AssignmentKey -> ContentHandler File
 exportAllSubmissions ak = do
   sks <- userStory (Story.lastSubmissions ak)
   zipAssignmentAndSubmissions ak sks
@@ -81,7 +82,7 @@ zip = foldr step Zip.emptyArchive
 add :: Zip.Entry -> Zip.Archive -> Zip.Archive
 add = Zip.addEntryToArchive
 
-zipAssignmentAndSubmissions :: AssignmentKey -> [SubmissionKey] -> ContentHandler ()
+zipAssignmentAndSubmissions :: AssignmentKey -> [SubmissionKey] -> ContentHandler File
 zipAssignmentAndSubmissions ak sks = do
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ convertToLocalTime <$> UTC.getCurrentTime
@@ -93,13 +94,13 @@ zipAssignmentAndSubmissions ak sks = do
   submissions <- zipSubmissions sks submissionFolder now
   downloadZip exportedFName (add exerciseFile submissions)
 
-downloadZip :: String -> Zip.Archive -> ContentHandler ()
-downloadZip filename zip = downloadFile filename (Zip.fromArchive zip) MimeZip
+downloadZip :: String -> Zip.Archive -> ContentHandler File
+downloadZip filename zip = downloadLazy filename MimeZip (Zip.fromArchive zip)
 
 zipSubmissions :: [SubmissionKey] -> String -> LocalTime.LocalTime -> ContentHandler Zip.Archive
 zipSubmissions sks folder now = do
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
-  msg <- lift i18nH
+  msg <- i18nE
   files <- forM sks $ \sk -> do
     (submission, desc) <- userStory (Story.getSubmission sk)
     let subm     = zipSubmission submission desc folder convertToLocalTime
