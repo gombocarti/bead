@@ -127,7 +127,7 @@ submissionDetailsContent p = do
                 "The submission may be downloaded as a plain text file by clicking on the link."
               downloadSubmissionButton
               H.br
-              div # submissionTextDiv $ seeMoreSubmission "submission-details-" msg maxLength maxLines $ sdSubmission info
+              div # submissionTextDiv $ seeMoreSubmission "submission-details-" msg $ sdSubmission info
     Bootstrap.rowColMd12 $ do
       H.a ! A.name (anchor SubmissionDetailsEvaluationDiv) $ mempty
       h2 $ fromString $ msg $ msg_SubmissionDetails_Evaluation "Evaluation"
@@ -149,8 +149,6 @@ submissionDetailsContent p = do
 
   where
     submissionDetails ak sk = Pages.submissionDetails ak sk ()
-    maxLength = 2048
-    maxLines  = 100
 
     resolveStatus :: I18N -> Maybe String -> H.Html
     resolveStatus msg Nothing     = fromString . msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet"

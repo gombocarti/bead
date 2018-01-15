@@ -1,5 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Bead.View.Content.SeeMore where
+module Bead.View.Content.SeeMore (
+    seeMoreSubmission
+  , seeMoreComment
+  ) where
 
 import           Control.Monad (when)
 import           Data.String
@@ -11,14 +14,12 @@ import qualified Text.Blaze.Html5.Attributes as A
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 
-seeMoreSubmission :: String -> I18N -> Int -> Int -> String -> Html
-seeMoreSubmission id_ i18n maxLength maxLines content = do
+seeMoreSubmission :: String -> I18N -> String -> Html
+seeMoreSubmission id_ i18n content = do
   Bootstrap.panelGroup ! Bootstrap.role "tablist" ! Bootstrap.areaMultiselectable "true" $ do
     let headingId = "heading" ++ id_
-    let collapseClass = if collapsed then "panel-collapse collapse"
-                                     else "panel-collapse collapse in"
-    let headerText = if collapsed then msg_Submission_Large_Submission "The submission is too long, click here to show"
-                                  else msg_Submission_Collapse_Submission "Collapse submission text"
+    let collapseClass = "panel-collapse collapse in"
+    let headerText = msg_Submission_Collapse_Submission "Collapse submission text"
     H.div ! A.class_ "panel panel-default" $ do
       H.div ! A.class_ "panel-heading" ! Bootstrap.role "tab" ! A.id (fromString headingId) $ do
         H.h4 ! A.class_ "panel-title" $
@@ -30,12 +31,6 @@ seeMoreSubmission id_ i18n maxLength maxLines content = do
         H.div ! A.class_ "panel-body" $
           H.div # assignmentTextDiv $
             H.pre # assignmentTextPre $ fromString content
-  where
-    cmt = take maxLength $ content
-    ml  = unlines $ take maxLines $ lines cmt
-    isLargeContent = length content > maxLength
-    collapsed = isLargeContent
-
 
 seeMoreComment :: String -> I18N -> Int -> Int -> (String, Maybe Bootstrap.Alert) -> Maybe CommentKey -> String -> Html
 seeMoreComment id_ i18n maxLength maxLines (badgeText, alert) anchorVal content =
