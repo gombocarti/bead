@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/development/init/dev-env-setup.sh && \
+dev-env-setup && \
   cd /development/bead && \
   stack build --flag Bead:Tests --flag Bead:MySQL --flag Bead:SSO && \
   stack exec BeadTest

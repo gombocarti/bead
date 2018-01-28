@@ -1,5 +1,3 @@
-# A local, patched version of snaplet-fay-0.3.3.14 is needed.
-# See ./docker/snaplet-fay-search-all-pkgdbs.patch
 packages:
   - '.'
 extra-deps:
@@ -8,7 +6,8 @@ extra-deps:
   - heist-1.0.1.1
   - map-syntax-0.2.0.2
   - snap-1.0.0.2
-  - snaplet-fay-0.3.3.14
+  - git: https://github.com/poor-a/snaplet-fay.git
+    commit: 8840019049211889a7984e63c4e5118cb51fcc4d
   - fay-base-0.20.0.1
   - fay-0.23.1.16
   - fay-jquery-0.6.1.0

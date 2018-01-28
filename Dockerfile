@@ -1,20 +1,43 @@
 FROM debian:stretch-slim
 
-# Download locales, stack, necessary Haskell tools and libs
+# Download stack dependencies, locales, necessary Haskell tools and libs
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-                       git patch \
-                       locales \
-                       cpphs haskell-stack \
-                       happy alex \
-                       libpcre3 libpcre3-dev \
-                       default-libmysqlclient-dev screen \
-                       netbase pkg-config
+      g++ \
+      gcc \
+      libc6-dev \
+      libffi-dev \
+      libgmp-dev \
+      make \
+      xz-utils \
+      zlib1g-dev \
+      git \
+      gnupg && \
+    apt-get install -y --no-install-recommends \
+      curl \
+      ca-certificates \
+      patch \
+      locales \
+      cpphs \
+      happy \
+      alex \
+      libkrb5-dev \
+      libpcre3 \
+      libpcre3-dev \
+      default-libmysqlclient-dev \
+      screen \
+      netbase \
+      pkg-config
 
 # Set locale
 RUN echo en_US.UTF-8 UTF-8 >> /etc/locale.gen && \
     locale-gen
 ENV LC_ALL en_US.UTF-8
+
+# Install stack
+RUN curl -L https://www.stackage.org/stack/linux-x86_64-static -o /usr/local/bin/stack.tar.gz && \
+    tar -C /usr/local/bin/ --strip-components=1 -xf /usr/local/bin/stack.tar.gz stack-1.6.3-linux-x86_64-static/stack && \
+    chmod +x /usr/local/bin/stack
 
 # Create development dirs
 RUN mkdir -p /development/bead && \
@@ -23,22 +46,15 @@ RUN mkdir -p /development/bead && \
 # Copy cabal file and install dependencies
 COPY "./Bead.cabal" "/development/init/"
 COPY "./stack.yaml" "/development/init/"
-COPY "./snaplet-fay-search-all-pkgdbs.patch" "/development/init/"
-COPY "./stack-snaplet-fay.yaml" "/development/init/"
-RUN cd development/init && \
-    git clone https://github.com/faylang/snaplet-fay.git && \
-    cd snaplet-fay && \
-    git checkout 7381250505c738a6da667cedbf9a4456733e67a7 && \
-    patch -p1 < ../snaplet-fay-search-all-pkgdbs.patch && \
-    cd /development/init && \
+RUN cd /development/init && \
     stack setup && \
-    stack --stack-yaml=stack-snaplet-fay.yaml build snaplet-fay && \
     stack build --only-dependencies
 
 # Convenience scripts for development
-COPY "./container-script/build.sh" "/usr/local/bin/build"
-COPY "./container-script/run.sh" "/usr/local/bin/run"
-COPY "./container-script/dev-env-setup.sh" "/development/init/dev-env-setup.sh"
+RUN ln -s /development/bead/docker/container-script/build \
+          /development/bead/docker/container-script/run \
+          /development/bead/docker/container-script/dev-env-setup \
+          /usr/local/bin/
 
 # Directory for sources
 VOLUME "/development/bead"
@@ -48,3 +64,5 @@ VOLUME "/bead-server"
 
 # Expose the default port
 EXPOSE 8000
+
+WORKDIR "/bead-server"
