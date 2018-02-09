@@ -252,5 +252,5 @@ submissionContent p = do
             St.formatSubmissionState St.toColoredBadge msg state
         )
         where
-          submissionDetails :: AssignmentKey -> SubmissionKey -> Pages.Page a b () c d
+          submissionDetails :: AssignmentKey -> SubmissionKey -> Pages.Page a b () c d f
           submissionDetails ak sk = Pages.submissionDetails ak sk ()

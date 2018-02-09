@@ -139,7 +139,7 @@ userUidField = UserField "useruid"
 instance SnapFieldName ChangePwdField where
   fieldName = fromString . cpf
 
-menuId :: P.Page a b c d e -> String
+menuId :: P.Page a b c d e f -> String
 menuId = P.pageCata
   (c "link-index")
   (c "link-login")
@@ -194,12 +194,13 @@ menuId = P.pageCata
   (c2 "link-modify-assessment-preview")
   (c2 "link-view-asssessment")
   (c "link-notifications")
+  (c2 "link-rest-submission-table")
     where
       c = const
       c2 = c . const
       c3 = c2 . const
 
-instance SnapFieldName (P.Page a b c d e) where
+instance SnapFieldName (P.Page a b c d e f) where
   fieldName = fromString . menuId
 
 newtype AssignmentField = AssignmentField { aFieldName :: String }

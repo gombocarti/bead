@@ -32,6 +32,7 @@ module Bead.View.RouteOf (
   , uploadFilePath
   , markdownPath
   , submissionDetailsPath
+  , submissionTablePath
   , administrationPath
   , groupRegistrationPath
   , createCoursePath
@@ -258,15 +259,17 @@ viewAssessmentPath = "/view-assessment"
 notificationsPath :: RoutePath
 notificationsPath = "/notifications"
 
+submissionTablePath :: RoutePath
+submissionTablePath = "/rest/submission-table"
+
 staticPath :: RoutePath
 staticPath = ""
 
-type PageRoutePath = Page RoutePath RoutePath RoutePath RoutePath RoutePath
+type PageRoutePath = Page RoutePath RoutePath RoutePath RoutePath RoutePath RoutePath
 
 -- Returns a base path for the given page
-pageRoutePath :: Page a b c d e -> PageRoutePath
-pageRoutePath = pfmap id id id id id . r where
-  r = constantsP
+pageRoutePath :: Page a b c d e f -> PageRoutePath
+pageRoutePath = constantsP
     indexPath
     loginPath
     logoutPath
@@ -320,11 +323,12 @@ pageRoutePath = pfmap id id id id id . r where
     modifyAssessmentPreviewPath
     viewAssessmentPath
     notificationsPath
+    submissionTablePath
 
-type PageReqParams = Page [ReqParam] [ReqParam] [ReqParam] [ReqParam] [ReqParam]
+type PageReqParams = Page [ReqParam] [ReqParam] [ReqParam] [ReqParam] [ReqParam] [ReqParam]
 
 -- Calculates a request parameter list from the given page value
-pageRequestParams :: Page a b c d e -> PageReqParams
+pageRequestParams :: Page a b c d e f -> PageReqParams
 pageRequestParams = liftsP
   (c []) -- index
   (c []) -- login
@@ -379,12 +383,13 @@ pageRequestParams = liftsP
   (\ak _ -> [requestParam ak]) -- modifyAssessmentPreview
   (\ak _ -> [requestParam ak]) -- viewAssessment
   (c []) -- notifications
+  (\gk _ -> [requestParam gk]) -- submission table
     where
       c = const
 
 -- Calculates the full path from a page value, including the base path and the
 -- request parameters
-routeOf :: (IsString s) => Page a b c d e -> s
+routeOf :: (IsString s) => Page a b c d e f -> s
 routeOf p = queryString (pageValue (pageRoutePath p)) (pageValue (pageRequestParams p))
 
 -- Produces a query string for a GET request from the given base name, and the
@@ -393,11 +398,11 @@ queryString :: (IsString s) => ByteString -> [ReqParam] -> s
 queryString base []     = fromString $ Char8.unpack base
 queryString base params = fromString . join $ [Char8.unpack base, "?"] ++ (intersperse "&" (map queryStringParam params))
 
-routeWithParams :: (IsString s) => Page a b c d e -> [ReqParam] -> s
+routeWithParams :: (IsString s) => Page a b c d e f -> [ReqParam] -> s
 routeWithParams p rs = fromString . join $
   [routeOf p, "?"] ++ (intersperse "&" (map queryStringParam rs))
 
-routeWithOptionalParams :: (IsString s) => Page a b c d e -> [ReqParam] -> s
+routeWithOptionalParams :: (IsString s) => Page a b c d e f -> [ReqParam] -> s
 routeWithOptionalParams p rs = fromString . join $
   [routeOf p, "&"] ++ (intersperse "&" (map queryStringParam rs))
 
@@ -406,7 +411,7 @@ requestRoute :: (IsString s) => String -> [ReqParam] -> s
 requestRoute route rs = fromString . join $
   [route, "?"] ++ (intersperse "&" (map queryStringParam rs))
 
-routeWithAnchor :: (IsString s, Anchor a) => Page a b c d e -> a -> s
+routeWithAnchor :: (IsString s, Anchor a) => Page a b c d e f -> a -> s
 routeWithAnchor p a = fromString $ routeOf p ++ "#" ++ anchor a
 
 #ifdef TEST

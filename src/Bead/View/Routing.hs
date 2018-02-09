@@ -110,17 +110,19 @@ pages = do
     handleLogin :: BeadHandler ()
     handleLogin = do
       lang <- configuredDefaultDictionaryLanguage
-      result <- withUserState $ \state ->
-        getPageContents
+      response <- withUserState $ \state ->
+        evalHandlerError
         (\err -> do
             logMessage ERROR $ "Error happened during log in: " ++ contentHandlerErrorMsg err
-            translationErrorPage
-              (msg_Login_PageTitle "Login")
-              (msg_Login_InternalError "Some internal error happened, please contact the administrators."))
+            Html <$>
+              translationErrorPage
+                (msg_Login_PageTitle "Login")
+                (msg_Login_InternalError "Some internal error happened, please contact the administrators."))
+        (return . contentsToResponse)
         (do result <- loginSubmit
             beadHandler $ traverse (bootstrapPublicPage defaultPageSettings) result)
         (SC.userNotLoggedIn (fromMaybe lang (SC.getLanguage state)))
-      either (redirect . routeOf) serve result
+      serveResponse response
 
 serve :: H.Html -> BeadHandler ()
 serve = blaze
@@ -195,8 +197,11 @@ changeLanguage = method GET handler <|> method POST (redirect indexPath)
       logMessage ERROR ("Change language: " ++ contentHandlerErrorMsg err)
 
 -- Redirects to the parent page of the given page
-redirectToParentPage :: P.PageDesc -> ContentHandler (PageContents H.Html)
-redirectToParentPage = redirectTo . fromMaybe (P.home ()) . P.parentPage
+redirectToParentPage :: P.PageDesc -> Response
+redirectToParentPage = Redirection . fromMaybe (P.home ()) . P.parentPage
+
+contentsToResponse :: PageContents H.Html -> Response
+contentsToResponse = either Redirection Html
 
 evalHandlerError
   :: (ContentError -> BeadHandler a)
@@ -215,68 +220,47 @@ evalHandlerError onError onSuccess h uState = do
     addState :: UserState -> BeadHandler a -> BeadHandler (a, UserState)
     addState s h = (,) <$> h <*> pure s
 
--- Runs the 'h' handler if no error occurs during the run of the
--- handler calculates the parent page for the given 'p', and runs the
--- attached userstory from the calculated user action and redirects to
--- the parent page at the end, otherwise runs the onError handler.
-runAction
-  :: (ContentError -> BeadHandler H.Html)
-  -> P.PageDesc
-  -> ContentHandler UserAction
-  -> SC.UserState
-  -> BeadHandler (PageContents H.Html, SC.UserState)
-runAction onError p h uState
-  = evalHandlerError
-      ((Right <$>) . onError)
-      return
-      (do userAction <- h
-          userStory $ userStoryFor userAction
-          redirectToParentPage p)
-      uState
-
-getPageContents
-  :: (ContentError -> BeadHandler H.Html)
-  -> ContentHandler (PageContents H.Html)
-  -> SC.UserState
-  -> BeadHandler (PageContents H.Html, SC.UserState)
-getPageContents onError ch uState
-  = evalHandlerError
-      ((Right <$>) . onError)
-      return
-      ch
-      uState
-
-getData
-  :: (ContentError -> BeadHandler H.Html)
-  -> ContentHandler File
-  -> SC.UserState
-  -> BeadHandler (Either H.Html File, SC.UserState)
-getData onError ch uState
-  = evalHandlerError
-      ((Left <$>) . onError)
-      (return . Right)
-      ch
-      uState
+type HttpStatusCode = Int
 
 data Response
   = Html H.Html
   | Redirection RedirectionTarget
   | File File
+  | Json Aeson.Encoding
+  | ReturnCode HttpStatusCode
 
-responseCata :: (H.Html -> a) -> (RedirectionTarget -> a) -> (File -> a) -> Response -> a
-responseCata html redirection file response =
+responseCata :: (H.Html -> a) -> (RedirectionTarget -> a) -> (File -> a) -> (Aeson.Encoding -> a) -> (HttpStatusCode -> a) -> Response -> a
+responseCata html redirection file json returnCode response =
   case response of
     Html h -> html h
     Redirection page -> redirection page
     File f -> file f
+    Json j -> json j
+    ReturnCode n -> returnCode n
+
+serveResponse :: Response -> BeadHandler ()
+serveResponse = responseCata
+                  serve
+                  (redirect . routeOf)
+                  downloadFile
+                  serveJson
+                  setStatusCode
+
+  where
+    setStatusCode :: HttpStatusCode -> BeadHandler ()
+    setStatusCode = modifyResponse . setResponseCode
+
+    serveJson :: Aeson.Encoding -> BeadHandler ()
+    serveJson = writeBuilder . Aeson.fromEncoding
 
 -- Helper type synonyms
 
 type CH     = ContentHandler (PageContents H.Html)
 type CHUA   = ContentHandler UserAction
 type CHData = ContentHandler File
+type CHRest = ContentHandler Aeson.Encoding
 
-type PageRenderer = P.Page CH CH (CH,CHUA) CHUA CHData
+type PageRenderer = P.Page CH CH (CH,CHUA) CHUA CHData CHRest
 
 renderResponse :: PageHandler -> PageRenderer
 renderResponse p = P.pfmap
@@ -285,6 +269,7 @@ renderResponse p = P.pfmap
   (viewModifyHandlerCata (\get post -> (get >>= \result -> traverse addBootstrap result, post)))
   (modifyHandlerCata Prelude.id)
   (dataHandlerCata Prelude.id)
+  (restViewHandlerCata Prelude.id)
   p
 
   where
@@ -300,7 +285,7 @@ renderResponse p = P.pfmap
    we calculate the appropiate user action and run it
 -}
 handlePage :: PageRenderer -> BeadHandler ()
-handlePage page = P.pageKindCata view userView viewModify modify data_ page where
+handlePage page = P.pageKindCata view userView viewModify modify data_ restView page where
   pageDesc = P.pageToPageDesc page
 
   invalidPOSTMethodCall :: BeadHandler ()
@@ -338,55 +323,70 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ page wher
   getPost :: BeadHandler () -> BeadHandler () -> BeadHandler ()
   getPost g p = method GET g <|> method POST p
 
-  serveContents :: PageContents H.Html -> BeadHandler ()
-  serveContents = either (redirect . routeOf) serve
+  getContentsOrError :: ContentHandler (PageContents H.Html) -> BeadHandler ()
+  getContentsOrError handler = do
+    response <- loggedInFilter $ \s ->
+      checkClearance
+        s
+        (evalHandlerError (\err -> Html <$> defErrorPage err) (return . contentsToResponse) handler s)
+        (notAllowed s)
+    serveResponse response
 
-  serveResponse :: Response -> BeadHandler ()
-  serveResponse = responseCata
-                    serve
-                    (redirect . routeOf)
-                    downloadFile
+  getFileOrError :: ContentHandler File -> BeadHandler ()
+  getFileOrError handler = do
+    response <- loggedInFilter $ \s ->
+      checkClearance
+        s
+        (evalHandlerError (\err -> Html <$> defErrorPage err) (return . File) handler s)
+        (notAllowed s)
+    serveResponse response
 
-  getContentsOrError :: ContentHandler (PageContents H.Html)
-                     -> UserState
-                     -> BeadHandler (PageContents H.Html, SC.UserState)
-  getContentsOrError = getPageContents defErrorPage  --TODO I18N
+  -- Runs the 'handler' handler if no error occurs during the run of the
+  -- handler calculates the parent page for the given 'p', and runs the
+  -- attached userstory from the calculated user action and redirects to
+  -- the parent page at the end, otherwise runs the onError handler.
+  runActionOrError :: ContentHandler UserAction -> BeadHandler ()
+  runActionOrError handler = do
+    response <- loggedInFilter $ \s ->
+      checkClearance
+        s
+        (evalHandlerError (\err -> Html <$> defErrorPage err) return runAction s)
+        (notAllowed s)
+    serveResponse response
 
-  getDataOrError :: ContentHandler File
-                 -> UserState
-                 -> BeadHandler (Either H.Html File, SC.UserState)
-  getDataOrError = getData defErrorPage
+      where
+        runAction :: ContentHandler Response
+        runAction = do
+          userAction <- handler
+          userStory $ userStoryFor userAction
+          return $ redirectToParentPage pageDesc
 
-  runActionOrError :: ContentHandler UserAction
-                   -> SC.UserState
-                   -> BeadHandler (PageContents H.Html, SC.UserState)
-  runActionOrError = runAction defErrorPage pageDesc
-
-  contentsToResponse :: PageContents H.Html -> Response
-  contentsToResponse = either Redirection Html
-
-  dataToResponse :: Either H.Html File -> Response
-  dataToResponse = either Html File
+  getJsonOrError :: ContentHandler Aeson.Encoding -> BeadHandler ()
+  getJsonOrError handler = do
+    response <- loggedInFilter $ \s ->
+      checkClearance
+        s
+        (evalHandlerError (\err -> Html <$> defErrorPage err) (return . Json) handler s)
+        (notAllowed s)
+    serveResponse response
 
   view :: P.ViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
-  view p = get . serveResponse =<< loggedInFilter (\s -> checkClearance s (first contentsToResponse <$> getContentsOrError (P.viewPageValue p) s) (notAllowed s))
+  view = get . getContentsOrError . P.viewPageValue
 
   data_ :: P.DataPage (ContentHandler File) -> BeadHandler ()
-  data_ p = get . serveResponse =<< loggedInFilter (\s -> checkClearance s (first dataToResponse <$> getDataOrError (P.dataPageValue p) s) (notAllowed s))
-  
-  userView :: P.UserViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
-  userView p = post . serveResponse =<< loggedInFilter (\s -> checkClearance s ((first contentsToResponse) <$> getContentsOrError (P.userViewPageValue p) s) (notAllowed s))
+  data_ = get . getFileOrError . P.dataPageValue
 
-  viewModify :: P.ViewModifyPage (ContentHandler (PageContents H.Html), ContentHandler UserAction)
-             -> BeadHandler ()
-  viewModify = (\(get, post) ->
-                   getPost
-                     (serveResponse =<< loggedInFilter (\s -> checkClearance s ((first contentsToResponse) <$> getContentsOrError get s) (notAllowed s)))
-                     (serveResponse =<< loggedInFilter (\s -> checkClearance s ((first contentsToResponse) <$> runActionOrError post s) (notAllowed s))))
-                 . P.viewModifyPageValue
+  userView :: P.UserViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
+  userView = post . getContentsOrError . P.userViewPageValue
+
+  viewModify :: P.ViewModifyPage (ContentHandler (PageContents H.Html), ContentHandler UserAction) -> BeadHandler ()
+  viewModify = (\(get, post) -> getPost (getContentsOrError get) (runActionOrError post)) . P.viewModifyPageValue
 
   modify :: P.ModifyPage (ContentHandler UserAction) -> BeadHandler ()
-  modify p = post . serveResponse =<< loggedInFilter (\s -> checkClearance s (first contentsToResponse <$> runActionOrError (P.modifyPageValue p) s) (notAllowed s))
+  modify = post . runActionOrError . P.modifyPageValue
+
+  restView :: P.RestViewPage (ContentHandler Aeson.Encoding) -> BeadHandler ()
+  restView = get . getJsonOrError . P.restViewPageValue
 
 withUserState :: (UserState -> BeadHandler (a, UserState)) -> BeadHandler a
 withUserState f = do
@@ -504,6 +504,7 @@ routeToPageMap = Map.fromList [
   , (modifyAssessmentPreviewPath, \ps -> P.modifyAssessmentPreview <$> assessmentKey ps <*> unit)
   , (viewAssessmentPath, \ps -> P.viewAssessment <$> assessmentKey ps <*> unit)
   , (notificationsPath, j $ P.notifications ())
+  , (submissionTablePath, \ps -> P.submissionTable <$> groupKey ps <*> unit)
   ] where
       j = const . Just
       unit = return ()

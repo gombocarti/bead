@@ -302,13 +302,25 @@ modifyPageValue = modifyPageCata
     cid = const id
     c2id = const . cid
 
+data RestViewPage a
+  = SubmissionTable GroupKey a
+  deriving (Eq, Ord, Show, Functor)
+
+restViewPageCata :: (GroupKey -> a -> b) -> RestViewPage a -> b
+restViewPageCata submissionTable p = case p of
+  SubmissionTable gk a -> submissionTable gk a
+
+restViewPageValue :: RestViewPage a -> a
+restViewPageValue = restViewPageCata (const id)
+
 -- The kind of the possible page types
-data Page a b c d e
+data Page a b c d e f
   = View       (ViewPage a)
   | UserView   (UserViewPage b)
   | ViewModify (ViewModifyPage c)
   | Modify     (ModifyPage d)
   | Data       (DataPage e)
+  | RestView   (RestViewPage f)
   deriving (Eq, Ord, Show)
 
 liftPK
@@ -317,14 +329,16 @@ liftPK
   viewModify
   modify
   data_
+  restView
   v = case v of
     View v       -> View       $ view v
     UserView u   -> UserView   $ userView u
     ViewModify v -> ViewModify $ viewModify v
     Modify m     -> Modify     $ modify m
     Data d       -> Data       $ data_ d
+    RestView r   -> RestView   $ restView r
 
-pfmap f0 f1 f2 f3 f4 = liftPK (fmap f0) (fmap f1) (fmap f2) (fmap f3) (fmap f4)
+pfmap f0 f1 f2 f3 f4 f5 = liftPK (fmap f0) (fmap f1) (fmap f2) (fmap f3) (fmap f4) (fmap f5)
 
 pageKindCata
   view
@@ -332,27 +346,29 @@ pageKindCata
   viewModify
   modify
   data_
+  restView
   q = case q of
     View p -> view p
     UserView p -> userView p
     ViewModify p -> viewModify p
     Modify p -> modify p
     Data p -> data_ p
+    RestView r -> restView r
 
 pageCata' = pageKindCata
 
-pageValue :: Page a a a a a -> a
-pageValue = pageCata' viewPageValue userViewPageValue viewModifyPageValue modifyPageValue dataPageValue
+pageValue :: Page a a a a a a -> a
+pageValue = pageCata' viewPageValue userViewPageValue viewModifyPageValue modifyPageValue dataPageValue restViewPageValue
 
-setPageValue :: a -> Page b c d e f -> Page a a a a a
-setPageValue a = pfmap (const a) (const a) (const a) (const a) (const a)
+setPageValue :: a -> Page b c d e f g -> Page a a a a a a
+setPageValue a = pfmap (const a) (const a) (const a) (const a) (const a) (const a)
 
-type Page' a = Page a a a a a
+type Page' a = Page a a a a a a
 
 type PageDesc = Page' ()
 
-pageToPageDesc :: Page a b c d e -> PageDesc
-pageToPageDesc = pfmap unit unit unit unit unit where
+pageToPageDesc :: Page a b c d e f -> PageDesc
+pageToPageDesc = pfmap unit unit unit unit unit unit where
   unit :: a -> ()
   unit = const ()
 
@@ -415,6 +431,8 @@ deleteUsersFromCourse ck          = Modify . DeleteUsersFromCourse ck
 deleteUsersFromGroup gk           = Modify . DeleteUsersFromGroup gk
 unsubscribeFromCourse gk          = Modify . UnsubscribeFromCourse gk
 
+submissionTable gk = RestView . SubmissionTable gk
+
 -- Template method for the page data structure
 pageCata
   index
@@ -470,6 +488,7 @@ pageCata
   modifyAssessmentPreview
   viewAssessment
   notifications
+  submissionTable
   p = case p of
     (View (Index a)) -> index a
     (View (Login a)) -> login a
@@ -524,6 +543,7 @@ pageCata
     (UserView (ModifyAssessmentPreview ak a)) -> modifyAssessmentPreview ak a
     (View (ViewAssessment ak a)) -> viewAssessment ak a
     (View (Notifications a)) -> notifications a
+    (RestView (SubmissionTable gk a)) -> submissionTable gk a
 
 -- Constants that attached each of the page constructor
 constantsP
@@ -580,6 +600,7 @@ constantsP
   modifyAssessmentPreview_
   viewAssessment_
   notifications_
+  submissionTable_
   = pageCata
       (c $ index index_)
       (c $ login login_)
@@ -634,6 +655,7 @@ constantsP
       (\ak _ -> modifyAssessmentPreview ak modifyAssessmentPreview_)
       (\ak _ -> viewAssessment ak viewAssessment_)
       (c $ notifications notifications_)
+      (\gk _ -> submissionTable gk submissionTable_)
   where
     c = const
 
@@ -692,6 +714,7 @@ liftsP
   modifyAssessmentPreview_
   viewAssessment_
   notifications_
+  submissionTable_
   = pageCata
       (index . index_)
       (login . login_)
@@ -746,6 +769,7 @@ liftsP
       (\ak a -> modifyAssessmentPreview ak (modifyAssessmentPreview_ ak a))
       (\ak a -> viewAssessment ak (viewAssessment_ ak a))
       (notifications . notifications_)
+      (\gk a -> submissionTable gk (submissionTable_ gk a))
 
 isIndex (View (Index _)) = True
 isIndex _ = False
@@ -902,9 +926,12 @@ isViewAssessment _ = False
 isNotifications (View (Notifications _)) = True
 isNotifications _ = False
 
--- Returns the if the given page satisfies one of the given predicates in the page predicate
+isSubmissionTable (RestView (SubmissionTable _ _)) = True
+isSubmissionTable _ = False
+
+-- Returns True if the given page satisfies one of the given predicates in the page predicate
 -- list
-isPage :: [Page a b c d e -> Bool] -> Page a b c d e -> Bool
+isPage :: [Page a b c d e f -> Bool] -> Page a b c d e f -> Bool
 isPage fs p = or $ map ($ p) fs
 
 -- Shortcut binary or for the given predicates
@@ -955,6 +982,7 @@ groupAdminPages = [
   , isModifyEvaluation
   , isDeleteUsersFromCourse
   , isDeleteUsersFromGroup
+  , isSubmissionTable
   ]
 
 courseAdminPages = [
@@ -995,6 +1023,7 @@ courseAdminPages = [
   , isModifyEvaluation
   , isDeleteUsersFromCourse
   , isDeleteUsersFromGroup
+  , isSubmissionTable
   ]
 
 adminPages = [
@@ -1005,13 +1034,14 @@ adminPages = [
   , isUploadFile
   ]
 
-isUserViewPage :: Page a b c d e -> Bool
+isUserViewPage :: Page a b c d e f -> Bool
 isUserViewPage = pageCata'
   false -- view
   true  -- userView
   false -- viewModify
   false -- modify
   false -- data
+  false -- restView
   where
     false = const False
     true  = const True
@@ -1034,7 +1064,7 @@ menuPageList = map ($ ()) [
 
 -- Returns a page predicate function depending on the role, which page transition is allowed,
 -- from a given page
-allowedPage :: E.Role -> Page a b c d e -> Bool
+allowedPage :: E.Role -> Page a b c d e f -> Bool
 allowedPage = E.roleCata student groupAdmin courseAdmin admin
   where
     student     = isPage regularPages
@@ -1051,16 +1081,17 @@ menuPages r p = filter allowedPage' menuPageList
       , p' /= p
       ]
 
--- Returns a Page descriptior for the given Modify or ViewModify
+-- Returns a Page descriptor for the given Modify or ViewModify
 -- parent page, where the page needs to be redirected after the
 -- modification of the data.
 parentPage :: PageDesc -> Maybe PageDesc
 parentPage = pageCata'
-  (const Nothing) -- view
-  (const Nothing) -- userView
-  viewModifyParent
-  modifyParent
-  (const Nothing)
+  (const Nothing)  -- view
+  (const Nothing)  -- userView
+  viewModifyParent -- viewModify
+  modifyParent     -- modify
+  (const Nothing)  -- data
+  (const Nothing)  -- restView
   where
     c2 = const . const
     viewModifyParent = Just . viewModifyPageCata
@@ -1184,6 +1215,7 @@ pageGen = oneof [
         , modifyAssessment <$> assessmentKey <*> unit
         , modifyAssessmentPreview <$> assessmentKey <*> unit
         , viewAssessment <$> assessmentKey <*> unit
+        , submissionTable <$> groupKey <*> unit
         ]
 
       unit = return ()

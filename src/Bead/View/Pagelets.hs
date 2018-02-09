@@ -349,7 +349,7 @@ table i c = H.table ! A.id (fromString i) ! A.class_ (fromString c)
 hiddenTableLine :: Html -> Html
 hiddenTableLine value = H.tr . H.td $ value
 
-linkText :: P.Page a b c d e -> Translation String
+linkText :: P.Page a b c d e f -> Translation String
 linkText = P.pageCata
   (c $ msg_LinkText_Index "BE-AD")
   (c $ msg_LinkText_Login "Login")
@@ -404,32 +404,33 @@ linkText = P.pageCata
   (c2 $ msg_LinkText_ModifyAssessmentPreview "Modify Assessment")
   (c2 $ msg_LinkText_ViewAssessment "View Assessment")
   (c $ msg_LinkText_Notifications "Notifications")
+  (c2 $ msg_LinkText_SubmissionTable "Submission table")
   where
     c = const
     c2 = c . const
     c3 = c2 . const
 
-linkToPage :: P.Page a b c d e -> IHtml
+linkToPage :: P.Page a b c d e f -> IHtml
 linkToPage g = do
   msg <- getI18N
   return $ Bootstrap.link (routeOf g) (msg $ linkText g) ! A.id (fieldName g)
 
-linkToPageWithPostfix :: P.Page a b c d e -> String -> IHtml
+linkToPageWithPostfix :: P.Page a b c d e f -> String -> IHtml
 linkToPageWithPostfix g p = do
   msg <- getI18N
   return $ Bootstrap.link (routeOf g) (msg (linkText g) ++ p) ! A.id (fieldName g)
 
-linkButtonToPageBS :: P.Page a b c d e -> IHtml
+linkButtonToPageBS :: P.Page a b c d e f -> IHtml
 linkButtonToPageBS g = do
   msg <- getI18N
   return $ Bootstrap.buttonLink (routeOf g) (msg $ linkText g)
 
-linkToPageBlank :: P.Page a b c d e -> IHtml
+linkToPageBlank :: P.Page a b c d e f -> IHtml
 linkToPageBlank g = do
   msg <- getI18N
   return $ Bootstrap.link (routeOf g) (msg $ linkText g) ! A.target "_blank" ! A.id (fieldName g)
 
-linkToPageWithText :: P.Page a b c d e -> String -> Html
+linkToPageWithText :: P.Page a b c d e f -> String -> Html
 linkToPageWithText g t = H.p $ Bootstrap.link (routeOf g) t ! A.id (fieldName g)
 
 -- Produces a HTML-link with the given route text and title
@@ -571,7 +572,7 @@ linkTextTest =
     P.pageGen
     "Page link text should be defined"
   where
-      linkText' :: P.Page a b c d e -> String
+      linkText' :: P.Page a b c d e f -> String
       linkText' = trans . linkText
 
 #endif

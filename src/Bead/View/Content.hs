@@ -47,6 +47,7 @@ module Bead.View.Content (
   , ViewModifyHandler(..)
   , ModifyHandler(..)
   , DataHandler(..)
+  , RestViewHandler(..)
 
   , PageHandler
   , viewHandlerCata
@@ -54,6 +55,7 @@ module Bead.View.Content (
   , viewModifyHandlerCata
   , modifyHandlerCata
   , dataHandlerCata
+  , restViewHandlerCata
 
   , module Snap
   , module Control.Applicative
@@ -78,6 +80,7 @@ module Bead.View.Content (
   ) where
 
 import Control.Applicative hiding (empty)
+import qualified Data.Aeson as Aeson
 import Data.Monoid
 import Data.Text (Text)
 
@@ -137,6 +140,7 @@ downloadText filename contents = return (filename, MimePlainText, writeText cont
 type GETContentHandler  = ContentHandler (PageContents IHtml)
 type POSTContentHandler = ContentHandler UserAction
 type ViewPOSTContentHandler = ContentHandler (PageContents IHtml)
+type RestViewContentHandler = ContentHandler Aeson.Encoding
 
 setPageContents :: html -> ContentHandler (PageContents html)
 setPageContents = return . Right
@@ -176,4 +180,8 @@ newtype DataHandler = DataHandler { unDataHandler :: ContentHandler File }
 
 dataHandlerCata f (DataHandler x) = f x
 
-type PageHandler = Page ViewHandler UserViewHandler ViewModifyHandler ModifyHandler DataHandler
+newtype RestViewHandler = RestViewHandler { unRestViewHandler :: RestViewContentHandler }
+
+restViewHandlerCata f (RestViewHandler x) = f x
+
+type PageHandler = Page ViewHandler UserViewHandler ViewModifyHandler ModifyHandler DataHandler RestViewHandler

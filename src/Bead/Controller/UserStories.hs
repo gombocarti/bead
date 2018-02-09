@@ -1386,15 +1386,14 @@ openSubmissions = logAction INFO ("lists unevaluated submissions") $ do
 courseSubmissionTable :: CourseKey -> UserStory SubmissionTableInfo
 courseSubmissionTable ck = logAction INFO ("gets submission table for course " ++ show ck) $ do
   authPerms submissionTableInfoPermissions
-  u  <- username
-  join . persistence $ do
-    admined <- Persist.isAdministratedCourse u ck
-    if admined
-      then do sti <- Persist.courseSubmissionTableInfo ck
-              return (return sti)
-      else return $ do
-             logMessage INFO . violation $ printf "The user tries to open a course overview (%s) that is not administrated by him." (courseKeyMap id ck)
-             errorPage $ userError nonAdministratedCourse
+  isAdministratedCourse ck
+  persistence $ Persist.courseSubmissionTableInfo ck
+
+groupSubmissionTable :: GroupKey -> UserStory SubmissionTableInfo
+groupSubmissionTable gk = logAction INFO ("gets submission table for group " ++ show gk) $ do
+  authPerms submissionTableInfoPermissions
+  isAdministratedGroup gk
+  persistence $ Persist.groupSubmissionTableInfo gk
 
 submissionTables :: UserStory [SubmissionTableInfo]
 submissionTables = logAction INFO "lists submission tables" $ do

@@ -182,7 +182,7 @@ htmlAssessmentTable board
 
         sortedAssessments = sortByCreationTime (sbAssessments board)
 
-navigation :: [Pages.Page a b c d e] -> IHtml
+navigation :: [Pages.Page a b c d e f] -> IHtml
 navigation links = do
   msg <- getI18N
   return
@@ -308,7 +308,7 @@ availableAssignments pd timeconverter studentAssignments
         limit = fromString . submissionLimit
           (const "") (\n _ -> (msg $ msg_Home_Remains "Remains: ") ++ show n) (const $ msg $ msg_Home_Reached "Reached")
 
-        submissionDetails :: SubmissionKey -> Pages.Page () () () () ()
+        submissionDetails :: SubmissionKey -> Pages.Page () () () () () ()
         submissionDetails key = Pages.submissionDetails a key ()
 
         submissionStateLabel :: Html

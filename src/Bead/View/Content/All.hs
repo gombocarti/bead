@@ -33,6 +33,7 @@ import Bead.View.Content.GetSubmission
 import Bead.View.Content.GetCsv
 import Bead.View.Content.Assessment.Page
 import Bead.View.Content.Score.Page
+import Bead.View.Content.Rest.SubmissionTable.Page (submissionTable)
 
 import Data.Monoid (mempty)
 
@@ -40,7 +41,7 @@ import Data.Monoid (mempty)
 import Test.Tasty.TestSet
 #endif
 
-pageContent :: Pages.Page a b c d e -> PageHandler
+pageContent :: Pages.Page a b c d e f -> PageHandler
 pageContent = Pages.constantsP
   nullViewHandler -- index
   nullViewHandler -- login
@@ -95,6 +96,7 @@ pageContent = Pages.constantsP
   modifyAssessmentPreview
   viewAssessment
   notifications
+  submissionTable
   where
     logout :: ViewHandler
     logout = ViewHandler (ContentHandler.logout >> redirectTo (Pages.index ()))
@@ -108,7 +110,7 @@ pageContent = Pages.constantsP
 pageContentTest =
   assertProperty
     "Content handler is a total function"
-    (Pages.pageKindCata view userView viewModify modify data_ . pageContent)
+    (Pages.pageKindCata view userView viewModify modify data_ restView . pageContent)
     Pages.pageGen
     "Content handler must be defined"
   where
@@ -117,5 +119,6 @@ pageContentTest =
       viewModify !_x = True
       modify !_x = True
       data_ !_x = True
+      restView !_x = True
 
 #endif

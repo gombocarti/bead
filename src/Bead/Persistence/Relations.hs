@@ -10,6 +10,7 @@ module Bead.Persistence.Relations (
   , canUserCommentOn
   , submissionTables
   , courseSubmissionTableInfo
+  , groupSubmissionTableInfo
   , userSubmissionDesc
   , userSubmissionInfos
   , userLastSubmission
