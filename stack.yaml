@@ -2,7 +2,7 @@ packages:
   - '.'
 extra-deps:
   - git: https://github.com/poor-a/gssapi.git
-    commit: 0ce712bf2e97e5ebdca5c2271bead31bb117e74c
+    commit: 2e5e9c7be4ddef7d731fec200144ee39866ee209
   - heist-1.0.1.1
   - map-syntax-0.2.0.2
   - snap-1.0.0.2
