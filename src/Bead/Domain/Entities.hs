@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Bead.Domain.Entities (
     AuthFailure(..)
   , Submission(..)
@@ -115,9 +116,11 @@ import           Control.Applicative
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import           Data.Data
+import           Data.Hashable (Hashable)
 import           Data.List (findIndex, sortBy)
 import           Data.Time (UTCTime(..), LocalTime, defaultTimeLocale)
 import           Data.Time.Format (formatTime)
+import           GHC.Generics (Generic)
 
 import           Bead.Domain.Entity.Assessment
 import           Bead.Domain.Entity.Assignment
@@ -436,9 +439,11 @@ userRegInfoCata f (UserRegInfo (username, uid, password, email, fullName, timeZo
 
 -- The language what the dictionary represents.
 newtype Language = Language String
-  deriving (Data, Eq, Ord, Read, Show, Typeable)
+  deriving (Data, Eq, Ord, Read, Show, Typeable, Generic)
 
 languageCata f (Language l) = f l
+
+instance Hashable Language
 
 -- User ID is unique identifier for the user, which
 -- can be different than the username

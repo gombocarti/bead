@@ -30,11 +30,12 @@ module Bead.View.Dictionary (
 
 -- Haskell imports
 
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Typeable
-import Control.Arrow ((&&&))
-import Data.Bifunctor (second)
+import           Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as Map
+import           Data.Typeable
+import           Control.Arrow ((&&&))
+import           Control.Lens (over, each)
+import           Data.Bifunctor (second)
 
 -- Bead imports
 
@@ -46,7 +47,7 @@ import           Bead.View.Translation.Language.DictionaryEn (defaultDictionary)
 import           Bead.View.Translation.Language.DictionaryHu (dictionaryHu)
 
 #ifdef TEST
-import           Data.Map ((!))
+import           Data.HashMap.Strict ((!))
 import qualified Test.Tasty.TestSet as TS
 import           Test.Tasty.TestSet
 #endif
@@ -68,7 +69,7 @@ dictionaryInfoCata f (DictionaryInfo langName) = f langName
 
 -- Dictionaries is a map from a given language to a Dictionary and
 -- a dictionary info pair
-type Dictionaries = Map Language (Dictionary, DictionaryInfo)
+type Dictionaries = HashMap Language (Dictionary, DictionaryInfo)
 
 dictionariesCata f dictionaries = f dictionaries
 
@@ -101,24 +102,19 @@ patch d p = d { DF.entries = process (DF.entries d) (DF.patches p) }
     process :: [Entry] -> [Entry] -> [Entry]
     process eDict ePatch =
       map T . Map.toList . uncurry Map.union $
-        both (Map.fromList . map unT) (ePatch, eDict)
-
-    both :: (a -> b) -> (a, a) -> (b, b)
-    both f (x, y) = (f x, f y)
+        over each (Map.fromList . map unT) (ePatch, eDict)
 
 -- Creates a new dictionary from the entries of the dictionary file,
 -- if no translation key is found in the entries, the original value
 -- would be used as the text of the translation
 dictionaryFromDFile :: DictionaryFile -> Dictionary
 dictionaryFromDFile = DF.dictionaryFileCata $ \ _langCode _langName entries ->
-  Dictionary {
-    unDictionary = \key ->
-      let key' = createKey key
-      in maybe (trans key) trans . Map.lookup key' . Map.fromList $ map (createKey &&& id) entries
+  let key = tid 
+      dict = Map.fromList $ map (key &&& id) entries
+  in Dictionary {
+    unDictionary = \defaultTranslation ->
+      maybe (trans defaultTranslation) trans . Map.lookup (key defaultTranslation) $ dict
   }
-  where
-    createKey :: Translation String -> Translation ()
-    createKey (T (n,_)) = T (n,())
 
 -- Reads out the icon file name into the dictionary info
 dictionaryFileToInfo :: DictionaryFile -> DictionaryInfo

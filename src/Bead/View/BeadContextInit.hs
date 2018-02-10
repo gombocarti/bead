@@ -12,7 +12,7 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Char (toUpper)
-import qualified Data.Map as Map
+import qualified Data.HashMap.Strict as Map
 import qualified Data.Set as Set
 
 import           Snap hiding (Config(..))

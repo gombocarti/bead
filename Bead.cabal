@@ -251,6 +251,7 @@ Library
     xmlhtml,
     utf8-string,
     unix,
+    unordered-containers,
     uuid,
     yaml,
     zip-archive

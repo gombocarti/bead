@@ -14,7 +14,8 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char (isAlphaNum, toUpper)
 import           Data.IORef
-import qualified Data.Map as Map
+import qualified Data.HashMap.Strict as Map
+
 import           Data.Maybe (maybe)
 import           Data.Set (Set)
 import qualified Data.Set as Set
