@@ -55,7 +55,7 @@ userDetailForm timeZones user dictionaries = do
       Bootstrap.labeledText "" (usernameCata fromString $ u_username user)
       userDetailsFields msg
       Bootstrap.submitButton (fieldName saveChangesBtn) (msg $ msg_UserDetails_SaveButton "Update")
-    Bootstrap.turnSelectionsOn
+
   where
     userDetailsFields msg = do
 #ifdef SSO

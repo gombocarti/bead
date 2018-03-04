@@ -63,8 +63,6 @@ bootStrapDocument settings body' = do
         css "/bootstrap.min.css"
         css "/bootstrap.custombutton.css"
         js "/bootstrap.min.js"
-        css "/bootstrap-combobox.css"
-        js "/bootstrap-combobox.js"
         css "/bootstrap-datetimepicker.min.css"
         js "/bootstrap-datetimepicker.min.js"
         js "/fay/DynamicContents.js"

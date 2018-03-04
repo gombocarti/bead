@@ -60,7 +60,7 @@ profileContent ts user ls = do
         profileFields msg
         Bootstrap.submitButton (fieldName changeProfileBtn) (msg $ msg_Profile_SaveButton "Save")
       passwordSection msg
-      Bootstrap.turnSelectionsOn
+
   where
     regFullNameField  = fromString $ B.name regFullNamePrm
     userLanguageField = fromString $ B.name userLanguagePrm

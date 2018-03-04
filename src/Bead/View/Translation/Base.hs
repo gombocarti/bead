@@ -178,10 +178,11 @@ labels =
  , "msg_ViewAssessment_Description"
 
  , "msg_GroupRegistration_RegisteredCourses"
+ , "msg_GroupRegistration_NewGroup"
  , "msg_GroupRegistration_SelectGroup"
  , "msg_GroupRegistration_NoRegisteredCourses"
- , "msg_GroupRegistration_Courses"
- , "msg_GroupRegistration_Admins"
+ , "msg_GroupRegistration_Group"
+ , "msg_GroupRegistration_Admin"
  , "msg_GroupRegistration_NoAvailableCourses"
  , "msg_GroupRegistration_Register"
  , "msg_GroupRegistration_Unsubscribe"
