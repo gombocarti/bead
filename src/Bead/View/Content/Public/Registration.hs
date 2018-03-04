@@ -63,6 +63,6 @@ registrationPasswordStep utcZoneInfo timeZones key language username token = do
       hiddenParam regLanguagePrm   language
       Bootstrap.submitButton (fieldName regSubmitBtn) (msg $ msg_RegistrationFinalize_SubmitButton "Register")
     backToLogin msg
-    Bootstrap.turnSelectionsOn
+
   where
     hiddenParam parameter value = hiddenInput (DataBridge.name parameter) (DataBridge.encode parameter value)

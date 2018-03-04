@@ -134,8 +134,6 @@ hasPageContent pd = do
         submitButton (fieldName testScriptSaveButton)
         (fromString . msg $ msg_NewTestScript_Save "Commit")
 
-    Bootstrap.turnSelectionsOn
-
   where
     testScriptPage = pageDataCata (const (Pages.newTestScript ())) (\_name key _script -> Pages.modifyTestScript key ())
     testScriptName = pageDataCata (const Nothing) (const2 (Just . tsName))

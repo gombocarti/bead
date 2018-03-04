@@ -275,7 +275,6 @@ fillAssessmentTemplate pdata = do
           (\_ _ _ _ users evaluations -> csvTable users evaluations)
           pdata
         enablePreviewButton
-        Bootstrap.turnSelectionsOn
 
   where
     titleLabel msg = msg . msg_NewAssessment_Title $ "Title"

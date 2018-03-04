@@ -26,8 +26,6 @@ Data-Files:
   static/bootstrap.custombutton.css,
   static/bootstrap.min.css,
   static/bootstrap.min.js,
-  static/bootstrap-combobox.css,
-  static/bootstrap-combobox.js,
   static/bootstrap-datetimepicker.min.css,
   static/bootstrap-datetimepicker.min.js,
   static/header.css,

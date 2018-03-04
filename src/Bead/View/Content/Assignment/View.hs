@@ -321,8 +321,6 @@ newAssignmentContent pd = do
                    Bootstrap.colMd6 $
                       onlyOnEdit pd $ Bootstrap.submitButtonWithAttrColorful (formAction $ page pd) (msg $ msg_NewAssignment_SaveButton "Commit")
 
-            Bootstrap.turnSelectionsOn
-
     where
       aas = fromAssignment Assignment.aspects Assignment.emptyAspects pd
       currentEvaluationType = fromAssignment Assignment.evType binaryConfig pd

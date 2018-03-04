@@ -235,21 +235,33 @@ helpBlock text = p ! class_ "help-block" $ fromString text
 
 -- | Creates a form control selection with the given parameter name, a selector
 -- function which determines the selected value, and possible values
+selection :: (Show a, Data a) => String -> (a -> Bool) -> [(a, String)] -> Html
 selection paramName selector values =
   formGroup $ selectionPart
     paramName
-    [class_ "combobox form-control", A.style "display:none", A.required ""]
+    [class_ "form-control", A.required ""]
     selector
     values
 
 -- | Creates a form control selection with the given parameter name, a label, a selector
 -- function which determines the selected value, and possible values
+selectionWithLabel :: (Show a, Data a) => String -> String -> (a -> Bool) -> [(a, String)] -> Html
 selectionWithLabel paramName labelText selector values = formGroup $ do
   labelFor paramName labelText
   selectionPart
     paramName
-    [class_ "combobox form-control", A.style "display:none", A.required ""]
+    [class_ "form-control", A.required ""]
     selector
+    values
+
+-- | Creates a form control selection with the given parameter name, a selector
+-- function which determines the selected value, and possible values
+selectionWithPlaceholder :: (Show a, Data a) => String -> String -> [(a, String)] -> Html
+selectionWithPlaceholder paramName placeholder values =
+  formGroup $ selectionPartWithPlaceholder
+    paramName
+    [class_ "form-control", A.required ""]
+    placeholder
     values
 
 -- | Creates a form control optional selection with the given parameter name, a label, a selector
@@ -258,7 +270,7 @@ selectionOptionalWithLabel paramName labelText selector values = formGroup $ do
   labelFor paramName labelText
   selectionOptionalPart
     paramName
-    [class_ "combobox form-control", A.style "display:none"]
+    [class_ "form-control"]
     selector
     values
 
@@ -295,10 +307,6 @@ smallSubmitButton nameValue text =
          ! (name $ fromString nameValue)
          ! class_ "btn btn-primary"
          $ fromString text
-
--- | Turns the selection into combobox like selections
-turnSelectionsOn
-  = script ! type_ "text/javascript" $ "$(document).ready(function(){$('.combobox').combobox()});"
 
 -- | Creates a password input with the given name as id, a given label within a form-group control
 passwordInput paramName labelText =
@@ -531,6 +539,13 @@ selectOptionalTag name =
 -- Encodes the value to Fay JSON representation or throw an error for the given name
 encode :: (Data a, Show a, IsString s) => String -> a -> s
 encode name value = fromString $ fromMaybe (name ++ ": error encoding value") (encodeToFay value)
+
+selectionPartWithPlaceholder :: (Show a, Data a) =>
+  String -> [Attribute] -> String -> [(a, String)] -> Html
+selectionPartWithPlaceholder name attrs placeholder options = foldl (!) (selectTag name) attrs $ optionTag "" placeholder False <> mapM_ option options
+  where
+    option :: (Show a, Data a) => (a, String) -> Html
+    option (v,t) = optionTag (encode "selection" v) t False
 
 selectionPart :: (Show a, Data a) =>
   String -> [Attribute] -> (a -> Bool) -> [(a, String)] -> Html

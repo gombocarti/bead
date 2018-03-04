@@ -60,9 +60,8 @@ groupRegistrationContent desc = do
         , "group registration."
         ])
     Bootstrap.rowColMd12 $ do
-      H.h3 $ (fromString . msg $ msg_GroupRegistration_SelectGroup "Select course and group")
+      H.h3 $ (fromString . msg $ msg_GroupRegistration_NewGroup "New group")
     i18n msg $ groupsForTheUser (groups desc)
-    Bootstrap.turnSelectionsOn
 
 groupsAlreadyRegistered :: [(GroupKey, GroupDesc, Bool)] -> IHtml
 groupsAlreadyRegistered ds = do
@@ -72,8 +71,8 @@ groupsAlreadyRegistered ds = do
       "No registered courses.  Choose a group.")
     (Bootstrap.table $ do
       thead $ H.tr $ do
-        H.th . fromString . msg $ msg_GroupRegistration_Courses "Groups"
-        H.th . fromString . msg $ msg_GroupRegistration_Admins "Teachers"
+        H.th . fromString . msg $ msg_GroupRegistration_Group "Group"
+        H.th . fromString . msg $ msg_GroupRegistration_Admin "Teacher"
         H.th . fromString . msg $ msg_GroupRegistration_Unsubscribe "Unregister"
       tbody $ mapM_ (groupLine msg) ds)
   where
@@ -82,7 +81,7 @@ groupsAlreadyRegistered ds = do
     groupLine msg (key, desc, hasSubmission) = flip groupDescFold desc $ \n as -> do
       H.tr $ do
         H.td $ fromString n
-        H.td $ fromString $ intercalate " " as
+        H.td $ fromString $ intercalate ", " as
         H.td $
           if hasSubmission
             then (fromString . msg $ msg_GroupRegistration_NoUnsubscriptionAvailable
@@ -99,7 +98,7 @@ groupsForTheUser gs = do
     nonEmpty gs
       (Bootstrap.rowColMd12 $ p $ fromString . msg $ msg_GroupRegistration_NoAvailableCourses "There are no available groups yet.") $
       postForm (routeOf groupRegistration) $ do
-        Bootstrap.selection (fieldName groupRegistrationField) (const False) (map (id *** descriptive) gs)
+        Bootstrap.selectionWithPlaceholder (fieldName groupRegistrationField) (msg $ msg_GroupRegistration_SelectGroup "Select course and group") (map (id *** descriptive) gs)
         Bootstrap.submitButton (fieldName regGroupSubmitBtn) (msg $ msg_GroupRegistration_Register "Register")
   where
     groupRegistration = Pages.groupRegistration ()
