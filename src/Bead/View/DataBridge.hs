@@ -2,7 +2,7 @@
 module Bead.View.DataBridge where
 
 import Control.Monad ((>=>), join)
-import Data.Char (toUpper)
+import Data.Char (toUpper, isSpace)
 import Data.Maybe (fromMaybe)
 import Data.String (fromString)
 import Data.Time (LocalTime(..))
@@ -291,7 +291,13 @@ customUsernamePrm field = Parameter {
          else Nothing
 
 transformUsername :: String -> Username
-transformUsername = Username . map toUpper
+transformUsername = Username . map toUpper . strip
+  where
+    strip :: String -> String
+    strip = reverse . dropWhiteSpace . reverse . dropWhiteSpace
+
+    dropWhiteSpace :: String -> String
+    dropWhiteSpace = dropWhile isSpace
 
 usernamePrm :: Parameter Username
 usernamePrm = customUsernamePrm (fieldName usernameField)
