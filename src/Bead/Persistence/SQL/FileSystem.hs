@@ -223,7 +223,7 @@ finalizeTestFeedback sk = liftIO $ do
 testFeedbacks :: (MonadIO io) => io [(SubmissionKey, Feedback)]
 testFeedbacks = liftIO (createFeedbacks =<< processables)
   where
-    processables = filter (not . (`isSuffixOf` ".locked")) <$>
+    processables = filter (not . (".locked" `isSuffixOf`)) <$>
       getSubDirectories testIncomingDataDir
 
     createFeedbacks = fmap join . mapM createFeedback
