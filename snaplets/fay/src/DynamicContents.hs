@@ -11,7 +11,6 @@ import Fay.JQueryUI
 import Fay.Text hiding (concat)
 
 import Bead.Domain.Shared.Evaluation
-import Bead.Shared.Command
 import Bead.View.Fay.Hooks
 import Bead.View.Fay.HookIds
 import Bead.View.Fay.JSON.ClientSide
