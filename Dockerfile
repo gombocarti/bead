@@ -35,34 +35,27 @@ RUN echo en_US.UTF-8 UTF-8 >> /etc/locale.gen && \
 ENV LC_ALL en_US.UTF-8
 
 # Install stack
-RUN curl -L https://www.stackage.org/stack/linux-x86_64-static -o /usr/local/bin/stack.tar.gz && \
-    tar -C /usr/local/bin/ --strip-components=1 -xf /usr/local/bin/stack.tar.gz stack-1.6.3-linux-x86_64-static/stack && \
+RUN curl -L https://www.stackage.org/stack/linux-x86_64 -o /usr/local/bin/stack.tar.gz && \
+    tar -C /usr/local/bin/ --strip-components=1 -xf /usr/local/bin/stack.tar.gz stack-1.7.1-linux-x86_64/stack && \
     chmod +x /usr/local/bin/stack
 
 # Create development dirs
 RUN mkdir -p /development/bead && \
     mkdir    /bead-server
 
+# Create user
+RUN adduser --system --uid 1000 --group dev
+
+USER dev
+
 # Copy cabal file and install dependencies
-COPY "./Bead.cabal" "/development/init/"
-COPY "./stack.yaml" "/development/init/"
+COPY --chown=dev:dev "./Bead.cabal" "/development/init/"
+COPY --chown=dev:dev "./stack.yaml" "/development/init/"
 RUN cd /development/init && \
     stack setup && \
-    stack build --only-dependencies
+    stack build --only-dependencies --ghc-options "-dynamic"
 
-# Convenience scripts for development
-RUN ln -s /development/bead/docker/container-script/build \
-          /development/bead/docker/container-script/run \
-          /development/bead/docker/container-script/dev-env-setup \
-          /usr/local/bin/
-
-# Directory for sources
-VOLUME "/development/bead"
-
-# Directory for running
-VOLUME "/bead-server"
+USER root
 
 # Expose the default port
 EXPOSE 8000
-
-WORKDIR "/bead-server"

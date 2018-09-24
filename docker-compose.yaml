@@ -1,7 +1,7 @@
 version: "3.2"
 services:
   bead-test:
-    image: poora/bead
+    image: poora/bead-dev
     entrypoint: ["/development/bead/docker/travis-test.sh"]
     depends_on:
       - mysql
@@ -11,10 +11,7 @@ services:
       - type: bind
         source: ./
         target: /development/bead
-
-      - type: bind
-        source: ./server
-        target: /bead-server
+    user: dev
 
   mysql:
     image: "mysql:5.7"

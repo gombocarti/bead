@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/bin/bash
+
+cp ../{stack.yaml,Bead.cabal,Dockerfile} ./
 
 # Build image
-docker build -t="poora/bead" .
+sudo docker build -t="poora/bead-dev" .
