@@ -50,8 +50,7 @@ loginSubmit = do
       else do
         password <- getParameter loginPasswordPrm
         let login = krb5Login (usernameCata B.pack username) (B.pack password)
-        liftIO $ isRight <$> (E.try login :: IO (Either KrbException ()))
-
+        liftIO (E.try login) >>= either (\exception -> logLoginError username exception >> return False) (const $ return True) 
   if correctCredentials
     then do
       lResult <- beadHandler $ ldapQuery username
@@ -64,6 +63,10 @@ loginSubmit = do
     else
       beadHandler (I.index (Just IncorrectUserOrPassword)) >>= setPageContents
   where
+    logLoginError :: Username -> KrbException -> ContentHandler ()
+    logLoginError username (KrbException code errorMessage) = beadHandler $
+      logMessage INFO $ join ["[Login] Login as ", show username, " failed. Code: ", show (fromIntegral code :: Int), ", reason: ", B.unpack errorMessage]
+
     -- Falls back to local credentials
     ldapError :: Username -> String -> ContentHandler (PageContents IHtml)
     ldapError username msg = do
