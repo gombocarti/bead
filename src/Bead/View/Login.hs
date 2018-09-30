@@ -10,7 +10,8 @@ import           Data.Char
 import           Data.Either (isLeft, isRight)
 import           Data.Maybe
 import           Data.String (fromString)
-import qualified Data.Text as Text
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.Typeable as Type
 
 #ifdef SSO
@@ -49,7 +50,8 @@ loginSubmit = do
       then return True
       else do
         password <- getParameter loginPasswordPrm
-        let login = krb5Login (usernameCata B.pack username) (B.pack password)
+        let encodeUtf8 = TE.encodeUtf8 . T.pack
+            login  = krb5Login (usernameCata encodeUtf8 username) (encodeUtf8 password)
         liftIO (E.try login) >>= either (\exception -> logLoginError username exception >> return False) (const $ return True) 
   if correctCredentials
     then do
