@@ -21,12 +21,10 @@ import System.IO
 import System.IO.Temp (createTempDirectory)
 import System.FilePath ((</>))
 
-import Control.Monad.Transaction.TIO
 import Bead.Persistence.Initialization
 import Bead.Persistence.Persist
 import Bead.Persistence.Relations
-import Bead.Persistence.NoSQLDir (referredPath)
-import Bead.Persistence.NoSQLDirFile
+import Bead.Persistence.SQL.FileSystem (dirName)
 
 import qualified Test.Property.EntityGen as Gen
 
@@ -1019,7 +1017,7 @@ testJobCreationTest = test $ testCase "Test job creation" $ do
   where
     testIfHasNoTestJob sk = do
       let tk = submissionKeyToTestJobKey sk
-      exist <- liftIO $ doesDirectoryExist $ referredPath tk
+      exist <- liftIO $ doesDirectoryExist $ dirName tk
       return $ do
         assertFalse exist "Test Job directory is exist"
 
@@ -1027,20 +1025,20 @@ testJobCreationTest = test $ testCase "Test job creation" $ do
       -- Domain knowledge is used
       tsk <- testScriptOfTestCase tck
       let tk = submissionKeyToTestJobKey sk
-      script     <- liftIO $ readFile $ referredPath tk </> "script"
+      script     <- liftIO $ readFile $ dirName tk </> "script"
       submission2 <- loadSubmission sk
       assertSubmissions <- withSubmissionValue (solution submission2)
-        (\sol -> do testSolution <- liftIO $ readFile $ referredPath tk </> "submission"
+        (\sol -> do testSolution <- liftIO $ readFile $ dirName tk </> "submission"
                     return $ assertEquals sol testSolution "Solutions are different")
-        (\sol -> do testSolution <- liftIO $ BS.readFile $ referredPath tk </> "submission"
+        (\sol -> do testSolution <- liftIO $ BS.readFile $ dirName tk </> "submission"
                     return $ assertEquals sol testSolution "Solutions are different")
       script2     <- loadTestScript tsk
       case2       <- loadTestCase   tck
       assertTests <- withTestCaseValue
         (tcValue case2)
-        (\testValue -> do tests <- liftIO $ readFile $ referredPath tk </> "tests"
+        (\testValue -> do tests <- liftIO $ readFile $ dirName tk </> "tests"
                           return $ assertEquals tests testValue "Tests are different")
-        (\testValue -> do tests <- liftIO $ BS.readFile $ referredPath tk </> "tests"
+        (\testValue -> do tests <- liftIO $ BS.readFile $ dirName tk </> "tests"
                           return $ assertEquals tests testValue "Tests are different")
       return $ do
 --        assertEquals submission (solution submission2) "Submissions are different"

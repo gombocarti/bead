@@ -192,8 +192,6 @@ import           Bead.Domain.Relationships
 import qualified Bead.Persistence.Initialization as Init
 #ifdef MYSQL
 import qualified Bead.Persistence.SQL as PersistImpl
-#else
-import qualified Bead.Persistence.NoSQLDir as PersistImpl
 #endif
 
 #ifdef TEST

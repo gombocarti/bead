@@ -160,13 +160,6 @@ Library
       Bead.Persistence.SQL.TestScript
       Bead.Persistence.SQL.User
 
-  Exposed-modules:
-    Bead.Persistence.NoSQLDir
-    Bead.Persistence.NoSQLDirFile
-    Control.Monad.Transaction
-    Control.Monad.Transaction.IO
-    Control.Monad.Transaction.TIO
-
   if flag(Tests)
     CPP-Options: -DTEST
 

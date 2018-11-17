@@ -13,7 +13,6 @@ import Bead.Controller.Pages (pageDescTest)
 import Bead.Domain.Entities (asgTests, entityTests, feedbackTests)
 import Bead.Domain.Relationships (relationshipTests)
 import Bead.Domain.RolePermission (permissionTest)
-import Bead.Persistence.NoSQLDirFile (noSqlDirTests)
 import Bead.Persistence.Persist (persistTests)
 import Bead.Persistence.Relations (persistRelationsTests)
 import Bead.View.Content.All (pageContentTest)
@@ -40,7 +39,6 @@ tests = do
   group "Page content handler " pageContentTest
   group "Link text" linkTextTest
   group "Permissions" permissionTest
-  group "NoSQLDir" noSqlDirTests
   group "Field name" fieldNameTest
   group "Entity" entityTests
   group "Relationships" relationshipTests
