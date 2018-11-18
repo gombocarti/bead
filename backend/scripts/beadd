@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+
+: ${beadd_instances=main}
+
+logfile_template="/var/log/bead/beadd.%s.log"
+
+usage() {
+    echo "No beadd instances to start or stop!"
+    exit 1
+}
+
+echo "Starting the BE-AD tester services: "
+
+test -z "${beadd_instances}" && usage
+
+pids=""
+
+for i in ${beadd_instances}; do
+    echo -n " ${i}"
+    logfile=$(printf ${logfile_template} ${i})
+    /usr/local/bead/bead bulk ${i} >> ${logfile} 2>&1 &
+    pids="$! $pids"
+done
+
+echo "."
+
+wait $pids

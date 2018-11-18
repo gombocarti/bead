@@ -1,6 +1,4 @@
 #!/bin/sh
-LC_ALL=C
-unset SHELL
 
 usage() {
     echo "Usage: bead command [options]
@@ -23,10 +21,10 @@ shift
 
 case ${CMD} in
     test)
-        exec env -i PATH=${PATH} /bin/sh ${SCRIPT_MODULES}/test.sh $@
+        exec ${SCRIPT_MODULES}/test.sh $@
         ;;
     bulk)
-        exec env -i PATH=${PATH} /bin/sh ${SCRIPT_MODULES}/bulk.sh $@
+        exec ${SCRIPT_MODULES}/bulk.sh $@
         ;;
     help)
         usage

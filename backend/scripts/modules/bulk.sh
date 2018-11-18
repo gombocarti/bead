@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 usage() {
     echo "bead bulk [jailname]
@@ -11,19 +11,17 @@ Parameters:
 
 JAILNAME="$1"
 
-test -z "${JAILNAME}" && usage
-
 SCRIPT_PATH=$(realpath $0)
 SCRIPT_PREFIX=$(dirname ${SCRIPT_PATH})
 
 . ${SCRIPT_PREFIX}/common.sh
 
-INCOMING_DIR="${BEAD_HOME}/jobs/${JAILNAME}/incoming"
+INCOMING_DIR="${JOBS_PATH}/${JAILNAME}/incoming"
 
-if [ ! -d "${INCOMING_DIR}" ]; then
-    msg "The ${INCOMING_DIR} cannot be found."
-    exit 1
-fi
+#if [ ! -d "${INCOMING_DIR}" ]; then
+#    msg "${INCOMING_DIR} cannot be found."
+#    exit 1
+#fi
 
 JAIL_PATH="${BEAD_HOME}/jails/${JAILNAME}"
 
@@ -38,13 +36,35 @@ main_loop() {
     local id
 
     while [ "${LOOP}" -ne "0" ]; do
-        id=$(ls ${INCOMING_DIR} | fgrep -v ${PENDING} | fgrep -v ${LOCKED} | head -1)
+        ${SCRIPT_PREFIX}/Cleanup "${JAIL_PATH}/build" "${JAIL_PATH}/run" "${JAIL_PATH}/job"
+
+        id=$(${SCRIPT_PREFIX}/Take)
         if [ "${id}" = "" ]; then
             msg_verbose "No job found, sleeping for ${SLEEP_TIME} seconds."
             sleep ${SLEEP_TIME}
         else
             msg "Found job ${id}, evaluating."
-            /bin/sh ${SCRIPT_PREFIX}/test.sh ${JAILNAME} ${id}
+            coproc watchdog (${SCRIPT_PREFIX}/watchdog.sh "${JAILNAME}" "${id}" ${WATCHDOG_TIMEOUT})
+
+            ${SCRIPT_PREFIX}/test.sh "${JAILNAME}" "${id}" $watchdog_PID &
+            test_PID=$!
+
+            # Now you have ${WATCHDOG_TIMEOUT} seconds to run (at maximum).
+            echo $test_PID >&${watchdog[1]}-
+
+            # Forward messages from watchdog to the log
+            echo ""
+
+            DONE=false
+            until $DONE; do
+                read -u ${watchdog[0]} output || DONE=true
+                if [ -n "$output" ]; then
+                    echo "$output"
+                fi
+            done
+
+            wait $test_PID $watchdog_PID
+            pgrep -U "test_runner" | ${SCRIPT_PREFIX}/Kill
         fi
     done
 }
@@ -53,9 +73,9 @@ signal_handler() {
     LOOP=0
 }
 
-trap signal_handler SIGINT
-trap signal_handler SIGTERM
-trap signal_handler SIGKILL
+trap signal_handler INT
+trap signal_handler TERM
+trap signal_handler KILL
 trap signal_handler EXIT
 
 msg "Bulk mode started with jail ${JAILNAME}."

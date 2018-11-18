@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 show_program() {
     cat "$1" | sed = | sed 'N; s/^/    /; s/ *\(.\{4,\}\)\n/\1  /'
@@ -7,12 +7,11 @@ show_program() {
 __MESSAGE=
 
 say() {
-    __MESSAGE=${__MESSAGE}$1$'\n'
+    __MESSAGE=${__MESSAGE}$1'\n'
 }
 
-export PATH=$PATH:/usr/local/bin
-SANDBOX_PATH="$1"
-BUILD_PATH="$2"
+BUILD_PATH="$1"
+SANDBOX_PATH="$2"
 ULIMIT="$3"
 ulimit -t ${ULIMIT}
 cd ${BUILD_PATH}
@@ -20,6 +19,6 @@ cd ${BUILD_PATH}
 build
 __BUILD_RESULT=$?
 if [ "${__MESSAGE}" != "" ]; then
-    echo "${__MESSAGE}" > ${BUILD_PATH}/.message
+    echo -ne "${__MESSAGE}" > ${BUILD_PATH}/.message
 fi
 exit ${__BUILD_RESULT}
