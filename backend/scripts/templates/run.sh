@@ -1,9 +1,7 @@
 #!/bin/bash
 
-__MESSAGE=
-
 say() {
-    __MESSAGE=${__MESSAGE}$1'\n'
+    echo -E "$1" >> ${SANDBOX_PATH}/.message
 }
 
 SANDBOX_PATH="$1"
@@ -13,7 +11,7 @@ cd ${SANDBOX_PATH}
 . ./script
 run
 __RUN_RESULT=$?
-if [ "${__MESSAGE}" != "" ]; then
-    echo -ne "${__MESSAGE}" > ${SANDBOX_PATH}/.message
+if [ ! -s "${SANDBOX_PATH}/.message" ]; then
+    rm -f "${SANDBOX_PATH}/.message"
 fi
 exit ${__RUN_RESULT}
