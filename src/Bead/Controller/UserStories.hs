@@ -581,6 +581,11 @@ isUserInGroup gk = logAction INFO ("checks if user is in the group " ++ show gk)
   state <- userState
   persistence $ Persist.isUserInGroup (SC.usernameInState state) gk
 
+courseOfGroup :: GroupKey -> UserStory CourseKey
+courseOfGroup gk = logAction INFO ("gets course of the group " ++ show gk) $ do
+  authorize P_Open P_Group
+  persistence $ Persist.courseOfGroup gk
+
 -- | Checks if the user is subscribed for the course
 isUserInCourse :: CourseKey -> UserStory Bool
 isUserInCourse ck = logAction INFO ("checks if user is in the course " ++ show ck) $ do
@@ -1077,6 +1082,12 @@ scoreBoards :: UserStory (Map (Either CourseKey GroupKey) ScoreBoard)
 scoreBoards = logAction INFO "lists scoreboards" $ do
   authPerms scoreBoardPermissions
   withUserAndPersist $ Persist.scoreBoards . u_username
+
+scoreBoardOfGroup :: GroupKey -> UserStory ScoreBoard
+scoreBoardOfGroup gk = logAction INFO ("gets scoreboard of group " ++ show gk) $ do
+  authPerms scoreBoardPermissions
+  isAdministratedGroup gk
+  persistence $ Persist.scoreBoardOfGroup gk
 
 -- Puts the given status message to the actual user state
 putStatusMessage :: Translation String -> UserStory ()
@@ -1720,6 +1731,12 @@ isAdministratedGroup = guard
   Persist.isAdministratedGroup
   "The user tries to access a group (%s) which is not administrated by him."
   (userError nonAdministratedGroup)
+
+groupsOfCourse :: CourseKey -> UserStory [GroupKey]
+groupsOfCourse ck = do
+  authorize P_Open P_Course
+  isAdministratedCourse ck
+  persistence $ Persist.groupKeysOfCourse ck
 
 -- Produces a list of groupkeys, each of them represents a group of
 -- the given course and is administrated by the current user.

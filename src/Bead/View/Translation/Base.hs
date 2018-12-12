@@ -419,6 +419,7 @@ labels =
  , "msg_SubmissionState_Tests_Passed"
  , "msg_SubmissionState_FreeFormEvaluated"
 
+ , "msg_Home_SubmissionTable_ExportEvaluations"
  , "msg_Home_SubmissionTable_StudentName"
  , "msg_Home_SubmissionTable_Username"
  , "msg_Home_SubmissionTable_Summary"
@@ -479,6 +480,8 @@ labels =
  , "msg_UploadFile_InternalError"
  , "msg_UploadFile_ErrorInManyUploads"
 
+ , "msg_ExportEvaluations_Assessments"
+ , "msg_ExportEvaluations_Evaluations"
  , "msg_ExportSubmissions_Comments"
 
  , "msg_UserStory_SetTimeZone"
@@ -574,6 +577,8 @@ labels =
  , "msg_LinkText_DeleteUsersFromCourse"
  , "msg_LinkText_DeleteUsersFromGroup"
  , "msg_LinkText_UnsubscribeFromCourse"
+ , "msg_LinkText_ExportEvaluations"
+ , "msg_LinkText_ExportEvaluationsAllGroups"
  , "msg_LinkText_ExportSubmissions"
  , "msg_LinkText_ExportSubmissionsOfGroups"
  , "msg_LinkText_ExportSubmissionsOfOneGroup"

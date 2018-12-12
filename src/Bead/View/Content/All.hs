@@ -28,6 +28,7 @@ import Bead.View.Content.SetUserPassword.Page
 import Bead.View.Content.NewTestScript.Page
 import Bead.View.Content.Notifications.Page
 import Bead.View.Content.UploadFile.Page
+import Bead.View.Content.ExportEvaluationsScores
 import Bead.View.Content.ExportSubmissions
 import Bead.View.Content.GetSubmission
 import Bead.View.Content.GetCsv
@@ -82,6 +83,8 @@ pageContent = Pages.constantsP
   deleteUsersFromCourse
   deleteUsersFromGroup
   unsubscribeFromCourse
+  exportEvaluationsScores
+  exportEvaluationsScoresAllGroups
   exportSubmissions
   exportSubmissionsOfGroups
   exportSubmissionsOfOneGroup

@@ -26,6 +26,7 @@ module Bead.Persistence.Relations (
   , testScriptInfo -- Calculates the test script information for the given test key
   , openedSubmissionInfo -- Calculates the opened submissions for the user from the administrated groups and courses
   , submissionLimitOfAssignment
+  , scoreBoardOfGroup
   , scoreBoards
   , scoreInfo
   , scoreDesc
@@ -602,6 +603,9 @@ scoreBoards u = do
   courseKeys <- map (Left . fst) <$> administratedCourses u
   let keys = courseKeys ++ groupKeys
   Map.fromList . zip keys <$> mapM scoreBoard keys
+
+scoreBoardOfGroup :: GroupKey -> Persist ScoreBoard
+scoreBoardOfGroup = scoreBoard . Right
 
 scoreBoard :: Either CourseKey GroupKey -> Persist ScoreBoard
 scoreBoard key = do

@@ -427,6 +427,13 @@ data ScoreBoard =
     }
   deriving Eq
 
+scoreBoardCata course group scoreBoard =
+  case scoreBoard of
+    CourseScoreBoard scores scoreInfos ck cName assessments users ->
+      course scores scoreInfos ck cName assessments users
+    GroupScoreBoard scores scoreInfos gk gName assessments users ->
+      group scores scoreInfos gk gName assessments users
+
 scoreBoardPermissions = ObjectPermissions
   [ (P_Open, P_Group), (P_Open, P_Assessment) ]
 

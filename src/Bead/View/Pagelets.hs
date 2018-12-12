@@ -388,6 +388,8 @@ linkText = P.pageCata
   (c2 $ msg_LinkText_DeleteUsersFromCourse "Remove Students")
   (c2 $ msg_LinkText_DeleteUsersFromGroup "Remove Students")
   (c2 $ msg_LinkText_UnsubscribeFromCourse "Unregister")
+  (c2 $ msg_LinkText_ExportEvaluations "Export Evaluations of Admined Groups of this Course")
+  (c2 $ msg_LinkText_ExportEvaluationsAllGroups "Export Evaluations of All Groups of this Course")
   (c2 $ msg_LinkText_ExportSubmissions "Export All Submissions")
   (c3 $ msg_LinkText_ExportSubmissionsOfGroups "Export Admined Groups")
   (c3 $ msg_LinkText_ExportSubmissionsOfOneGroup "Export This Group")

@@ -82,7 +82,7 @@ submissionTable tableId now stb table = submissionTableContextCata html stb wher
     msg <- getI18N
     return $ do
       H.h4 . H.b $ fromString $ unwords [stiCourse table, userCountText msg]
-      i18n msg $ assignmentCreationMenu courses groups table
+      i18n msg $ managementMenu courses groups table
       i18n msg $ submissionTablePart tableId now stb table
       i18n msg $ courseTestScriptTable testscripts table
 
@@ -322,36 +322,44 @@ testScriptTable cti ck = maybe (return "") courseFound $ Map.lookup ck cti where
                      (routeOf (Pages.modifyTestScript tsk ()))
                      (fromString $ tsiName tsi)
 
--- Renders a menu for the creation of the course or group assignment if the
--- user administrates the given group or course
-assignmentCreationMenu
+-- Renders a menu for the creation of the course or group assignment and evaluation export
+-- if the user administrates the given group or course
+managementMenu
   :: AdministratedCourses
   -> AdministratedGroups
   -> SubmissionTableInfo
   -> IHtml
-assignmentCreationMenu courses groups = submissionTableInfoCata courseMenu groupMenu
+managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
   where
     groupMenu _n _us _as _uls _ans ck gk = maybe
       (return (return ()))
       (const $ do
         msg <- getI18N
-        return . navigationWithRoute msg $
+        return . navigationWithRoute $
           case Map.lookup ck courses of
-            Nothing -> [Pages.newGroupAssignment gk (), Pages.newGroupAssessment gk ()]
-            Just _  -> [Pages.newGroupAssignment gk (), Pages.newCourseAssignment ck (), Pages.newGroupAssessment gk ()] )
+            Nothing -> map (button msg) [Pages.newGroupAssignment gk (), Pages.newGroupAssessment gk (), Pages.exportEvaluationsScores ck ()]
+            Just _  -> map (button msg) [Pages.newGroupAssignment gk (), Pages.newCourseAssignment ck (), Pages.newGroupAssessment gk ()]
+                         ++ [dropdown msg [Pages.exportEvaluationsScores ck (), Pages.exportEvaluationsScoresAllGroups ck ()]])
       (Map.lookup gk groups)
 
     courseMenu _n _us _as _uls _ans ck = maybe
       (return (return ()))
       (const $ do
         msg <- getI18N
-        return (navigationWithRoute msg [Pages.newCourseAssignment ck ()]))
+        return (navigationWithRoute $
+                  [button msg $ Pages.newCourseAssignment ck ()]
+                   ++ [dropdown msg [Pages.exportEvaluationsScores ck (), Pages.exportEvaluationsScoresAllGroups ck ()]]))
       (Map.lookup ck courses)
 
-    navigationWithRoute msg links =
-      Bootstrap.rowColMd12 . Bootstrap.buttonGroup $ mapM_ elem links
-      where
-        elem page = Bootstrap.buttonLink (routeOf page) (msg $ linkText page)
+    navigationWithRoute :: [H.Html] -> H.Html
+    navigationWithRoute buttons =
+      Bootstrap.rowColMd12 . Bootstrap.buttonGroup $ mconcat buttons
+
+    button :: I18N -> Pages.PageDesc -> H.Html
+    button msg page = Bootstrap.buttonLink (routeOf page) (msg $ linkText page)
+
+    dropdown :: I18N -> [Pages.PageDesc] -> H.Html
+    dropdown msg pages = Bootstrap.dropdown (msg $ msg_Home_SubmissionTable_ExportEvaluations "Export Evaluations") (map (\page -> Bootstrap.link (routeOf page) (msg $ linkText page)) pages)
 
 -- * CSS Section
 

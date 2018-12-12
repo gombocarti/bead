@@ -490,6 +490,8 @@ routeToPageMap = Map.fromList [
   , (deleteUsersFromCoursePath , \ps -> P.deleteUsersFromCourse <$> courseKey ps <*> unit)
   , (deleteUsersFromGroupPath , \ps -> P.deleteUsersFromGroup <$> groupKey ps <*> unit)
   , (unsubscribeFromCoursePath , \ps -> P.unsubscribeFromCourse <$> groupKey ps <*> unit)
+  , (exportEvaluationsScoresPath, \ps -> P.exportEvaluationsScores <$> courseKey ps <*> unit)
+  , (exportEvaluationsScoresAllGroupsPath, \ps -> P.exportEvaluationsScoresAllGroups <$> courseKey ps <*> unit)
   , (exportSubmissionsPath, \ps -> P.exportSubmissions <$> assignmentKey ps <*> unit)
   , (exportSubmissionsOfGroupsPath, \ps -> P.exportSubmissionsOfGroups <$> assignmentKey ps <*> username ps <*> unit)
   , (exportSubmissionsOfOneGroupPath, \ps -> P.exportSubmissionsOfOneGroup <$> assignmentKey ps <*> groupKey ps <*> unit)

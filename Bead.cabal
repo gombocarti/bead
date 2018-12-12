@@ -275,6 +275,7 @@ Library
     Bead.Domain.Relationships
     Bead.Domain.RolePermission
     Bead.Domain.Shared.Evaluation
+    Bead.Domain.String
     Bead.Domain.TimeZone
     Bead.Domain.Types
     Bead.Persistence.Guards
@@ -318,6 +319,7 @@ Library
     Bead.View.Content.All
     Bead.View.Content.Bootstrap
     Bead.View.Content.Comments
+    Bead.View.Content.ExportEvaluationsScores
     Bead.View.Content.ExportSubmissions
     Bead.View.Content.GetSubmission
     Bead.View.Content.GetCsv

@@ -80,7 +80,9 @@ viewPageValue = viewPageCata
 -- and only the data will be rendered in the response
 -- (e.g. file download)
 data DataPage a
-  = ExportSubmissions AssignmentKey a
+  = ExportEvaluationsScores CourseKey a
+  | ExportEvaluationsScoresAllGroups CourseKey a
+  | ExportSubmissions AssignmentKey a
   | ExportSubmissionsOfGroups AssignmentKey E.Username a
   | ExportSubmissionsOfOneGroup AssignmentKey GroupKey a
   | GetSubmission SubmissionKey a
@@ -89,6 +91,8 @@ data DataPage a
   deriving (Eq, Ord, Show, Functor)
 
 dataPageCata
+  exportEvaluationsScores
+  exportEvaluationsScoresAllGroups
   exportSubmissions
   exportSubmissionsOfGroups
   exportSubmissionsOfOneGroup
@@ -96,6 +100,8 @@ dataPageCata
   getCourseCsv
   getGroupCsv
   p = case p of
+    ExportEvaluationsScores ck a -> exportEvaluationsScores ck a
+    ExportEvaluationsScoresAllGroups ck a -> exportEvaluationsScoresAllGroups ck a
     ExportSubmissions ak a -> exportSubmissions ak a
     ExportSubmissionsOfGroups ak u a -> exportSubmissionsOfGroups ak u a
     ExportSubmissionsOfOneGroup ak gk a -> exportSubmissionsOfOneGroup ak gk a
@@ -105,6 +111,8 @@ dataPageCata
 
 dataPageValue :: DataPage a -> a
 dataPageValue = dataPageCata
+  cid  -- exportEvaluationsScores
+  cid  -- exportEvaluationsScoresAllGroups
   cid  -- exportSubmissions
   c2id -- exportSubmissionsOfGroups
   c2id -- exportSubmissionsOfOneGroup
@@ -385,12 +393,14 @@ viewAssessment ak       = View . ViewAssessment ak
 viewUserScore sk        = View . ViewUserScore sk
 notifications           = View . Notifications
 
-exportSubmissions ak              = Data . ExportSubmissions ak
-exportSubmissionsOfGroups ak u    = Data . ExportSubmissionsOfGroups ak u
-exportSubmissionsOfOneGroup ak gk = Data . ExportSubmissionsOfOneGroup ak gk
-getSubmission sk                  = Data . GetSubmission sk
-getCourseCsv ck                   = Data . GetCourseCsv ck
-getGroupCsv gk                    = Data . GetGroupCsv gk
+exportEvaluationsScores ck          = Data . ExportEvaluationsScores ck
+exportEvaluationsScoresAllGroups ck = Data . ExportEvaluationsScoresAllGroups ck
+exportSubmissions ak                = Data . ExportSubmissions ak
+exportSubmissionsOfGroups ak u      = Data . ExportSubmissionsOfGroups ak u
+exportSubmissionsOfOneGroup ak gk   = Data . ExportSubmissionsOfOneGroup ak gk
+getSubmission sk                    = Data . GetSubmission sk
+getCourseCsv ck                     = Data . GetCourseCsv ck
+getGroupCsv gk                      = Data . GetGroupCsv gk
 
 newGroupAssignmentPreview gk  = UserView . NewGroupAssignmentPreview gk
 newCourseAssignmentPreview ck = UserView . NewCourseAssignmentPreview ck
@@ -474,6 +484,8 @@ pageCata
   deleteUsersFromCourse
   deleteUsersFromGroup
   unsubscribeFromCourse
+  exportEvaluationsScores
+  exportEvaluationsScoresAllGroups
   exportSubmissions
   exportSubmissionsOfGroups
   exportSubmissionsOfOneGroup
@@ -529,6 +541,8 @@ pageCata
     (Modify (DeleteUsersFromCourse ck a)) -> deleteUsersFromCourse ck a
     (Modify (DeleteUsersFromGroup gk a)) -> deleteUsersFromGroup gk a
     (Modify (UnsubscribeFromCourse gk a)) -> unsubscribeFromCourse gk a
+    (Data (ExportEvaluationsScores ck a)) -> exportEvaluationsScores ck a
+    (Data (ExportEvaluationsScoresAllGroups ck a)) -> exportEvaluationsScoresAllGroups ck a
     (Data (ExportSubmissions ak a)) -> exportSubmissions ak a
     (Data (ExportSubmissionsOfGroups ak u a)) -> exportSubmissionsOfGroups ak u a
     (Data (ExportSubmissionsOfOneGroup ak gk a)) -> exportSubmissionsOfOneGroup ak gk a
@@ -586,6 +600,8 @@ constantsP
   deleteUsersFromCourse_
   deleteUsersFromGroup_
   unsubscribeFromCourse_
+  exportEvaluationsScores_
+  exportEvaluationsScoresAllGroups_
   exportSubmissions_
   exportSubmissionsOfGroups_
   exportSubmissionsOfOneGroup_
@@ -641,6 +657,8 @@ constantsP
       (\ck _ -> deleteUsersFromCourse ck deleteUsersFromCourse_)
       (\gk _ -> deleteUsersFromGroup gk deleteUsersFromGroup_)
       (\gk _ -> unsubscribeFromCourse gk unsubscribeFromCourse_)
+      (\ck _ -> exportEvaluationsScores ck exportEvaluationsScores_)
+      (\ck _ -> exportEvaluationsScoresAllGroups ck exportEvaluationsScoresAllGroups_)
       (\ak _ -> exportSubmissions ak exportSubmissions_)
       (\ak u _ -> exportSubmissionsOfGroups ak u exportSubmissionsOfGroups_)
       (\ak gk _ -> exportSubmissionsOfOneGroup ak gk exportSubmissionsOfOneGroup_)
@@ -700,6 +718,8 @@ liftsP
   deleteUsersFromCourse_
   deleteUsersFromGroup_
   unsubscribeFromCourse_
+  exportEvaluationsScores_
+  exportEvaluationsScoresAllGroups_
   exportSubmissions_
   exportSubmissionsOfGroups_
   exportSubmissionsOfOneGroup_
@@ -755,6 +775,8 @@ liftsP
       (\ck a -> deleteUsersFromCourse ck (deleteUsersFromCourse_ ck a))
       (\gk a -> deleteUsersFromGroup gk (deleteUsersFromGroup_ gk a))
       (\gk a -> unsubscribeFromCourse gk (unsubscribeFromCourse_ gk a))
+      (\ck a -> exportEvaluationsScores ck (exportEvaluationsScores_ ck a))
+      (\ck a -> exportEvaluationsScoresAllGroups ck (exportEvaluationsScoresAllGroups_ ck a))
       (\ak a -> exportSubmissions ak (exportSubmissions_ ak a))
       (\ak u a -> exportSubmissionsOfGroups ak u (exportSubmissionsOfGroups_ ak u a))
       (\ak gk a -> exportSubmissionsOfOneGroup ak gk (exportSubmissionsOfOneGroup_ ak gk a))
@@ -884,6 +906,12 @@ isDeleteUsersFromGroup _ = False
 isUnsubscribeFromCourse (Modify (UnsubscribeFromCourse _ _)) = True
 isUnsubscribeFromCourse _ = False
 
+isExportEvaluationsScores (Data (ExportEvaluationsScores _ _)) = True
+isExportEvaluationsScores _ = False
+
+isExportEvaluationsScoresAllGroups (Data (ExportEvaluationsScoresAllGroups _ _)) = True
+isExportEvaluationsScoresAllGroups _ = False
+
 isExportSubmissions (Data (ExportSubmissions _ _)) = True
 isExportSubmissions _ = False
 
@@ -974,6 +1002,7 @@ groupAdminPages = [
   , isFillNewGroupAssessmentPreview
   , isModifyAssessment
   , isModifyAssessmentPreview
+  , isExportEvaluationsScores
   , isExportSubmissions
   , isExportSubmissionsOfGroups
   , isExportSubmissionsOfOneGroup
@@ -1014,6 +1043,8 @@ courseAdminPages = [
   , isFillNewGroupAssessmentPreview
   , isModifyAssessment
   , isModifyAssessmentPreview
+  , isExportEvaluationsScores
+  , isExportEvaluationsScoresAllGroups
   , isExportSubmissions
   , isExportSubmissionsOfGroups
   , isExportSubmissionsOfOneGroup
@@ -1203,6 +1234,8 @@ pageGen = oneof [
         , newGroupAssignmentPreview <$> groupKey <*> unit
         , modifyAssignmentPreview <$> assignmentKey <*> unit
         , getSubmission <$> submissionKey <*> unit
+        , exportEvaluationsScores <$> courseKey <*> unit
+        , exportEvaluationsScoresAllGroups <$> courseKey <*> unit
         , exportSubmissions <$> assignmentKey <*> unit
         , exportSubmissionsOfGroups <$> assignmentKey <*> username <*> unit
         , exportSubmissionsOfOneGroup <$> assignmentKey <*> groupKey <*> unit
