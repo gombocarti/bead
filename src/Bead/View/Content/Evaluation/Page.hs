@@ -223,7 +223,7 @@ evaluationContent pd = do
         (msg $ msg_Evaluation_Username "Username: ") .|. (uid Prelude.id $ eUid sd)
         (msg $ msg_Evaluation_SubmissionDate "Date of submission: ") .|. (showDate . tc . thd3 $ eSubmissionInfo sd)
         let customIconStyle = St.toMediumIcon {
-              St.freeFormPlaceholder = \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
+                St.freeFormPlaceholder = Just $ \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
               }
           in (msg $ msg_Evaluation_SubmissionInfo "State: ") .|. (St.formatSubmissionState customIconStyle msg . snd3 . eSubmissionInfo $ sd)
 

@@ -4,15 +4,16 @@
 module Bead.View.Content.SubmissionState
   ( formatSubmissionState
   , Style(..)
-  , toLabel
-  , toIcon
-  , toMediumIcon
-  , toLargeIcon
   , toBadge
   , toColoredBadge
-  )
-where
+  , toIcon
+  , toLabel
+  , toLargeIcon
+  , toMediumIcon
+  , toPlainText
+  ) where
 
+import qualified Data.Text as T
 import qualified Text.Blaze.Html5 as H
 import           Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5.Attributes as A
@@ -23,20 +24,32 @@ import           Bead.View.Content
 import           Bead.View.Content.VisualConstants (displayableFreeFormResultLength)
 import qualified Bead.Domain.Shared.Evaluation as Eval
 
-data Style = Style {
-    nonEvaluated :: I18N -> H.Html
-  , testsPassed :: I18N -> H.Html
-  , testsFailed :: I18N -> H.Html
-  , accepted :: I18N -> H.Html
-  , rejected :: I18N -> H.Html
-  , percentageTag :: String -> H.Html
-  , freeFormTag :: String -> H.Html
-  , freeFormPlaceholder :: I18N -> String
+data Style a = Style {
+    nonEvaluated :: I18N -> a
+  , testsPassed :: I18N -> a
+  , testsFailed :: I18N -> a
+  , accepted :: I18N -> a
+  , rejected :: I18N -> a
+  , percentageTag :: String -> a
+  , freeFormTag :: String -> Maybe String -> a
+  , freeFormPlaceholder :: Maybe (I18N -> String)
 }
+
+toPlainText :: Style T.Text
+toPlainText = Style {
+    nonEvaluated = \msg -> T.pack $ msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
+  , testsPassed = \msg -> T.pack $ msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
+  , testsFailed = \msg -> T.pack $ msg $ msg_SubmissionState_Tests_Failed "Tests are failed"
+  , accepted = \msg -> T.pack $ msg $ msg_SubmissionState_Accepted "Accepted"
+  , rejected = \msg -> T.pack $ msg $ msg_SubmissionState_Rejected "Rejected"
+  , percentageTag = T.pack
+  , freeFormTag = \text _mTooltip -> T.pack text
+  , freeFormPlaceholder = Nothing
+  }
 
 -- |Convert a 'SubmissionState' into a colored label.
 -- This 'Style' is used on the student section of the Home page.
-toLabel :: Style
+toLabel :: Style H.Html
 toLabel = Style {
     nonEvaluated = \msg -> Bootstrap.grayLabel $ msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
   , testsPassed = \msg -> Bootstrap.grayLabel $ msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
@@ -44,20 +57,20 @@ toLabel = Style {
   , accepted = \msg -> Bootstrap.greenLabel $ msg $ msg_SubmissionState_Accepted "Accepted"
   , rejected = \msg -> Bootstrap.redLabel $ msg $ msg_SubmissionState_Rejected "Rejected"
   , percentageTag = Bootstrap.blueLabel
-  , freeFormTag = Bootstrap.blueLabel
-  , freeFormPlaceholder = const "..."
+  , freeFormTag = \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel text)
+  , freeFormPlaceholder = Just $ const "..."
   }
 
-toMediumIcon :: Style
+toMediumIcon :: Style H.Html
 toMediumIcon = toIcon Bootstrap.Medium
 
-toLargeIcon :: Style
+toLargeIcon :: Style H.Html
 toLargeIcon = toIcon Bootstrap.Large
 
 -- |Convert a 'SubmissionState' into a colored icon.
 -- This 'Style' is used on the admin section of the Home page,
 -- at the top of the Evaluation page, and on the EvaluationTable page.
-toIcon :: Bootstrap.Size -> Style
+toIcon :: Bootstrap.Size -> Style H.Html
 toIcon size = Style {
     nonEvaluated = \msg ->
       H.i ! A.class_ "glyphicon glyphicon-stop"
@@ -87,9 +100,9 @@ toIcon size = Style {
   , percentageTag =
       Bootstrap.blueLabel
   , freeFormTag =
-      Bootstrap.blueLabel
+      \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel text)
   , freeFormPlaceholder =
-      const "..."
+      Just $ const "..."
   }
   where
     tooltip :: String -> H.Attribute
@@ -98,7 +111,8 @@ toIcon size = Style {
     iconSize :: String
     iconSize = unwords ["font-size:", Bootstrap.sizeCata "medium" "large" "xx-large" size]
 
-toBadge :: Style
+-- |This style is used in list groups that lists submissions.
+toBadge :: Style H.Html
 toBadge = Style {
     nonEvaluated = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
   , testsPassed = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
@@ -106,20 +120,20 @@ toBadge = Style {
   , accepted = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_Accepted "Accepted"
   , rejected = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_Rejected "Rejected"
   , percentageTag = Bootstrap.badge
-  , freeFormTag = Bootstrap.badge
-  , freeFormPlaceholder = \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
+  , freeFormTag = \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.badge text)
+  , freeFormPlaceholder = Just $ \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
   }
 
 -- |Convert a 'SubmissionState' into a colored icon.
 -- Uses the same color as labels. This is forward-compatible with Bootstrap 4,
 -- which uses same colors for pill badges and labels.
 -- When Bootstrap 4 rolls in, colored badges can use 'Bootstrap.Alert'.
-toColoredBadge :: Style
+toColoredBadge :: Style H.Html
 toColoredBadge = toBadge {
     accepted = \msg -> (accepted toBadge msg) ! acceptedColor
   , rejected = \msg -> (rejected toBadge msg) ! rejectedColor
   , percentageTag = \text -> (percentageTag toBadge text) ! evaluatedColor
-  , freeFormTag = \text -> (freeFormTag toBadge text) ! evaluatedColor
+  , freeFormTag = \text mTooltip -> (freeFormTag toBadge text mTooltip) ! evaluatedColor
   }
 
 acceptedColor :: H.Attribute
@@ -131,7 +145,7 @@ rejectedColor = A.style "background-color: #d9534f;"
 evaluatedColor :: H.Attribute
 evaluatedColor = A.style "background-color: #337ab7;"
 
-formatSubmissionState :: Style -> I18N -> SubmissionState -> H.Html
+formatSubmissionState :: forall a. Style a -> I18N -> SubmissionState -> a
 formatSubmissionState style msg =
   submissionStateCata
     (nonEvaluated style msg)
@@ -139,19 +153,23 @@ formatSubmissionState style msg =
     (\_key result -> val result) -- evaluated
 
   where
-    tested :: Bool -> H.Html
+    tested :: Bool -> a
     tested = bool (testsPassed style msg) (testsFailed style msg)
 
-    val :: Eval.EvResult -> H.Html
+    val :: Eval.EvResult -> a
     val = Eval.evResultCata
             (Eval.binaryCata (Eval.resultCata (accepted style msg) (rejected style msg)))
             percentage
             (Eval.freeForm $ \text ->
-              let cell = if length text < displayableFreeFormResultLength then text else freeFormPlaceholder style msg in
-              freeFormTag style cell ! A.title (H.toValue text))
+              case freeFormPlaceholder style of
+                Just placeHolder ->
+                  let cell = if length text < displayableFreeFormResultLength then text else placeHolder msg in
+                    freeFormTag style cell (Just text)
+                Nothing ->
+                  freeFormTag style text Nothing)
 
       where
-        percentage :: Eval.Percentage -> H.Html
+        percentage :: Eval.Percentage -> a
         percentage (Eval.Percentage (Eval.Scores [p])) = percentageTag style $ concat [show . round $ (100 * p), "%"]
         percentage _ = percentageTag style "???%"
 

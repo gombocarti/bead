@@ -1,4 +1,21 @@
-module Bead.Persistence.Guards where
+module Bead.Persistence.Guards
+  ( doesBlockAssignmentView
+  , doesBlockSubmissionView
+  , isAccessibleBallotBoxSubmission
+  , isAccessibleSubmission
+  , isAdministratedAssessment
+  , isAdministratedAssignment
+  , isAdministratedCourse
+  , isAdministratedCourseOfGroup
+  , isAdministratedEvaluation
+  , isAdministratedGroup
+  , isAdministratedSubmission
+  , isAdministratedTestScript
+  , isInBallotBox
+  , isStudentOf
+  , isUserOfSubmission
+  , isUsersAssignment
+  ) where
 
 {-
 This module implements guards for persistence layer,
@@ -21,18 +38,20 @@ import           Bead.Persistence.Relations
 -- * Guards against invalid data modification
 
 -- Returns True if the given user administrates the course of the given
--- group, otherwise False
+-- group, otherwise False.
 isAdministratedCourseOfGroup :: Username -> GroupKey -> Persist Bool
 isAdministratedCourseOfGroup u gk = do
   ck <- courseOfGroup gk
   ac <- adminCourse u
   return (ac ck)
 
--- Returns True if the given user administrates the given group, otherwise False
+-- Returns True if the given user administrates the given group or
+-- administrates the course of the group, otherwise False.
 isAdministratedGroup :: Username -> GroupKey -> Persist Bool
 isAdministratedGroup u gk = do
   ag <- adminGroup u
-  return (ag gk)
+  adminedCourse <- isAdministratedCourseOfGroup u gk
+  return (ag gk || adminedCourse)
 
 -- Returns True if the given user administrates the given course, otherwise False
 isAdministratedCourse :: Username -> CourseKey -> Persist Bool

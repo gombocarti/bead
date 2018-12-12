@@ -55,6 +55,8 @@ module Bead.View.RouteOf (
   , deleteUsersFromGroupPath
   , unsubscribeFromCoursePath
   , pageRoutePath
+  , exportEvaluationsScoresPath
+  , exportEvaluationsScoresAllGroupsPath
   , exportSubmissionsPath
   , exportSubmissionsOfGroupsPath
   , exportSubmissionsOfOneGroupPath
@@ -217,6 +219,12 @@ deleteUsersFromGroupPath = "/delete-users-from-group"
 unsubscribeFromCoursePath :: RoutePath
 unsubscribeFromCoursePath = "/unsubscribe-from-course"
 
+exportEvaluationsScoresPath :: RoutePath
+exportEvaluationsScoresPath = "/export-evaluations-scores"
+
+exportEvaluationsScoresAllGroupsPath :: RoutePath
+exportEvaluationsScoresAllGroupsPath = "/export-evaluations-scores-all-groups"
+
 exportSubmissionsPath :: RoutePath
 exportSubmissionsPath = "/export-submissions"
 
@@ -309,6 +317,8 @@ pageRoutePath = constantsP
     deleteUsersFromCoursePath
     deleteUsersFromGroupPath
     unsubscribeFromCoursePath
+    exportEvaluationsScoresPath
+    exportEvaluationsScoresAllGroupsPath
     exportSubmissionsPath
     exportSubmissionsOfGroupsPath
     exportSubmissionsOfOneGroupPath
@@ -369,6 +379,8 @@ pageRequestParams = liftsP
   (\ck _ -> [requestParam ck]) -- deleteUsersFromCourse
   (\gk _ -> [requestParam gk]) -- deleteUsersFromGroup
   (\gk _ -> [requestParam gk]) -- unsubscribeFromCourse
+  (\ck _ -> [requestParam ck]) -- exportEvaluationsScores
+  (\ck _ -> [requestParam ck]) -- exportEvaluationsScoresAllGroups
   (\ak _ -> [requestParam ak]) -- exportSubmissions
   (\ak u _ -> [requestParam ak, requestParam u])   -- exportSubmissionsOfGroups
   (\ak gk _ -> [requestParam ak, requestParam gk]) -- exportSubmissionsOfOneGroup

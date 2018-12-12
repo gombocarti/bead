@@ -51,15 +51,21 @@ check_encoding() {
     return $r
 }
 
-blame_encoding() {
+correct_encoding() {
     local f
     f=$1
+    tmp=$(mktemp)
 
-    cat > $f <<EOF
-Unfortunately, the contents of this comment cannot be displayed as it contains
-some non-Unicode (UTF-8) characters or it is not a plain ASCII text.  Please
-remove those characters from the output of the program that generated it.
+    cat > $tmp <<EOF
+Unfortunately, the contents of this comment contains some non-Unicode
+(UTF-8) characters. We tried to do our best to convert it into a
+proper UTF-8 text and it may not display correctly as a result. 
+
+Please use UTF-8 in all of your source files and output of your program.
+
 EOF
+    iconv -c --to-code=UTF-8 $f >> $tmp
+    mv -f $tmp $f
 }
 
 force_publish() {
@@ -70,14 +76,38 @@ force_publish() {
     tgt=$2
 
     if [ -s ${src} ] && [ -d $(dirname ${tgt}) ]; then
-        mv ${src} ${tgt}
-        chown nobody:nogroup ${tgt}
+        cp --preserve=timestamps -f ${src} ${tgt}
         chmod g+rw,o+rw ${tgt}
     fi
 }
 
 publish() {
-    check_encoding $1 && force_publish $1 $2 || blame_encoding $2
+    check_encoding $1 || correct_encoding $1
+    force_publish $1 $2
+}
+
+# Path variables
+JAIL_PATH=
+OUTPUT_DIR=
+OUTPUT_DIR_TMP=
+OUTPUT=
+RESULT=
+TEMPLATES=
+BUILD_PATH=
+SANDBOX_PATH=
+
+set_paths() {
+  local JAILNAME=$1
+  local JOB_ID=$2
+  JAIL_PATH="${JAILS_PATH}/${JAILNAME}"
+  OUTPUT_DIR="${JAIL_PATH}/job/${JOB_ID}/result"
+  OUTPUT_DIR_TMP="${OUTPUT_DIR}${LOCKED}"
+  OUTPUT="${OUTPUT_DIR_TMP}/private"
+  MESSAGE="${OUTPUT_DIR_TMP}/public"
+  RESULT="${OUTPUT_DIR_TMP}/result"
+  TEMPLATES="${SCRIPT_PREFIX}/../templates"
+  BUILD_PATH="${JAIL_PATH}/build"
+  SANDBOX_PATH="${JAIL_PATH}/run"
 }
 
 msg_debug "Checking for ${BEAD_CONF}..."
@@ -92,9 +122,11 @@ fi
 # Some reasonable default
 : ${WATCHDOG_TIMEOUT:=15}
 : ${SLEEP_TIME:=5}
-: ${BEAD_HOME:=/usr/home/bead}
-: ${ULIMIT_BUILD:=10}
-: ${ULIMIT_RUN:=5}
+: ${JOBS_PATH:=/home/bead/jobs}
+: ${JAILS_PATH:=/home/tester/jails}
+: ${BEAD_HOME:=/home/tester}
+: ${ULIMIT_BUILD:=16}
+: ${ULIMIT_RUN:=16}
 
 msg_debug "Watchdog timeout = ${WATCHDOG_TIMEOUT}"
 msg_debug "Sleep time = ${SLEEP_TIME}"

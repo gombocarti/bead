@@ -180,6 +180,8 @@ menuId = P.pageCata
   (c2 "link-delete-users-from-course")
   (c2 "link-delete-users-from-group")
   (c2 "link-unsubscribe-from-course")
+  (c2 "link-export-evaluations")
+  (c2 "link-export-evaluations-all-groups")
   (c2 "link-export-submissions")
   (c3 "link-export-submissions-of-groups")
   (c3 "link-export-submissions-of-one-group")

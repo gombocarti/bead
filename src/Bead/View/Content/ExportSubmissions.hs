@@ -5,6 +5,7 @@ module Bead.View.Content.ExportSubmissions (
     exportSubmissions
   , exportSubmissionsOfGroups
   , exportSubmissionsOfOneGroup
+  , localTimeInSeconds
   ) where
 
 import qualified Codec.Archive.Zip as Zip
@@ -14,7 +15,6 @@ import           Control.Monad (forM, mapM)
 import           Control.Monad.Trans (lift)
 import           Control.Monad.IO.Class (liftIO)
 import           Data.List (intersperse)
-import qualified Data.Map as Map
 import           Data.Maybe (catMaybes)
 import           Data.String (fromString)
 import qualified Data.Time.Clock as UTC
@@ -27,6 +27,7 @@ import           System.FilePath ((</>), (<.>))
 
 import qualified Bead.Controller.UserStories as Story
 import qualified Bead.Domain.Entity.Assignment as Assignment
+import           Bead.Domain.String (removeAccents)
 import           Bead.View.Content.GetSubmission (submissionFilename)
 import qualified Bead.View.Content.Comments as C
 import           Bead.View.Content
@@ -158,32 +159,3 @@ localTimeInSeconds = utcTimeInSeconds . LocalTime.localTimeToUTC LocalTime.utc
   where
     utcTimeInSeconds :: UTC.UTCTime -> Integer
     utcTimeInSeconds = round . Time.utcTimeToPOSIXSeconds
-
--- | Converts hungarian accute accented letters into ones without accents,
--- in order to be compatible with zip managers and to avoid errors and
--- unreadable files.
-removeAccents :: String -> String
-removeAccents = map removeAccent
-  where
-      removeAccent :: Char -> Char
-      removeAccent c = case Map.lookup c conversion of
-                         Just latinLetter -> latinLetter
-                         Nothing -> c
-
-      conversion :: Map.Map Char Char
-      conversion = Map.fromList (matching ++ upperCaseMatching)
-        where
-          matching :: [(Char, Char)]
-          matching = [ ('á', 'a')
-                     , ('é', 'e')
-                     , ('í', 'i')
-                     , ('ó', 'o')
-                     , ('ö', 'o')
-                     , ('ő', 'o')
-                     , ('ú', 'u')
-                     , ('ü', 'u')
-                     , ('ű', 'u')
-                     ]
-
-          upperCaseMatching :: [(Char, Char)]
-          upperCaseMatching = map (\(c1, c2) -> (toUpper c1, toUpper c2)) matching
