@@ -172,8 +172,8 @@ adminGroup u = do
   gks <- map fst <$> administratedGroups u
   return (\gk -> elem gk gks)
 
--- Returns a function that returns True if the user administrates
--- a course if administrated the group, otherwise False
+-- Returns a function that returns True if the user administrates a
+-- group of a course, otherwise False.
 adminCourseOfGroup :: Username -> Persist (CourseKey -> Bool)
 adminCourseOfGroup u = do
   gks <- map fst <$> administratedGroups u

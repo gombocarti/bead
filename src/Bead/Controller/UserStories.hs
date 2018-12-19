@@ -1767,7 +1767,7 @@ isAdministratedAssessment = guard
 -- the users attend otherwise, renders the error page
 isUsersAssignment :: AssignmentKey -> UserStory ()
 isUsersAssignment = guard
-  Persist.isUsersAssignment
+  (\u ak -> or <$> sequence [Persist.isUsersAssignment u ak, Persist.isAdministratedAssignment u ak])
   "The user tries to access an assignment (%s) which is not of him's."
   (userError nonRelatedAssignment)
 
