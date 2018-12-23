@@ -127,7 +127,9 @@ Library
     CPP-Options: -DMYSQL
 
     Build-Depends:
-      persistent-mysql,
+      mysql-haskell,
+      persistent,
+      persistent-mysql-haskell,
       persistent-template,
       resourcet
 
@@ -201,12 +203,8 @@ Library
     monad-logger,
     mtl,
     pandoc,
-    persistent,
-    persistent-mysql,
-    persistent-template,
     process,
     random,
-    resourcet,
     regex-tdfa,
     snap,
     snap-core,

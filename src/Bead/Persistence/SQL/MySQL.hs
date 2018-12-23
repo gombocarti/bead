@@ -5,8 +5,11 @@ module Bead.Persistence.SQL.MySQL where
 
 import           Control.Exception
 import           Control.Monad.Logger
+import qualified Data.ByteString.Char8 as BC
 import           Data.String (fromString)
 import           Data.Text (Text)
+import           Data.Word (Word8)
+import           Database.MySQL.Connection (utf8mb4_unicode_ci)
 import           Database.Persist.Sql
 import           Database.Persist.MySQL
 
@@ -52,17 +55,21 @@ configToPersistConfig = mysqlConfigToPersistConfig . Config.persistConfig
 parseConfig :: String -> Config
 parseConfig = read
 
-configToConnectInfo c = defaultConnectInfo {
-    connectHost = host c
-  , connectPort = fromIntegral $ port c
-  , connectUser = user c
-  , connectPassword = pass c
-  , connectDatabase = dbName c
-  }
+configToConnectInfo :: Config -> MySQLConnectInfo
+configToConnectInfo c = setMySQLConnectInfoCharset utf8mb4_unicode_ci .
+                          setMySQLConnectInfoPort (fromIntegral $ port c) $ connectInfo
+
+  where
+    connectInfo :: MySQLConnectInfo
+    connectInfo = mkMySQLConnectInfo
+                    (host c)
+                    (BC.pack (user c))
+                    (BC.pack (pass c))
+                    (BC.pack (dbName c))
 
 runMySql pool query = runResourceT . runNoLoggingT $ runSqlPool query pool
 
-runMySqlConn :: ConnectInfo -> Persist a -> IO a
+runMySqlConn :: MySQLConnectInfo -> Persist a -> IO a
 runMySqlConn conn query = runResourceT . runNoLoggingT . withMySQLConn conn $ runSqlConn query
 
 createPersistInit :: Config -> IO PersistInit

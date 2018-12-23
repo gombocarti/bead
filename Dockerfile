@@ -24,7 +24,6 @@ RUN apt-get update && \
       libkrb5-dev \
       libpcre3 \
       libpcre3-dev \
-      default-libmysqlclient-dev \
       screen \
       netbase \
       pkg-config
