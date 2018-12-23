@@ -16,18 +16,18 @@ import qualified Bead.View.Content.Bootstrap as Bootstrap
 
 seeMoreSubmission :: String -> I18N -> String -> Html
 seeMoreSubmission id_ i18n content = do
-  Bootstrap.panelGroup ! Bootstrap.role "tablist" ! Bootstrap.areaMultiselectable "true" $ do
+  Bootstrap.panelGroup ! A.role "tablist" ! Bootstrap.areaMultiselectable "true" $ do
     let headingId = "heading" ++ id_
     let collapseClass = "panel-collapse collapse in"
     let headerText = msg_Submission_Collapse_Submission "Collapse submission text"
     H.div ! A.class_ "panel panel-default" $ do
-      H.div ! A.class_ "panel-heading" ! Bootstrap.role "tab" ! A.id (fromString headingId) $ do
+      H.div ! A.class_ "panel-heading" ! A.role "tab" ! A.id (fromString headingId) $ do
         H.h4 ! A.class_ "panel-title" $
           H.a ! Bootstrap.dataToggle "collapse" ! A.href (fromString $ '#':id_)
               ! Bootstrap.ariaExpanded "true" ! Bootstrap.ariaControls (fromString id_)
               $ fromString . i18n $ headerText
       H.div ! A.id (fromString id_) ! A.class_ (fromString collapseClass)
-            ! Bootstrap.role "tabpanel" ! Bootstrap.ariaLabelledBy (fromString headingId) $
+            ! A.role "tabpanel" ! Bootstrap.ariaLabelledBy (fromString headingId) $
         H.div ! A.class_ "panel-body" $
           H.div # assignmentTextDiv $
             H.pre # assignmentTextPre $ fromString content
@@ -39,7 +39,7 @@ seeMoreComment id_ i18n maxLength maxLines (badgeText, alert) anchorVal content 
                                    else "panel-collapse collapse in"
   in
   H.div ! A.class_ "panel panel-default" $ do
-    H.div ! A.class_ "panel-heading" ! Bootstrap.role "tab" ! A.id (fromString headingId) $ do
+    H.div ! A.class_ "panel-heading" ! A.role "tab" ! A.id (fromString headingId) $ do
       maybe mempty (\ac -> H.a ! A.name (anchor ac) $ mempty) anchorVal
       H.p $ badge badgeText
       H.pre # commentTextPre $ fromString preview
@@ -49,7 +49,7 @@ seeMoreComment id_ i18n maxLength maxLines (badgeText, alert) anchorVal content 
             $ fromString . i18n $ msg_SeeMore_SeeMore "See More"
     when isLargeContent $
       H.div ! A.id (fromString id_) ! A.class_ (fromString collapseClass)
-            ! Bootstrap.role "tabpanel" ! Bootstrap.ariaLabelledBy (fromString headingId) $
+            ! A.role "tabpanel" ! Bootstrap.ariaLabelledBy (fromString headingId) $
         H.div ! A.class_ "panel-body" $
           H.pre # commentTextPre $ fromString content
   where

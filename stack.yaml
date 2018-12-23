@@ -3,17 +3,18 @@ packages:
 extra-deps:
   - git: https://github.com/poor-a/gssapi.git
     commit: 2e5e9c7be4ddef7d731fec200144ee39866ee209
-  - heist-1.0.1.1
-  - map-syntax-0.2.0.2
-  - snap-1.0.0.2
+  - heist-1.1.0.1
+  - map-syntax-0.3
+  - snap-1.1.2.0
   - git: https://github.com/poor-a/snaplet-fay.git
-    commit: 8840019049211889a7984e63c4e5118cb51fcc4d
-  - fay-base-0.20.0.1
-  - fay-0.23.1.16
+    commit: d716cf38b247b17703458a39e23eebab15946dc8
+  - pwstore-fast-2.4.4
   - fay-jquery-0.6.1.0
   - fay-text-0.3.2.2
   - xmlhtml-0.2.5.2
-  - spoon-0.3.1
-  - type-eq-0.5
-  - traverse-with-class-0.2.0.4
-resolver: lts-9.21
+  - pandoc-2.5
+  - HsYAML-0.1.1.2
+  - haddock-library-1.7.0
+  - hslua-1.0.1
+  - hslua-module-text-0.2.0
+resolver: lts-12.25

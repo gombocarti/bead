@@ -18,6 +18,9 @@ autoMarginLeft = StyleElement ["margin-left: auto"]
 
 noStyle = StyleElement []
 
+instance Semigroup StyleElement where
+  (<>) = mappend
+
 instance Monoid StyleElement where
   mempty = StyleElement []
   mappend (StyleElement a) (StyleElement b) = StyleElement (a ++ b)

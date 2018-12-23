@@ -69,6 +69,8 @@ bootStrapDocument settings body' = do
         when (needsLatex settings) $ do
           css "/katex/katex.min.css"
           js  "/katex/katex.min.js"
+          css "/katex/contrib/copy-tex.min.css"
+          js  "/katex/contrib/copy-tex.min.js"
           H.script $ fromString $ unwords
             [ "window.onload = function(){ var mathElements = document.getElementsByClassName(\"math\");"
             , "for (var i=0; i < mathElements.length; i++) {"

@@ -8,7 +8,7 @@ module Bead.Daemon.LDAP.Query (
 import           Control.Applicative
 import           Control.Arrow ((&&&), (***))
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Either
+import           Control.Monad.Except (ExceptT, runExceptT, throwError)
 import           Data.ByteString.Base64
 import qualified Data.ByteString.Char8 as BS
 import           Data.Either
@@ -51,10 +51,7 @@ exitCode f _ (ExitFailure y) = f y
 
 exitCode' f x = exitCode (const f) x
 
-raise :: String -> Query a
-raise = left
-
-type Query a = EitherT String (ReaderT QuerySettings IO) a
+type Query a = ExceptT String (ReaderT QuerySettings IO) a
 
 ldapsearch :: String -> [String] -> Query [(String,String)]
 ldapsearch username attrs = do
@@ -63,11 +60,11 @@ ldapsearch username attrs = do
     readProcessWithExitCode
       cmd (args ++ concat [usernameKey, "=", username] : attrs)
       "")
-    >>= maybe (raise "timed out") return
+    >>= maybe (throwError "timed out") return
   let out1 = DT.replace (fromString "\n ") (fromString "") $ fromString out
   let out2 = filter (not . DT.null) $ DT.lines out1
   let r    = map ((DT.unpack *** translate) . DT.break (== ':')) out2
-  exitCode' (raise err) (return r) ec
+  exitCode' (throwError err) (return r) ec
  where
    textToBS :: DT.Text -> BS.ByteString
    textToBS = BS.pack . DT.unpack
@@ -85,5 +82,5 @@ ldapsearch username attrs = do
 
 query :: QuerySettings -> String -> [String] -> IO QueryResult
 query cfg username attrs =
- fmap (either QueryError id) $ flip runReaderT cfg . runEitherT $ do
+ fmap (either QueryError id) $ flip runReaderT cfg . runExceptT $ do
    QueryOK <$> ldapsearch username attrs

@@ -62,6 +62,7 @@ configToConnectInfo c = defaultConnectInfo {
 
 runMySql pool query = runResourceT . runNoLoggingT $ runSqlPool query pool
 
+runMySqlConn :: ConnectInfo -> Persist a -> IO a
 runMySqlConn conn query = runResourceT . runNoLoggingT . withMySQLConn conn $ runSqlConn query
 
 createPersistInit :: Config -> IO PersistInit

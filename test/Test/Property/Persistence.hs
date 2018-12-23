@@ -33,7 +33,7 @@ import qualified Bead.Domain.Entity.Assignment as Assignment
 import Bead.Domain.Entity.Comment
 import Bead.Domain.Relationships
 import Bead.Domain.Shared.Evaluation
-import Test.QuickCheck
+import Test.QuickCheck as QuickCheck
 import Test.QuickCheck.Monadic
 import Test.Tasty
 import Test.Tasty.HUnit (testCase)
@@ -160,6 +160,7 @@ evaluationGroupSaveAndLoad = do
   saveAndLoadIdenpotent
     "Evaluation" (saveSubmissionEvaluation sk) (loadEvaluation) (Gen.evaluations cfg)
 
+success :: Int -> Args
 success n = stdArgs { maxSuccess = n, chatty = False }
 
 massTest = testCase "Mass Test" massPersistenceTest
@@ -438,10 +439,12 @@ massPersistenceTest = do
   return ()
 
 
+quick :: Testable a => Int -> PropertyM IO a -> IO ()
 quick n p = check (return ()) $ quickCheckWithResult (success n) $ monadicIO p
 
 quickWithCleanUp cleanup n p = check cleanup $ quickCheckWithResult (success n) $ monadicIO p
 
+check :: IO a -> IO QuickCheck.Result -> IO a
 check cleanup m = do
   x <- m
   case x of
@@ -630,7 +633,7 @@ submissionDetailsDescTest = test $ testCase "Every submission has a description"
     assertNonEmpty (Assignment.desc $ sdAssignment desc) "Description was empty"
     when (isJust (sdStatus desc)) $ assertNonEmpty (fromJust $ sdStatus desc) "Status was empty"
     assertNonEmpty (sdSubmission desc) "Submission text was empty"
-    forM (Map.toList $ sdComments desc) $ \(_,c) -> assertNonEmpty (comment c) "Comment was empty"
+    forM_ (Map.toList $ sdComments desc) $ \(_,c) -> assertNonEmpty (comment c) "Comment was empty"
 
 -- If the user administrates courses or groups, submission information about the
 -- submission of the group or course attendees. The number of the tables are same as
@@ -655,7 +658,7 @@ submissionTablesTest = test $ testCase "Submission tables" $ do
     acs <- runPersistCmd $ administratedCourses u
     ags <- runPersistCmd $ administratedGroups  u
     ts  <- runPersistCmd $ submissionTables     u
-    forM ts $ \t -> do
+    forM_ ts $ \t -> do
       assertNonEmpty (stiCourse t) "Course name was empty"
 --      assertTrue (length (stAssignments t) >= 0) "Invalid assignment list" TODO
       forM (stiUsers t) $ usernameCata (\u -> assertNonEmpty u "Username was empty")
@@ -1506,17 +1509,17 @@ tests = do
 
 propertyTests = group "Persistence Layer QuickCheck properties" $ do
   add initPersistenceLayer
-  add $ testProperty "Assignment Save and Load" $ monadicIO assignmentSaveAndLoad
-  add $ testProperty "Course Save and Load" $ monadicIO courseSaveAndLoad
+  add $ testProperty "Assignment Save and Load" $ monadicIO $ void assignmentSaveAndLoad
+  add $ testProperty "Course Save and Load" $ monadicIO $ void courseSaveAndLoad
   add $ testProperty "Group Save and Load" $ monadicIO groupSaveAndLoad
-  add $ testProperty "Course Assignment Save and Load" $ monadicIO courseAssignmentSaveAndLoad
-  add $ testProperty "Group Assignment Save and Load" $ monadicIO groupAssignmentSaveAndLoad
+  add $ testProperty "Course Assignment Save and Load" $ monadicIO $ void courseAssignmentSaveAndLoad
+  add $ testProperty "Group Assignment Save and Load" $ monadicIO $ void groupAssignmentSaveAndLoad
   add $ testProperty "User Save and Load" $ monadicIO (pick Gen.users >>= userSaveAndLoad)
-  add $ testProperty "Multiple groups for course" $ monadicIO multipleGroupsForCourse
-  add $ testProperty "Submission Save and Load" $ monadicIO saveAndLoadSubmission
+  add $ testProperty "Multiple groups for course" $ monadicIO $ void multipleGroupsForCourse
+  add $ testProperty "Submission Save and Load" $ monadicIO $ void saveAndLoadSubmission
   add $ testProperty "Assignment and user of submission" $ monadicIO assignmentAndUserOfSubmission
   add $ testProperty "Comment save and load" $ monadicIO saveAndLoadComment
-  add $ testProperty "Evaluation save and load" $ monadicIO evaluationGroupSaveAndLoad
+  add $ testProperty "Evaluation save and load" $ monadicIO $ void evaluationGroupSaveAndLoad
   add cleanUpPersistence
 
 

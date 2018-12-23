@@ -79,7 +79,7 @@ forStudentCFs ballotBox = filter forStudent where
 commentsDiv :: String -> UserTimeConverter -> [CommentOrFeedback] -> IHtml
 commentsDiv id_ t cs = do
   msg <- getI18N
-  return $ Bootstrap.panelGroup ! Bootstrap.role "tablist" ! Bootstrap.areaMultiselectable "true" $ do
+  return $ Bootstrap.panelGroup ! A.role "tablist" ! Bootstrap.areaMultiselectable "true" $ do
     mapM_ (commentPar msg id_ t) $ zip [1..] (sortDecreasingTime cs)
 
 commentPar :: I18N -> String -> UserTimeConverter -> (Int, CommentOrFeedback) -> Html

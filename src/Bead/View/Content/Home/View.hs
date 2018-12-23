@@ -29,7 +29,7 @@ import           Bead.View.Content.Home.Data
 homeContent :: HomePageData -> IHtml
 homeContent d = do
   let s = userState d
-      r = role s
+      r = Content.role s
       hasCourse = hasCourses d
       hasGroup  = hasGroups d
       testScripts = courseTestScripts d

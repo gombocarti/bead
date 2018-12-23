@@ -43,7 +43,8 @@ userAssignmentForSubmission key found notFound = do
   where
     foundAssignment (ak,desc,_) = (loadAssignment ak) >>= return . found desc
     findAssignmentKey = find (\(k,_v,_s) -> (k==key))
-    toList = Map.fold (++) []
+    toList :: Map.Map a [b] -> [b]
+    toList = foldr (++) []
 
 usersAssignment
   :: AssignmentKey
@@ -51,7 +52,7 @@ usersAssignment
   -> ContentHandler b
 usersAssignment = usersObject (fmap toList userAssignmentKeys) loadAssignment
   where
-    toList = Set.toList . Map.fold Set.union Set.empty
+    toList = Set.toList . foldr Set.union Set.empty
 
 usersSubmission
   :: AssignmentKey

@@ -584,8 +584,6 @@ dataParend = customAttribute "data-parent"
 
 formControl = class_ "form-control"
 
-role = customAttribute "role"
-
 areaMultiselectable = customAttribute "aria-multiselectable"
 
 -- | Adds a tooltip to a given HTML tag

@@ -36,7 +36,7 @@ ENV LC_ALL en_US.UTF-8
 
 # Install stack
 RUN curl -L https://www.stackage.org/stack/linux-x86_64 -o /usr/local/bin/stack.tar.gz && \
-    tar -C /usr/local/bin/ --strip-components=1 -xf /usr/local/bin/stack.tar.gz stack-1.7.1-linux-x86_64/stack && \
+    tar -C /usr/local/bin/ --strip-components=1 -xf /usr/local/bin/stack.tar.gz stack-1.9.3-linux-x86_64/stack && \
     chmod +x /usr/local/bin/stack
 
 # Create development dirs
