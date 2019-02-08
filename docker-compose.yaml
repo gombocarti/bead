@@ -14,7 +14,7 @@ services:
     user: dev
 
   mysql:
-    image: "mysql:5.7"
+    image: "mariadb:10.1"
     ports:
       - "3306:3306"
     networks:

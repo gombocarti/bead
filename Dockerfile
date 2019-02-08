@@ -1,7 +1,8 @@
-FROM debian:stretch-slim
+FROM debian:stretch
 
 # Download stack dependencies, locales, necessary Haskell tools and libs
 RUN apt-get update && \
+    apt-get upgrade -y --no-install-recommends && \
     apt-get install -y --no-install-recommends \
       g++ \
       gcc \
