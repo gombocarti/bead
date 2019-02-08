@@ -9,6 +9,7 @@ import           Bead.Domain.Relationships as R
 
 #ifdef TEST
 import           Control.Applicative
+import           Test.Tasty.Arbitrary (alphaNum)
 import           Test.Tasty.TestSet
 import           Test.QuickCheck.Gen
 import           Test.QuickCheck.Arbitrary (arbitrary)
@@ -1187,7 +1188,7 @@ pageGen = oneof [
       courseKey     = CourseKey . showInt     <$> choose (1,5000)
       groupKey      = GroupKey . showInt      <$> choose (1,5000)
       testScriptKey = TestScriptKey . showInt <$> choose (1,5000)
-      username      = E.Username <$> arbitrary
+      username      = E.Username <$> vectorOf 6 alphaNum
 
       nonParametricPages = elements [
           index ()
