@@ -10,7 +10,7 @@ import           Text.JSON.Generic (encodeJSON)
 
 import qualified Bead.Domain.Entities          as Domain
 import qualified Bead.Domain.Relationships     as Domain
-import qualified Bead.Domain.Shared.Evaluation as Domain
+import qualified Bead.Domain.Evaluation as Domain
 import           Bead.Persistence.SQL.Class
 import           Bead.Persistence.SQL.Entities
 import           Bead.Persistence.SQL.JSON

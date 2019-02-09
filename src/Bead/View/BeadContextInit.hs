@@ -85,8 +85,6 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
 
   rp <- nestSnaplet "randompassword" randomPasswordContext passwordGeneratorSnaplet
 
-  fs <- nestSnaplet "fay" fayContext $ initFay
-
   ts <- nestSnaplet "tempdir" tempDirContext $ tempDirectorySnaplet tempDir
 
   cs <- nestSnaplet "config" configContext $ configurationServiceContext config
@@ -114,15 +112,15 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
   return $
 #ifdef SSO
 #ifdef EmailEnabled
-    BeadContext auth ss ds se rp fs ts cs tz dl ldap
+    BeadContext auth ss ds se rp ts cs tz dl ldap
 #else
-    BeadContext auth ss ds rp fs ts cs tz dl ldap
+    BeadContext auth ss ds rp ts cs tz dl ldap
 #endif
 #else
 #ifdef EmailEnabled
-    BeadContext auth ss ds se rp fs ts cs un tz dl
+    BeadContext auth ss ds se rp ts cs un tz dl
 #else
-    BeadContext auth ss ds rp fs ts cs un tz dl
+    BeadContext auth ss ds rp ts cs un tz dl
 #endif
 #endif
   where

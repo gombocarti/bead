@@ -45,7 +45,7 @@ userDataChange = do
     <*> getParameter userTimeZonePrm
     <*> getParameter userLanguagePrm
     <*> getParameter uidPrm
-  return $ UpdateUser user
+  setUserAction $ UpdateUser user
 
 userDetailForm :: [TimeZoneName] -> User -> DictionaryInfos -> IHtml
 userDetailForm timeZones user dictionaries = do
@@ -59,7 +59,7 @@ userDetailForm timeZones user dictionaries = do
   where
     userDetailsFields msg = do
 #ifdef SSO
-      Bootstrap.selection (fieldName userRoleField) (== u_role user) (roles msg)
+      Bootstrap.selection' (fieldName userRoleField) (== u_role user) (roles msg)
       emailCata (Bootstrap.labeledText (msg $ msg_Input_User_Email "Email") . fromString) (u_email user)
       hiddenInput (fieldName userEmailField) (emailCata id $ u_email user)
       Bootstrap.labeledText (msg $ msg_Input_User_FullName "Full name") $ fromString (u_name user)

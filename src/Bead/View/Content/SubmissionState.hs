@@ -18,11 +18,11 @@ import qualified Text.Blaze.Html5 as H
 import           Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5.Attributes as A
 
-import           Bead.Domain.Shared.Evaluation (EvResult)
+import           Bead.Domain.Evaluation (EvResult)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content
 import           Bead.View.Content.VisualConstants (displayableFreeFormResultLength)
-import qualified Bead.Domain.Shared.Evaluation as Eval
+import qualified Bead.Domain.Evaluation as Eval
 
 data Style a = Style {
     nonEvaluated :: I18N -> a

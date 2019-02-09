@@ -70,7 +70,7 @@ homeContent d = do
                   , "name of a course."
                   ]
                 Bootstrap.row $ Bootstrap.colMd12 $ ul ! class_ "list-group" $ do
-                  let courseList = sortBy (compareHun `on` (courseName . snd)) $ Map.toList $ administratedCourseMap d
+                  let courseList = sortBy (compareHu `on` (courseName . snd)) $ Map.toList $ administratedCourseMap d
                   forM_ courseList $ \(ck, c) ->
                     li ! class_ "list-group-item"
                        $ a ! href (fromString $ routeOf (courseOverview ck))
@@ -153,7 +153,7 @@ htmlAssessmentTable board
             H.th . fromString . msg $ msg_Home_AssessmentTable_StudentName "Name"
             H.th . fromString . msg $ msg_Home_AssessmentTable_Username "Username"
             forM_ (zip sortedAssessments [1..]) (assessmentViewButton msg)
-          forM_ (sortBy (compareHun `on` ud_fullname) (sbUsers board)) (userLine msg)
+          forM_ (sortBy (compareHu `on` ud_fullname) (sbUsers board)) (userLine msg)
       where
         assessmentViewButton :: I18N -> ((AssessmentKey,Assessment),Int) -> Html
         assessmentViewButton msg ((ak,as),n) = H.td $ Bootstrap.customButtonLink style modifyLink assessmentName (show n)
@@ -298,7 +298,7 @@ availableAssignments pd timeconverter studentAssignments
                  ! A.class_ "glyphicon glyphicon-lock"
                  $ mempty
       td (fromString . aGroup $ aDesc)
-      td (fromString . join . intersperse ", " . sortHun . aTeachers $ aDesc)
+      td (fromString . join . intersperse ", " . sortHu . aTeachers $ aDesc)
       td $ Bootstrap.link (routeOf (Pages.submission a ())) (aTitle aDesc)
       when isLimited $ td (fromString . limit $ aLimit aDesc)
       td (fromString . showDate . timeconverter $ aEndDate aDesc)

@@ -109,14 +109,12 @@ labels =
  , "msg_Administration_CourseAdmins_Admins"
 
  , "msg_NewAssignment_Title"
- , "msg_NewAssignment_Title_Default"
  , "msg_NewAssignment_SubmissionDeadline"
  , "msg_NewAssignment_StartDate"
  , "msg_NewAssignment_EndDate"
  , "msg_NewAssignment_Description"
  , "msg_NewAssignment_Description_Default"
  , "msg_NewAssignment_Markdown"
- , "msg_NewAssignment_CanBeUsed"
  , "msg_NewAssignment_Properties"
  , "msg_NewAssignment_Course"
  , "msg_NewAssignment_Group"
@@ -152,9 +150,15 @@ labels =
  , "msg_NewAssignment_Info_Isolated"
  , "msg_NewAssignment_Info_NoOfTries"
  , "msg_NewAssignment_NoOfTries"
+ , "msg_NewAssignment_MustBePositive"
+ , "msg_NewAssignment_MustBeAPositiveInt"
+ , "msg_NewAssignment_CannotBeEmpty"
+
  , "msg_NewAssignment_FreeFormEvaluation"
 
 
+ , "msg_Assessment_CannotBeEmpty"
+ , "msg_Assessment_CannotChange"
  , "msg_NewAssessment_Title"
  , "msg_NewAssessment_Description"
  , "msg_NewAssessment_StudentName"

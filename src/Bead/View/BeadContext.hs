@@ -295,7 +295,6 @@ data BeadContext = BeadContext {
   , _sendEmailContext   :: Snaplet SendEmailContext
 #endif
   , _randomPasswordContext :: Snaplet PasswordGeneratorContext
-  , _fayContext     :: Snaplet Fay
   , _tempDirContext :: Snaplet TempDirectoryContext
   , _configContext  :: Snaplet ConfigServiceContext
 #ifndef SSO

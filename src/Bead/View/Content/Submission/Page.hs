@@ -23,7 +23,7 @@ import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
 import qualified Bead.Domain.Entities as E
 import qualified Bead.Domain.Entity.Assignment as Assignment
-import qualified Bead.Domain.Shared.Evaluation as Eval
+import qualified Bead.Domain.Evaluation as Eval
 import           Bead.View.Content hiding (submissionForm)
 import qualified Bead.View.Content as C
 import           Bead.View.ContentHandler (modifyPageSettings)
@@ -101,13 +101,13 @@ submissionPostHandler = do
   if Assignment.isPasswordProtected aspects
     -- Password-protected assignment
     then do pwd <- getParameter (stringParameter (fieldName submissionPwdField) "Submission password")
-            if Assignment.getPassword aspects == pwd
+            if Assignment.getPassword aspects == Just pwd
               -- Passwords do match
-              then newSubmission ak aspects uploadResult
+              then setUserAction =<< newSubmission ak aspects uploadResult
               -- Passwords do not match
-              else return . ErrorMessage $ msg_Submission_InvalidPassword "Invalid password, the solution could not be submitted!"
+              else setUserAction $ ErrorMessage $ msg_Submission_InvalidPassword "Invalid password, the solution could not be submitted!"
     -- Non password protected assignment
-    else newSubmission ak aspects uploadResult
+    else newSubmission ak aspects uploadResult >>= setUserAction
   where
     newSubmission ak as up =
       if (not $ Assignment.isZippedSubmissions as)
@@ -168,7 +168,7 @@ submissionContent p = do
     Bootstrap.rowColMd12 $ Bootstrap.table $
       H.tbody $ do
         (msg $ msg_Submission_Course "Course: ")         .|. (aGroup $ asDesc p)
-        (msg $ msg_Submission_Admin "Teacher: ")         .|. (concat . intersperse ", " . sortHun . aTeachers $ asDesc p)
+        (msg $ msg_Submission_Admin "Teacher: ")         .|. (concat . intersperse ", " . sortHu . aTeachers $ asDesc p)
         (msg $ msg_Submission_Assignment "Assignment: ") .|. (Assignment.name $ asValue p)
         (msg $ msg_Submission_Deadline "Deadline: ")     .|.
           (showDate . (asTimeConv p) . Assignment.end $ asValue p)
@@ -213,14 +213,14 @@ submissionContent p = do
             assignmentPassword msg
             if (Assignment.isZippedSubmissions aspects)
               then
-                Bootstrap.formGroup $ do
+                Bootstrap.formGroup' $ do
                   Bootstrap.helpBlock $
                     (msg $ msg_Submission_Info_File
                       "Please select a file with .zip extension to submit.  Note that the maximum file size in kilobytes: ") ++
                     (fromString $ show $ asMaxFileSize p)
                   fileInput (fieldName submissionFileField)
               else
-                Bootstrap.textArea (fieldName submissionTextField) "" Bootstrap.Medium ""
+                Bootstrap.textArea' (fieldName submissionTextField) "" Bootstrap.Medium ""
             Bootstrap.submitButton (fieldName submitSolutionBtn) (fromString $ msg $ msg_Submission_Submit "Submit")
         else
           Bootstrap.alert Bootstrap.Danger $ H.p $ fromString . msg $

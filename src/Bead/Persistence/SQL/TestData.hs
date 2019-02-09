@@ -3,7 +3,7 @@ module Bead.Persistence.SQL.TestData where
 
 import Bead.Domain.Entities
 import Bead.Domain.Relationships
-import Bead.Domain.Shared.Evaluation
+import Bead.Domain.Evaluation
 
 course  = Course "name" "desc" TestScriptSimple
 

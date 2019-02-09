@@ -11,7 +11,7 @@ import Text.Printf (printf)
 import Bead.Domain.Types (readMaybe)
 import Bead.Domain.Entities hiding (name)
 import Bead.Domain.Relationships
-import Bead.Domain.Shared.Evaluation
+import Bead.Domain.Evaluation
 import Bead.View.TemplateAndComponentNames
 import Bead.View.Fay.Hooks
 import Bead.View.Fay.HookIds
@@ -448,7 +448,7 @@ unsubscribeUserGroupKeyPrm :: Parameter GroupKey
 unsubscribeUserGroupKeyPrm = customGroupKeyPrm groupKeyParamName
 
 #ifdef TEST
-
+-- TODO needed?
 -- Test create Just . id = encode . decode property
 encodeDecodeProp :: (Eq a) => Parameter a -> (a -> Bool)
 encodeDecodeProp = encodeDecodeCompare (==)

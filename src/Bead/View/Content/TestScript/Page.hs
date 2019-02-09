@@ -57,7 +57,7 @@ postNewTestScript = do
     Story.isAdministratedCourse ck
     (course,_groupkeys) <- Story.loadCourse ck
     return (script' $ courseTestScriptType course)
-  return $ UA.CreateTestScript ck script
+  setUserAction $ UA.CreateTestScript ck script
 
 modifyTestScriptPage :: GETContentHandler
 modifyTestScriptPage = withUserState $ \s -> do
@@ -80,7 +80,7 @@ postModifyTestScript = do
   script <- userStory $ do
     (testscript, _coursekey) <- Story.loadTestScript tsk
     return (script' $ tsType testscript)
-  return $ UA.ModifyTestScript tsk script
+  setUserAction $ UA.ModifyTestScript tsk script
 
 testScriptContent :: PageData -> IHtml
 testScriptContent pd = pageDataCata checkIfThereCourses modify pd
@@ -107,24 +107,24 @@ hasPageContent pd = do
   return $ do
     Bootstrap.row $ Bootstrap.colMd12 $ H.form $ do
       postForm (routeOf $ testScriptPage pd) $ do
-        Bootstrap.textInput
+        Bootstrap.textInput'
           (fieldName testScriptNameField)
           (fromString . msg $ msg_NewTestScript_Name "Name")
           (maybe mempty fromString $ testScriptName pd)
-        Bootstrap.textInput
+        Bootstrap.textInput'
           (fieldName testScriptDescField)
           (fromString . msg $ msg_NewTestScript_Description "Description")
           (maybe mempty fromString $ testScriptDesc pd)
 
         testScriptCourse msg pd
 
-        Bootstrap.textArea
+        Bootstrap.textArea'
           (fieldName testScriptScriptField)
           (fromString . msg $ msg_NewTestScript_Script "Test script")
           Bootstrap.Medium
           (maybe mempty fromString $ testScriptScript pd)
 
-        Bootstrap.textArea
+        Bootstrap.textArea'
           (fieldName testScriptNotesField)
           (fromString . msg $ msg_NewTestScript_Notes "Help for writing test cases")
           Bootstrap.Medium
@@ -141,7 +141,7 @@ hasPageContent pd = do
     testScriptNotes = pageDataCata (const Nothing) (const2 (Just . tsNotes))
     testScriptScript = pageDataCata (const Nothing) (const2 (Just . tsScript))
     testScriptCourse msg = pageDataCata
-      (Bootstrap.selection (fieldName testScriptCourseKeyField) (const False) . Prelude.map (Prelude.id *** courseNameAndType))
+      (Bootstrap.selection' (fieldName testScriptCourseKeyField) (const False) . Prelude.map (Prelude.id *** courseNameAndType))
       (\courseName _key _script -> fromString courseName)
       where
         courseNameAndType c = concat

@@ -39,7 +39,7 @@ data FeedbackInfo
   | Evaluated { evalResult :: EvResult, evalComment :: String, evalAuthor :: String }
     -- ^ Stores the evaluation result at a time, to be able to show later on, if the
     -- evaluation changes over time.
-  deriving (Data, Eq, Read, Show, Typeable)
+  deriving (Eq, Show, Data)
 
 feedbackInfo
   result
@@ -75,7 +75,7 @@ instance Arbitrary FeedbackInfo where
 -- | Feedback consist of a piece of information and a date when the information
 -- is posted intot the system.
 data Feedback = Feedback { info :: FeedbackInfo, postDate :: UTCTime }
-  deriving (Data, Eq, Read, Show, Typeable)
+  deriving (Eq, Show)
 
 feedback g f (Feedback i p) = f (g i) p
 

@@ -5,6 +5,7 @@ module Bead.View.Content.Public.ResetPassword (
   ) where
 
 import           Data.String (fromString)
+import qualified Data.Text as T
 
 import qualified Text.Blaze.Html5 as H
 
@@ -23,8 +24,14 @@ resetPassword = do
   msg <- getI18N
   return $ do
     Bootstrap.rowCol4Offset4 $ postForm "/reset_pwd" $ do
-      Bootstrap.textInput (name regUsernamePrm) (msg $ msg_ResetPassword_Username "Username:") ""
-      Bootstrap.textInput (name regEmailPrm)    (msg $ msg_ResetPassword_Email "Email") ""
+      Bootstrap.formGroup
+        (T.pack . msg $ msg_ResetPassword_Username "Username")
+        (Bootstrap.textInput (T.pack $ name regUsernamePrm) Bootstrap.PlainText Nothing)
+        []
+      Bootstrap.formGroup
+        (T.pack . msg $ msg_ResetPassword_Email "Email")
+        (Bootstrap.textInput (T.pack $ name regEmailPrm) Bootstrap.PlainText Nothing)
+        []
       Bootstrap.submitButton (fieldName pwdSubmitBtn) (msg $ msg_ResetPassword_NewPwdButton "New password")
     Bootstrap.rowCol4Offset4 $ Bootstrap.buttonGroupJustified $
       Bootstrap.buttonLink "/" (msg $ msg_ResetPassword_GoBackToLogin "Back to login")

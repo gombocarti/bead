@@ -17,4 +17,8 @@ extra-deps:
   - haddock-library-1.7.0
   - hslua-1.0.1
   - hslua-module-text-0.2.0
+  - git: https://github.com/poor-a/digestive-functors.git
+    commit: 847d45a2f7e56b79110ddaa3ec361dbc806fb28b
+    subdirs:
+        - digestive-functors
 resolver: lts-12.25

@@ -61,6 +61,7 @@ submitGroup :: POSTContentHandler
 submitGroup = UA.CreateGroup
   <$> getParameter (jsonCourseKeyPrm (fieldName courseKeyInfo))
   <*> getGroup
+  >>= setUserAction
 
 -- * Assign GroupAdmin to a group
 
@@ -71,6 +72,7 @@ submitGroupAdmin :: POSTContentHandler
 submitGroupAdmin = UA.CreateGroupAdmin
   <$> getParameter (jsonUsernamePrm (fieldName selectedGroupAdmin))
   <*> getParameter (jsonGroupKeyPrm (fieldName selectedGroup))
+  >>= setUserAction
 
 -- * View
 
@@ -104,9 +106,9 @@ courseAdminContent info = do
             -- Hidden message
             H.span ! A.id (fieldName pctHelpMessage) ! A.hidden "" $
               (fromString $ msg $ msg_CourseAdmin_PctHelpMessage "Minimum of percent to achieve by students")
-            Bootstrap.selection (fieldName courseKeyInfo) (const False) courses'
-            Bootstrap.textInput (fieldName groupNameField) (msg $ msg_Input_Group_Name "Title") ""
-            Bootstrap.textInput (fieldName groupDescField) (msg $ msg_Input_Group_Description "Description") ""
+            Bootstrap.selection' (fieldName courseKeyInfo) (const False) courses'
+            Bootstrap.textInput' (fieldName groupNameField) (msg $ msg_Input_Group_Name "Title") ""
+            Bootstrap.textInput' (fieldName groupDescField) (msg $ msg_Input_Group_Description "Description") ""
             Bootstrap.submitButton (fieldName createGroupBtn) (fromString $ msg $ msg_CourseAdmin_CreateCourse "Create group")
             hr
       -- Assign teacher to the group
@@ -115,8 +117,8 @@ courseAdminContent info = do
         nonEmpty (groups info) (H.p $ fromString . msg $ msg_CourseAdmin_NoGroups "There are no groups.") $
           nonEmpty (groupAdmins info) (H.p $ fromString . msg $ msg_CourseAdmin_NoGroupAdmins "There are no teachers.") $
           postForm (routeOf assignGroupAdmin) $ do
-            Bootstrap.selection (fieldName selectedGroup) (const False) groups'
-            Bootstrap.selection (fieldName selectedGroupAdmin) (const False) groupAdmins'
+            Bootstrap.selection' (fieldName selectedGroup) (const False) groups'
+            Bootstrap.selection' (fieldName selectedGroupAdmin) (const False) groupAdmins'
             Bootstrap.submitButton (fieldName assignGroupAdminBtn) (fromString $ msg $ msg_CourseAdmin_AssignAdmin_Button "Assign")
 
     Bootstrap.row $ Bootstrap.colMd12 $ hr

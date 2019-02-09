@@ -66,9 +66,9 @@ administrationContent info = do
       H.h3 $ (fromString . msg $ msg_Administration_NewCourse "New course")
       postForm (routeOf createCourse) $ do
         -- i18n msg $ inputPagelet emptyCourse
-        Bootstrap.textInput (fieldName courseNameField) (msg $ msg_Input_Course_Name "Title") ""
-        Bootstrap.textInput (fieldName courseDescField) (msg $ msg_Input_Course_Description "Description") ""
-        Bootstrap.selectionWithLabel
+        Bootstrap.textInput' (fieldName courseNameField) (msg $ msg_Input_Course_Name "Title") ""
+        Bootstrap.textInput' (fieldName courseDescField) (msg $ msg_Input_Course_Description "Description") ""
+        Bootstrap.selectionWithLabel'
           (fieldName testScriptTypeField)
           (msg $ msg_Input_Course_TestScript "Type of test script")
           (const False)
@@ -87,15 +87,15 @@ administrationContent info = do
             msg_Administration_HowToAddMoreAdmins
               "Further teachers can be added by modifying roles of users, then assign them to courses.")
           postForm (routeOf assignCourseAdmin) $ do
-            Bootstrap.selection (fieldName selectedCourse) (const False) courses'
-            Bootstrap.selection (fieldName selectedCourseAdmin) (const False) courseAdmins'
+            Bootstrap.selection' (fieldName selectedCourse) (const False) courses'
+            Bootstrap.selection' (fieldName selectedCourseAdmin) (const False) courseAdmins'
             Bootstrap.submitButton (fieldName assignBtn) (fromString . msg $ msg_Administration_AssignCourseAdminButton "Assign")
       courseAdministratorsTable msg (assignedCourseAdmins info)
     Bootstrap.row $ Bootstrap.colMd12 $ do
       H.h3 $ (fromString . msg $ msg_Administration_ChangeUserProfile "Modify users")
       getForm (routeOf userDetails) $ do
         -- i18n msg $ inputPagelet emptyUsername
-        Bootstrap.textInput (fieldName usernameField) "" ""
+        Bootstrap.textInput' (fieldName usernameField) "" ""
         Bootstrap.submitButton (fieldName selectBtn) (fromString . msg $ msg_Administration_SelectUser "Select")
   where
     noCourseAdminInfo msg coursesInfo = do
@@ -147,11 +147,12 @@ submitCourse :: POSTContentHandler
 submitCourse = UA.CreateCourseAdmin
   <$> getParameter (jsonUsernamePrm  (fieldName selectedCourseAdmin))
   <*> getParameter (jsonCourseKeyPrm (fieldName selectedCourse))
+  >>= setUserAction
 
 -- Create Course
 
 createCourse :: ModifyHandler
-createCourse = ModifyHandler $ UA.CreateCourse <$> getCourse
+createCourse = ModifyHandler $ UA.CreateCourse <$> getCourse >>= setUserAction
 
 getCourse :: ContentHandler Course
 getCourse = Course

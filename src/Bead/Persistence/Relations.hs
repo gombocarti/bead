@@ -63,7 +63,7 @@ import           Bead.Domain.Entities
 import qualified Bead.Domain.Entity.Assignment as Assignment
 import qualified Bead.Domain.Entity.Notification as Notification
 import           Bead.Domain.Relationships
-import           Bead.Domain.Shared.Evaluation
+import           Bead.Domain.Evaluation
 import           Bead.Persistence.Persist
 import           Bead.View.Translation
 

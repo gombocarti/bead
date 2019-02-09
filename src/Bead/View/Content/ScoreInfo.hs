@@ -11,13 +11,14 @@ import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 import           Data.String (fromString)
 
-import           Bead.View.Content hiding (notFound)
+import           Bead.View.Content (I18N, Translation, ScoreInfo)
+import qualified Bead.View.Content as C
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.VisualConstants
-import           Bead.Domain.Shared.Evaluation
+import           Bead.Domain.Evaluation
 
 scoreInfoToText :: String -> I18N -> ScoreInfo -> String
-scoreInfoToText notFound msg = scoreInfoAlgebra
+scoreInfoToText notFound msg = C.scoreInfoAlgebra
                                notFound
                                (\_ek result -> 
                                   evResultCata
@@ -27,7 +28,7 @@ scoreInfoToText notFound msg = scoreInfoAlgebra
                                   result)
 
 scoreInfoToRawText :: String -> I18N -> ScoreInfo -> String
-scoreInfoToRawText notFound msg = scoreInfoAlgebra
+scoreInfoToRawText notFound msg = C.scoreInfoAlgebra
                                   notFound
                                   (\_ek result -> 
                                    evResultCata
@@ -43,14 +44,14 @@ evResultToIcon msg = evResultCata (binaryCata (resultCata passed' failed')) perc
     failed' = failed msg
 
 scoreInfoToIcon :: I18N -> ScoreInfo -> Html
-scoreInfoToIcon msg = scoreInfoAlgebra notFound' $ \_ek -> evResultToIcon msg
+scoreInfoToIcon msg = C.scoreInfoAlgebra notFound' $ \_ek -> evResultToIcon msg
   where
     notFound' = notFound msg
 
 
 scoreInfoToIconLink :: I18N -> String -> String -> ScoreInfo -> Html
 scoreInfoToIconLink msg notFoundLink foundLink =
-  scoreInfoAlgebra (Bootstrap.link notFoundLink notFound') $ \_ek -> (Bootstrap.link foundLink . evResultToIcon msg)
+  C.scoreInfoAlgebra (Bootstrap.link notFoundLink notFound') $ \_ek -> (Bootstrap.link foundLink . evResultToIcon msg)
   where 
     notFound' = notFound msg
 
@@ -59,11 +60,11 @@ tooltip msg = A.title . fromString . msg
 
 notFound :: I18N -> Html
 notFound msg = H.i ! A.class_ "glyphicon glyphicon-stop" ! A.style "color:#AAAAAA; font-size: xx-large"
-                   ! tooltip msg (msg_SubmissionState_NonEvaluated "Non evaluated") $ mempty
+                   ! tooltip msg (C.msg_SubmissionState_NonEvaluated "Non evaluated") $ mempty
 
 accepted, rejected :: Translation String
-accepted = msg_SubmissionState_Accepted "Accepted"
-rejected = msg_SubmissionState_Rejected "Rejected"
+accepted = C.msg_SubmissionState_Accepted "Accepted"
+rejected = C.msg_SubmissionState_Rejected "Rejected"
 
 passed :: I18N -> Html
 passed msg = H.i ! A.class_ "glyphicon glyphicon-thumbs-up" ! A.style "color:#00FF00; font-size: xx-large"

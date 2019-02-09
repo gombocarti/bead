@@ -873,7 +873,7 @@ modifyAssessment ak a = logAction INFO ("modifies assessment " ++ show ak) $ do
                -- Overwrite the assignment type with the old one
                -- if there is a score for the given assessment
                evConfig <- Assessment.evaluationCfg <$> Persist.loadAssessment ak
-               return (a { Assessment.evaluationCfg = evConfig})
+               return (a { Assessment.evaluationCfg = evConfig })
              else return a
     Persist.modifyAssessment ak new
     now <- liftIO getCurrentTime

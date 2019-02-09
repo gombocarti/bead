@@ -19,7 +19,7 @@ import qualified Bead.View.Content.Bootstrap as Bootstrap
 groupRegistration = ViewModifyHandler groupRegistrationPage postGroupReg
 
 unsubscribeFromCourse =
-  ModifyHandler (UnsubscribeFromCourse <$> getParameter unsubscribeUserGroupKeyPrm)
+  ModifyHandler (UnsubscribeFromCourse <$> getParameter unsubscribeUserGroupKeyPrm >>= setUserAction)
 
 data GroupRegData = GroupRegData {
     groups :: [(GroupKey, GroupDesc)]
@@ -29,6 +29,7 @@ data GroupRegData = GroupRegData {
 postGroupReg :: POSTContentHandler
 postGroupReg = SubscribeToGroup
   <$> getParameter (jsonGroupKeyPrm (fieldName groupRegistrationField))
+  >>= setUserAction
 
 groupRegistrationPage :: GETContentHandler
 groupRegistrationPage = do

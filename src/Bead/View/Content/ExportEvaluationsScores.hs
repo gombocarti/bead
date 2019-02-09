@@ -82,7 +82,7 @@ evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter (n
                        (\_ _ assignments _ _ _ _ -> map (cgInfoCata id id) assignments)
 
     submissionTableToCsv :: SubmissionTableInfo -> (FilePath, Text)
-    submissionTableToCsv submissionTable = (filename, T.unlines (header : map userLine (L.sortBy (compareHun `on` (ud_fullname . fst)) (stiUserLines submissionTable))))
+    submissionTableToCsv submissionTable = (filename, T.unlines (header : map userLine (L.sortBy (compareHu `on` (ud_fullname . fst)) (stiUserLines submissionTable))))
       where
         filename :: FilePath
         filename = concat
@@ -136,7 +136,7 @@ assessmentCsvs msg groups scoreBoards = map scoreBoardToCsv (filter (not . null 
         header = T.intercalate "," ("" : "" : map (T.pack . Assess.title . snd) (sbAssessments board))
 
     userLines :: ScoreBoard -> [Text]
-    userLines board = map userLine (L.sortBy (compareHun `on` ud_fullname) (sbUsers board))
+    userLines board = map userLine (L.sortBy (compareHu `on` ud_fullname) (sbUsers board))
       where
         userLine :: UserDesc -> Text
         userLine uDesc = T.intercalate "," (fullname : uid : scores)

@@ -10,6 +10,7 @@ import Test.Tasty.TestSet (group)
 import Bead.Config (initTaskAssertions)
 import Bead.Config.Parser (parseTests)
 import Bead.Controller.Pages (pageDescTest)
+import Bead.Domain.String (compareHuTest)
 import Bead.Domain.Entities (asgTests, entityTests, feedbackTests)
 import Bead.Domain.Relationships (relationshipTests)
 import Bead.Domain.RolePermission (permissionTest)
@@ -40,6 +41,7 @@ tests = do
   group "Link text" linkTextTest
   group "Permissions" permissionTest
   group "Field name" fieldNameTest
+  group "CompareHu ordering" compareHuTests
   group "Entity" entityTests
   group "Relationships" relationshipTests
   group "Assignment" asgTests

@@ -9,33 +9,41 @@ module Bead.View.Content.Assessment.Page (
   , viewAssessment
   ) where
 
-import           Bead.View.Content
-import           Bead.View.Content.Bootstrap ((.|.))
+import           Bead.View.Content hiding (getForm, postForm)
+import           Bead.View.Content.Bootstrap ((.|.), FixedChoiceInput)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
+import qualified Bead.View.Content.Form as Form
 import           Bead.View.Content.ScoreInfo (scoreInfoToIcon)
 import           Bead.View.RequestParams
 import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
-import           Bead.Domain.Shared.Evaluation
-import           Data.String (fromString)
-import           Bead.Config (maxUploadSizeInKb)
-import           Bead.Domain.Types (readMaybe)
-
-import           Snap.Util.FileUploads
-import           System.Directory (doesFileExist)
+import qualified Bead.Domain.Entity.Assessment as A
+import           Bead.Domain.Evaluation
+import qualified Bead.Domain.JSON as JSON
 
 import           Data.Char (toUpper,isSpace)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.UTF8 as BsUTF8 (toString)
 import           Data.Function (on)
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
+import           Data.Maybe (listToMaybe, maybe, fromMaybe)
 import           Data.List (sortBy,intercalate)
-import           Data.String.Utils (strip)
-import           Data.Time (getCurrentTime)
+import           Data.String (fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Read as TR
+import           Data.Time (UTCTime, getCurrentTime)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 import           Text.Blaze.Html5 ((!))
+import qualified Text.Digestive as DF
+import           Text.Digestive ((.:))
+import           Text.Read (readMaybe)
+import           Control.Applicative ((<|>))
 import           Control.Monad (join,when)
+import           Control.Monad.Identity (Identity(Identity), runIdentity)
 import           Control.Monad.Trans (lift)
 import           Control.Monad.IO.Class (liftIO)
 
@@ -52,23 +60,24 @@ viewAssessment = ViewHandler viewAssessmentPage
 type Title = String
 type Description = String
 
-data PageData = PD_NewCourseAssessment CourseKey
-              | PD_NewGroupAssessment GroupKey
-              | PD_PreviewCourseAssessment CourseKey Title Description EvConfig [UserDesc] (M.Map UserDesc Evaluation)
-              | PD_PreviewGroupAssessment GroupKey Title Description EvConfig [UserDesc] (M.Map UserDesc Evaluation)
+data PageData = PD_NewCourseAssessment CourseKey Form.View
+              | PD_NewGroupAssessment GroupKey Form.View
+              | PD_PreviewCourseAssessment CourseKey (Maybe ([UserDesc], M.Map Uid Evaluation)) Form.View
+              | PD_PreviewGroupAssessment GroupKey (Maybe ([UserDesc], M.Map Uid Evaluation)) Form.View
               | PD_ModifyAssessment {
                   pdAKey             :: AssessmentKey
                 , pdAs               :: Assessment
-                , courseOrGroupKey   :: Either CourseKey GroupKey
+                , pdCourseOrGroupKey :: Either CourseKey GroupKey
                 , pdIsScoreSubmitted :: Bool
+                , pdFormContents     :: Form.View
                 }
               | PD_ModifyAssessmentPreview {
                   pdAKey             :: AssessmentKey
                 , pdAs               :: Assessment
-                , courseOrGroupKey   :: Either CourseKey GroupKey
+                , pdCourseOrGroupKey :: Either CourseKey GroupKey
                 , pdIsScoreSubmitted :: Bool
-                , users              :: [UserDesc]
-                , pdEvaluations      :: M.Map UserDesc Evaluation
+                , pdEvaluations      :: Maybe ([UserDesc], M.Map Uid Evaluation)
+                , pdFormContents     :: Form.View
                 } 
 
 pageDataAlgebra
@@ -80,96 +89,140 @@ pageDataAlgebra
   modifyAssessmentPreview
   pdata =
       case pdata of
-        PD_NewCourseAssessment ck -> newCourseAssessment ck
-        PD_NewGroupAssessment gk -> newGroupAssessment gk
-        PD_PreviewCourseAssessment ck title description evConfig users evaluations -> previewCourseAssessment ck title description evConfig users evaluations
-        PD_PreviewGroupAssessment gk title description evConfig users evaluations -> previewGroupAssessment gk title description evConfig users evaluations
-        PD_ModifyAssessment ak as cGKey isScoreSubmitted -> modifyAssessment ak as cGKey isScoreSubmitted
-        PD_ModifyAssessmentPreview ak as cGKey isScoreSubmitted users evaluations -> modifyAssessmentPreview ak as cGKey isScoreSubmitted users evaluations
+        PD_NewCourseAssessment ck formContents ->
+          newCourseAssessment ck formContents
+        PD_NewGroupAssessment gk formContents ->
+          newGroupAssessment gk formContents
+        PD_PreviewCourseAssessment ck evaluations formContents ->
+          previewCourseAssessment ck evaluations formContents
+        PD_PreviewGroupAssessment gk evaluations formContents ->
+          previewGroupAssessment gk evaluations formContents
+        PD_ModifyAssessment ak as cGKey isScoreSubmitted formContents ->
+          modifyAssessment ak as cGKey isScoreSubmitted formContents
+        PD_ModifyAssessmentPreview ak as cGKey isScoreSubmitted evaluations formContents ->
+          modifyAssessmentPreview ak as cGKey isScoreSubmitted evaluations formContents
 
-data UploadResult
-  = PolicyFailure
-  | File FilePath !ByteString
-  | InvalidFile
-  | UnnamedFile
-  deriving (Eq,Show)
+data EvConfigAccess = ReadOnly | ReadWrite
+
+evAccessCata :: a -> a -> EvConfigAccess -> a
+evAccessCata readOnly readWrite evAccess =
+  case evAccess of
+    ReadOnly -> readOnly
+    ReadWrite -> readWrite
+
+data FormData = FormData {
+    fdTitle           :: String
+  , fdDesc            :: String
+  , fdEvConfig        :: EvConfig
+  , fdPrevEvaluations :: T.Text
+  , fdNewEvaluations  :: M.Map Uid Evaluation
+  }
+
+formDataCata f (FormData title desc evConfig prevEvaluations newEvaluations) =
+  f title desc evConfig prevEvaluations newEvaluations
 
 newGroupAssessmentPage :: GETContentHandler
 newGroupAssessmentPage = do
+  msg <- i18nE
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
-  setPageContents $ fillAssessmentTemplate $ PD_NewGroupAssessment gk
+  let formContents = getForm (form msg Nothing)
+  setPageContents $ fillAssessmentTemplate $ PD_NewGroupAssessment gk formContents
 
 postNewGroupAssessment :: POSTContentHandler
 postNewGroupAssessment = do 
   msg <- i18nE
-  uploadResult <- uploadFile
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
-  title <- getParameter titleParam
-  description <- getParameter descriptionParam
-  evalConfig <- getParameter evConfigParam
-  now <- liftIO getCurrentTime
-  let visible = True
-      a = Assessment title description now evalConfig visible
-  case uploadResult of
-    [File _name contents] -> do
-      users <- userStory $ do
-        usernames <- Story.subscribedToGroup gk
-        mapM Story.loadUserDesc usernames
-      let evaluations = fromUserDescKey (toUserDescKey ud_uid users (parseEvaluations msg evalConfig (readCsv contents)))
-      return $ SaveScoresOfGroupAssessment gk a evaluations
-    _ -> do
-      evaluations <- read <$> getParameter evaluationsParam
-      return $ if M.null evaluations
-                 then CreateGroupAssessment gk a
-                 else SaveScoresOfGroupAssessment gk a evaluations
+  res <- postForm (form msg Nothing) Form.InsertFilesIntoView
+  case res of
+    (_, Just formData) -> do
+      now <- liftIO getCurrentTime
+      users <- usersInGroup gk
+      let assessment = formToAssessment now formData
+          evaluations = toUsernameKey (formToEvaluations msg users formData)
+      setUserAction $ if M.null evaluations
+                      then CreateGroupAssessment gk assessment
+                      else SaveScoresOfGroupAssessment gk assessment evaluations
+    (errors, _) -> do
+      setErrorContents $ fillAssessmentTemplate $ PD_NewGroupAssessment gk errors
+
+assessmentToForm :: Assessment -> FormData
+assessmentToForm = A.assessment (\title desc _creation evConfig _visible ->
+                                    FormData title desc evConfig "" M.empty)
+
+formToAssessment :: UTCTime -> FormData -> Assessment
+formToAssessment now = formDataCata (\title desc evConfig _prevEvaluations _newEvaluations ->
+                                       Assessment title desc now evConfig visible)
+  where
+    visible :: Bool
+    visible = True
+
+formToEvaluations :: I18N -> [UserDesc] -> FormData -> M.Map UserDesc Evaluation
+formToEvaluations msg users = formDataCata (\_title _desc evConfig prevEvaluations newEvaluations ->
+                                              let prev = case JSON.safeDecodeJSON prevEvaluations of
+                                                           JSON.Ok evaluations -> evaluationsOf users evaluations
+                                                           _                   -> M.empty
+                                                  new = evaluationsOf users newEvaluations
+                                              in if not $ M.null new
+                                                 then new
+                                                 else prev
+                                           )
+  where
+    evaluationsOf :: [UserDesc] -> M.Map Uid a -> M.Map UserDesc a
+    evaluationsOf users m = foldr f M.empty users
+      where 
+        f user acc = maybe acc (\a -> M.insert user a acc) (M.lookup (ud_uid user) m)
+
+toUsernameKey :: M.Map UserDesc a -> M.Map Username a
+toUsernameKey = M.mapKeys ud_username
+
+toUidKey :: M.Map UserDesc a -> M.Map Uid a
+toUidKey = M.mapKeys ud_uid
+
+usersInGroup :: GroupKey -> ContentHandler [UserDesc]
+usersInGroup gk = userStory $ do
+  usernames <- Story.subscribedToGroup gk
+  mapM Story.loadUserDesc usernames
+
+usersInCourse :: CourseKey -> ContentHandler [UserDesc]
+usersInCourse ck = userStory $ do
+  usernames <- Story.subscribedToCourse ck
+  mapM Story.loadUserDesc usernames
 
 newCourseAssessmentPage :: GETContentHandler
 newCourseAssessmentPage = do
+  msg <- i18nE
   ck <- getParameter $ customCourseKeyPrm courseKeyParamName
-  setPageContents $ fillAssessmentTemplate $ PD_NewCourseAssessment ck
+  let formContents = getForm (form msg Nothing)
+  setPageContents $ fillAssessmentTemplate $ PD_NewCourseAssessment ck formContents
 
 postNewCourseAssessment :: POSTContentHandler
 postNewCourseAssessment = do 
   msg <- i18nE
-  uploadResult <- uploadFile
-  title <- getParameter titleParam
   ck <- getParameter $ customCourseKeyPrm courseKeyParamName
-  description <- getParameter descriptionParam
-  evalConfig <- getParameter evConfigParam
-  now <- liftIO getCurrentTime
-  let visible = True
-      a = Assessment title description now evalConfig visible
-  case uploadResult of
-    [File _name contents] -> do
-      users <- userStory $ do
-        usernames <- Story.subscribedToCourse ck
-        mapM Story.loadUserDesc usernames
-      let evaluations = fromUserDescKey (toUserDescKey ud_uid users (parseEvaluations msg evalConfig (readCsv contents)))
-      return $ SaveScoresOfCourseAssessment ck a evaluations
-    _ -> do
-      evaluations <- read <$> getParameter evaluationsParam
-      return $ if M.null evaluations
-                 then CreateCourseAssessment ck a
-                 else SaveScoresOfCourseAssessment ck a evaluations
+  res <- postForm (form msg Nothing) Form.InsertFilesIntoView
+  case res of
+    (_, Just formData) -> do
+      now <- liftIO getCurrentTime
+      users <- usersInCourse ck
+      let assessment = formToAssessment now formData
+          evaluations = toUsernameKey (formToEvaluations msg users formData)
+      setUserAction $ if M.null evaluations
+                      then CreateCourseAssessment ck assessment
+                      else SaveScoresOfCourseAssessment ck assessment evaluations
+    (errors, _) -> do
+      setErrorContents $ fillAssessmentTemplate $ PD_NewCourseAssessment ck errors
 
-toUserDescKey :: Ord k => (UserDesc -> k) -> [UserDesc] -> M.Map k a -> M.Map UserDesc a
-toUserDescKey select users m = foldr f M.empty users
-    where 
-      f user acc = maybe acc (\a -> M.insert user a acc) (M.lookup (select user) m)
+parseEvaluations :: I18N -> EvConfig -> M.Map Uid T.Text -> M.Map Uid Evaluation
+parseEvaluations msg evConfig = M.mapMaybe (parseEvaluation msg evConfig)
 
-fromUserDescKey :: M.Map UserDesc a -> M.Map Username a
-fromUserDescKey = M.mapKeys ud_username
-
-parseEvaluations :: I18N -> EvConfig -> M.Map Uid String -> M.Map Uid Evaluation
-parseEvaluations msg evalConfig = M.mapMaybe (parseEvaluation msg evalConfig)
-
-parseEvaluation :: I18N -> EvConfig -> String -> Maybe Evaluation
-parseEvaluation _msg _evalConfig "" = Nothing
-parseEvaluation msg evalConfig s = evConfigCata 
-                                 (mkEval <$> readBinary)
-                                 (\_ -> mkEval <$> readPercentage)
-                                 (Just . mkEval . freeFormResult $ s)
-                                 evalConfig
+parseEvaluation :: I18N -> EvConfig -> T.Text -> Maybe Evaluation
+parseEvaluation _msg _evConfig "" = Nothing
+parseEvaluation  msg  evConfig  s = mkEval <$>
+                                    evConfigCata
+                                      readBinary
+                                      (const readPercentage)
+                                      (Just . freeFormResult . T.unpack $ s)
+                                      evConfig
     where mkEval :: EvResult -> Evaluation
           mkEval result = Evaluation result ""
 
@@ -180,151 +233,194 @@ parseEvaluation msg evalConfig s = evConfigCata
               where
                 isAccepted = normalized `elem` [accepted,"+","1"]
                 isRejected = normalized `elem` [rejected,"-","0"]
-                normalized = map toUpper (strip s)
-                accepted   = map toUpper (msg . msg_NewAssessment_Accepted $ "Accepted")
-                rejected   = map toUpper (msg . msg_NewAssessment_Rejected $ "Rejected")
+                normalized = T.toUpper (T.strip s)
+                accepted   = T.pack $ map toUpper (msg . msg_NewAssessment_Accepted $ "Accepted")
+                rejected   = T.pack $ map toUpper (msg . msg_NewAssessment_Rejected $ "Rejected")
 
           readPercentage :: Maybe EvResult
-          readPercentage = case readMaybe s :: Maybe Int of
-                             Just p -> if p >= 0 && p <= 100
-                                       then Just . percentageResult . (/100) . fromIntegral $ p
-                                       else Nothing
-                             Nothing -> Nothing
-
-titleParam = stringParameter "n1" "Title"
-descriptionParam = stringParameter "n2" "Description"
-evaluationsParam = stringParameter "evaluations" "Evaluations"
-evConfigParam = evalConfigParameter "evConfig"
+          readPercentage = case TR.decimal s of
+                             Right (n, _) ->
+                               if n >= 0 && n <= 100
+                               then Just . percentageResult . (/100) . fromIntegral $ n
+                               else Nothing
+                             Left _ -> Nothing
 
 fillNewGroupAssessmentPreviewPage :: ViewPOSTContentHandler
 fillNewGroupAssessmentPreviewPage = do
   msg <- i18nE
-  uploadResult <- uploadFile
-  title <- getParameter titleParam
-  description <- getParameter descriptionParam
-  evConfig <- getParameter evConfigParam
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
-  let [File _name contents] = uploadResult
-  users <- userStory $ do
-    usernames <- Story.subscribedToGroup gk
-    mapM Story.loadUserDesc usernames
-  let evaluations = toUserDescKey ud_uid users (parseEvaluations msg evConfig (readCsv contents))
-  setPageContents $ fillAssessmentTemplate $ PD_PreviewGroupAssessment gk title description evConfig users evaluations
+  postResult <- postForm (form msg Nothing) Form.InsertFilesIntoView
+  case postResult of
+    (v, Just formData) -> do
+      users <- usersInGroup gk
+      let evaluations = toUidKey (formToEvaluations msg users formData)
+      setPageContents $ fillAssessmentTemplate $ PD_PreviewGroupAssessment gk (Just (users, evaluations)) v
+    (errors, _) ->
+      setPageContents $ fillAssessmentTemplate $ PD_PreviewGroupAssessment gk Nothing errors
 
-uploadFile :: ContentHandler [UploadResult]
-uploadFile = do
-  results <- beadHandler $ do
-    tmpDir <- getTempDirectory
-    size <- maxUploadSizeInKb <$> getConfiguration
-    let maxSize = fromIntegral (size * 1024)
-    let uploadPolicy = setMaximumFormInputSize maxSize defaultUploadPolicy
-    let perPartUploadPolicy = const $ allowWithMaximumSize maxSize
-    handleFileUploads tmpDir uploadPolicy perPartUploadPolicy handlePart
-  return $ filter isFile results
-        where
-          handlePart _partInfo (Left _exception) = return PolicyFailure
-          handlePart partInfo (Right filePath) =
-            case (partFileName partInfo) of
-              Just fp | not (B.null fp) -> do
-                contents <- liftIO $ do
-                  exists <- doesFileExist filePath
-                  if exists
-                    then do
-                      body <- B.readFile filePath
-                      return $ Just body
-                    else return $ Nothing
-                return $ case contents of
-                  Just body -> File (unpack fp) body
-                  _         -> InvalidFile
-              _         -> return UnnamedFile
-
-          isFile :: UploadResult -> Bool
-          isFile (File _ _) = True
-          isFile _          = False
-                         
 fillNewCourseAssessmentPreviewPage :: ViewPOSTContentHandler
 fillNewCourseAssessmentPreviewPage = error "fillNewCourseAssessmentPreviewPage is undefined"
 
-fillAssessmentTemplate :: PageData -> IHtml
-fillAssessmentTemplate pdata = do
-  msg <- getI18N
-  return $ do
-    Bootstrap.rowColMd12 $ do
-      H.form ! A.method "post" $ do
-        Bootstrap.textInputWithDefault "n1" (titleLabel msg) title
-        Bootstrap.optionalTextInputWithDefault "n2" (descriptionLabel msg) description
-        if readOnlyEvType
-          then showEvaluationType msg selectedEvType
-          else evTypeSelection msg selectedEvType
-        Bootstrap.formGroup $ fileInput "csv"
-        Bootstrap.row $ do
-          Bootstrap.colMd4 (previewButton msg ! A.disabled "")
-          Bootstrap.colMd4 (downloadCsvButton msg)
-          Bootstrap.colMd4 (commitButton msg)
-        let csvTable users evaluations = do
-              previewTable msg users evaluations
-              hiddenInput "evaluations" (show (fromUserDescKey evaluations))
-            noPreview = hiddenInput "evaluations" (show (M.empty :: M.Map Username Evaluation))
-            
-        pageDataAlgebra
-          (\_ -> noPreview)
-          (\_ -> noPreview)
-          (\_ _ _ _ users evaluations -> csvTable users evaluations)
-          (\_ _ _ _ users evaluations -> csvTable users evaluations)
-          (\_ _ _ _ -> noPreview)
-          (\_ _ _ _ users evaluations -> csvTable users evaluations)
-          pdata
-        enablePreviewButton
+assTitle :: T.Text
+assTitle = "title"
+
+assDesc :: T.Text
+assDesc = "desc"
+
+assEvConfig :: T.Text
+assEvConfig = "evConfig"
+
+assPrevEvaluations :: T.Text
+assPrevEvaluations = "evaluations_prev"
+
+assNewEvaluations :: T.Text
+assNewEvaluations = "evaluations_new"
+
+formName :: T.Text
+formName = "assessment"
+
+getForm :: Form.Form a -> Form.View
+getForm = Form.getForm formName
+
+postForm :: Form.Form a -> Form.UploadPolicy -> ContentHandler (Form.View, Maybe a)
+postForm = Form.postForm formName
+
+form :: I18N -> Maybe FormData -> Form.Form FormData
+form msg defaults = formData <$>
+  assTitle .: DF.check (T.pack $ msg $ msg_Assessment_CannotBeEmpty "Cannot be empty.") (not . null) (DF.string (fdTitle <$> defaults))
+  <*>
+  assDesc .: DF.string (fdDesc <$> defaults)
+  <*>
+  assEvConfig .: (maybe id (\ev -> DF.check (T.pack $ msg $ msg_Assessment_CannotChange "Cannot change.") (== ev)) (fdEvConfig <$> defaults) $ evConfig (fdEvConfig <$> defaults))
+  <*>
+  assPrevEvaluations .: DF.text (fdPrevEvaluations <$> defaults)
+  <*>
+  assNewEvaluations .: DF.text Nothing
+  where
+    formData :: String -> String -> EvConfig -> Text -> Text -> FormData
+    formData title desc evConfig prevEvaluations newEvaluations = FormData {
+        fdTitle           = title
+      , fdDesc            = desc
+      , fdEvConfig        = evConfig
+      , fdPrevEvaluations = prevEvaluations
+      , fdNewEvaluations  = parseEvaluations msg evConfig (readCsv newEvaluations)
+      }
+
+    evConfig :: Maybe EvConfig -> Form.Form EvConfig
+    evConfig = DF.choice options
+      where
+        options :: [(EvConfig, T.Text)]
+        options = [ (binaryConfig, binary)
+                  , (percentageConfig 0, percentage)
+                  , (freeFormConfig, freeForm)
+                  ]
+
+        binary = T.pack $ msg $ msg_NewAssessment_BinaryEvaluation $ "Binary"
+        percentage = T.pack $ msg $ msg_NewAssessment_PercentageEvaluation $ "Percentage"
+        freeForm = T.pack $ msg $ msg_NewAssessment_FreeFormEvaluation $ "Free form textual"
+
+    evaluations :: String -> Maybe (M.Map Uid T.Text) -> Form.Form (M.Map Uid T.Text)
+    evaluations v evals = DF.validate (DF.Success . readCsv) (DF.text ((T.pack . show) <$> evals))
+
+view :: I18N -> PageData -> EvConfigAccess -> Form.View -> H.Html
+view msg pdata evAccess v = H.form ! A.method "post" ! A.enctype "multipart/form-data" $ do
+  Bootstrap.formGroup
+    (T.pack . msg . msg_NewAssessment_Title $ "Title")
+    (Bootstrap.with (Form.textInput assTitle v) [Bootstrap.required])
+    (Form.errorOf assTitle v)
+  Bootstrap.formGroup
+    (T.pack . msg . msg_NewAssessment_Description $ "Description")
+    (Form.textInput assDesc v)
+    (Form.errorOf assDesc v)
+  evConfig msg
+  hiddenInput (T.unpack $ DF.absoluteRef assPrevEvaluations v) (T.unpack $ JSON.encodeJSON evaluations)
+  Bootstrap.formGroup
+    "Csv"
+    (Form.file assNewEvaluations v)
+    Nothing
+  Bootstrap.row $ do
+    Bootstrap.colMd4 (previewButton msg ! A.disabled "")
+    Bootstrap.colMd4 (downloadCsvButton msg)
+    Bootstrap.colMd4 (commitButton msg)
+  enablePreviewButton
 
   where
-    titleLabel msg = msg . msg_NewAssessment_Title $ "Title"
-    descriptionLabel msg = msg . msg_NewAssessment_Description $ "Description"
+    evConfig :: I18N -> H.Html
+    evConfig msg = evAccessCata readonly readwrite evAccess
+      where
+        readonly :: H.Html
+        readonly = do
+          Bootstrap.formGroup
+            evalType
+            (Bootstrap.with selection [Bootstrap.disabled])
+            Nothing
+          fromString . msg $ msg_NewAssessment_EvalTypeWarn "The evaluation type can not be modified, there is a score for the assessment."
 
-    formAction :: Pages.PageDesc -> String -> H.Attribute
-    formAction page encType = A.onclick (fromString $ concat ["javascript: form.action='", routeOf page, "'; form.enctype='", encType, "';"])
-                              
-    previewButton msg = Bootstrap.submitButtonWithAttr
-                    (formAction preview "multipart/form-data" <> A.id "preview")
-                    (msg . msg_NewAssessment_PreviewButton $ "Preview")
-    downloadCsvButton msg = Bootstrap.blockButtonLink
-                        getCsvLink
-                        (msg . msg_NewAssessment_GetCsvButton $ "Get CSV")
-    commitButton msg = Bootstrap.submitButtonWithAttrColorful
-                   (formAction commit "multipart/form-data")
-                   (msg . msg_NewAssessment_SaveButton $ "Commit")
+        readwrite :: H.Html
+        readwrite = Bootstrap.formGroup evalType selection Nothing
 
-    enablePreviewButton = H.script . fromString $ unwords
-                            [ "document.getElementById('csv').onchange = function() {"
-                            , "  document.getElementById('preview').disabled = false;"
-                            , "};"
-                            ]
+        selection :: FixedChoiceInput
+        selection = Form.selection assEvConfig v
 
-    title, description :: String
-    (title,description) = pageDataAlgebra
-                            (\_ -> ("",""))
-                            (\_ -> ("",""))
-                            (\_ title description _ _ _ -> (title,description))
-                            (\_ title description _ _ _ -> (title,description))
-                            (\_ as _ _ -> assessment (\title description _ _ _ -> (title,description)) as)
-                            (\_ as _ _ _ _ -> assessment (\title description _ _ _ -> (title,description)) as)
-                            pdata
+        evalType :: Text
+        evalType = T.pack . msg . msg_NewAssessment_EvaluationType $ "Evaluation Type"
+
+    evaluations :: M.Map Uid Evaluation
+    evaluations =
+      pageDataAlgebra
+        (\_ _ -> M.empty)
+        (\_ _ -> M.empty)
+        (\_ evs _ -> maybe M.empty snd evs)
+        (\_ evs _ -> maybe M.empty snd evs)
+        (\_ _ _ _ _ -> M.empty)
+        (\_ _ _ _ evs _ -> maybe M.empty snd evs)
+        pdata
+
+    title msg = msg . msg_NewAssessment_Title $ "Title"
+    description msg = msg . msg_NewAssessment_Description $ "Description"
+
+    previewId :: T.Text
+    previewId = "preview"
+
+    previewButton msg =
+      Bootstrap.submitButtonWithAttr
+        (formAction preview <> A.id (H.toValue previewId))
+        (msg . msg_NewAssessment_PreviewButton $ "Preview")
+
+    downloadCsvButton msg =
+      Bootstrap.blockButtonLink
+        getCsvLink
+        (msg . msg_NewAssessment_GetCsvButton $ "Get CSV")
+      
+    commitButton msg =
+      Bootstrap.submitButtonWithAttrColorful
+        (formAction commit)
+        (msg . msg_NewAssessment_SaveButton $ "Commit")
+
+    enablePreviewButton =
+      H.script . H.toMarkup $ T.concat
+        [ "document.getElementById('" , DF.absoluteRef assNewEvaluations v, "').onchange = function() {"
+        , "  document.getElementById('" , previewId, "').disabled = false;"
+        , "};"
+        ]
 
     preview = pageDataAlgebra
-                (\ck -> Pages.fillNewCourseAssessmentPreview ck ())
-                (\gk -> Pages.fillNewGroupAssessmentPreview gk ())
-                (\ck _ _ _ _ _ -> Pages.fillNewCourseAssessmentPreview ck ())
-                (\gk _ _ _ _ _ -> Pages.fillNewGroupAssessmentPreview gk ())
-                (\ak _ _ _ -> Pages.modifyAssessmentPreview ak ())
+                (\ck _ -> Pages.fillNewCourseAssessmentPreview ck ())
+                (\gk _ -> Pages.fillNewGroupAssessmentPreview gk ())
+                (\ck _ _ -> Pages.fillNewCourseAssessmentPreview ck ())
+                (\gk _ _ -> Pages.fillNewGroupAssessmentPreview gk ())
+                (\ak _ _ _ _ -> Pages.modifyAssessmentPreview ak ())
                 (\ak _ _ _ _ _ -> Pages.modifyAssessmentPreview ak ())
                 pdata
+
     getCsvLink = pageDataAlgebra
-                 (\ck -> getEmptyCourseCsv ck)
-                 (\gk -> getEmptyGroupCsv gk)
-                 (\ck _ _ _ _ _ -> getEmptyCourseCsv ck)
-                 (\gk _ _ _ _ _ -> getEmptyGroupCsv gk)
-                 (\ak _ cGKey _ -> getFilledCsv ak cGKey)
-                 (\ak _ cGKey _ _ _ -> getFilledCsv ak cGKey)
-               pdata
+                   (\ck _ -> getEmptyCourseCsv ck)
+                   (\gk _ -> getEmptyGroupCsv gk)
+                   (\ck _ _ -> getEmptyCourseCsv ck)
+                   (\gk _ _ -> getEmptyGroupCsv gk)
+                   (\ak _ cGKey _ _ -> getFilledCsv ak cGKey)
+                   (\ak _ cGKey _ _ _ -> getFilledCsv ak cGKey)
+                   pdata
         where
           getFilledCsv ak cGKey = either (getFilledCourseCsv ak) (getFilledGroupCsv ak) cGKey
           getFilledCourseCsv ak ck = routeWithOptionalParams (Pages.getCourseCsv ck ()) [requestParam ak]
@@ -333,47 +429,60 @@ fillAssessmentTemplate pdata = do
           getEmptyGroupCsv gk = routeOf $ Pages.getGroupCsv gk ()
 
     commit = pageDataAlgebra
-               (\ck -> Pages.newCourseAssessment ck ())
-               (\gk -> Pages.newGroupAssessment gk ())
-               (\ck _ _ _ _ _ -> Pages.newCourseAssessment ck ())
-               (\gk _ _ _ _ _ -> Pages.newGroupAssessment gk ())
-               (\ak _ _ _ -> Pages.modifyAssessment ak ())
+               (\ck _ -> Pages.newCourseAssessment ck ())
+               (\gk _ -> Pages.newGroupAssessment gk ())
+               (\ck _ _ -> Pages.newCourseAssessment ck ())
+               (\gk _ _ -> Pages.newGroupAssessment gk ())
+               (\ak _ _ _ _ -> Pages.modifyAssessment ak ())
                (\ak _ _ _ _ _ -> Pages.modifyAssessment ak ())
                pdata
 
-    readOnlyEvType = pageDataAlgebra
-                       (\_ -> False)
-                       (\_ -> False)
-                       (\_ _ _ _ _ _ -> False)
-                       (\_ _ _ _ _ _ -> False)
-                       (\_ _ _ isScoreSubmitted -> isScoreSubmitted)
-                       (\_ _ _ isScoreSubmitted _ _ -> isScoreSubmitted)
+    formAction :: Pages.PageDesc -> H.Attribute
+    formAction page = A.onclick (fromString $ concat ["javascript: form.action='", routeOf page, "';"])
+
+fillAssessmentTemplate :: PageData -> IHtml
+fillAssessmentTemplate pdata = do
+  msg <- getI18N
+  return $ do
+    Bootstrap.rowColMd12 $ do
+      view msg pdata evConfigAccess formContents
+      previewCsv msg
+  where
+    formContents :: Form.View
+    formContents = pageDataAlgebra
+                 (\_ v -> v)
+                 (\_ v -> v)
+                 (\_ _ v -> v)
+                 (\_ _ v -> v)
+                 (\_ _ _ _ v -> v)
+                 (\_ _ _ _ _ v -> v)
+                 pdata
+
+    previewCsv :: I18N -> H.Html
+    previewCsv msg = 
+      pageDataAlgebra
+        (\_ _ -> noPreview)
+        (\_ _ -> noPreview)
+        (\_ evs _ -> maybe noPreview (uncurry $ previewTable msg) evs)
+        (\_ evs _ -> maybe noPreview (uncurry $ previewTable msg) evs)
+        (\_ _ _ _ _ -> noPreview)
+        (\_ _ _ _ evs _ -> maybe noPreview (uncurry $ previewTable msg) evs)
+        pdata
+
+    noPreview :: H.Html
+    noPreview = mempty
+
+    evConfigAccess :: EvConfigAccess
+    evConfigAccess = pageDataAlgebra
+                       (\_ _ -> ReadWrite)
+                       (\_ _ -> ReadWrite)
+                       (\_ _ _ -> ReadWrite)
+                       (\_ _ _ -> ReadWrite)
+                       (\_ _ _ isScoreSubmitted _ -> if isScoreSubmitted then ReadOnly else ReadWrite)
+                       (\_ _ _ isScoreSubmitted _ _ -> if isScoreSubmitted then ReadOnly else ReadWrite)
                        pdata
 
-    showEvaluationType :: I18N -> EvConfig -> H.Html
-    showEvaluationType msg eType =
-      Bootstrap.formGroup $ do
-        Bootstrap.readOnlyTextInputWithDefault ""
-          (msg $ msg_NewAssessment_EvaluationType "Evaluation Type")
-          (evConfigCata
-            (fromString . msg $ msg_NewAssessment_BinaryEvaluation "Binary")
-            (const . fromString . msg $ msg_NewAssessment_PercentageEvaluation "Percentage")
-            (fromString . msg $ msg_NewAssessment_FreeFormEvaluation "Free form textual")
-            eType)
-        hiddenInput "evConfig" (Bootstrap.encode "Evaluation type" eType)
-        fromString . msg $ msg_NewAssessment_EvalTypeWarn "The evaluation type can not be modified, there is a score for the assessment."
-
-    selectedEvType = pageDataAlgebra
-                       (\_ -> defaultEvType)
-                       (\_ -> defaultEvType)
-                       (\_ _ _ evConfig _ _ -> evConfig)
-                       (\_ _ _ evConfig _ _ -> evConfig)
-                       (\_ as _ _ -> evaluationCfg as)
-                       (\_ as _ _ _ _ -> evaluationCfg as)
-                       pdata
-                           where defaultEvType = binaryConfig
-
-previewTable :: I18N -> [UserDesc] -> M.Map UserDesc Evaluation -> H.Html
+previewTable :: I18N -> [UserDesc] -> M.Map Uid Evaluation -> H.Html
 previewTable msg users evaluations = Bootstrap.table $ do
   header
   tableData
@@ -385,43 +494,31 @@ previewTable msg users evaluations = Bootstrap.table $ do
             score = fromString . msg . msg_NewAssessment_Score $ "Score"
              
       tableData :: H.Html
-      tableData = mapM_ tableRow (sortBy (compareHun `on` ud_fullname) users)
+      tableData = mapM_ tableRow (sortBy (compareHu `on` ud_fullname) users)
 
       tableRow :: UserDesc -> H.Html
       tableRow user = H.tr $ do
         H.td $ fromString fullname
-        H.td $ fromString user_uid
-        H.td $ case M.lookup user evaluations of
+        H.td $ fromString (uid id user_uid)
+        H.td $ case M.lookup user_uid evaluations of
                  Just evaluation -> let scoreInfo = evaluationCata (\result _comment -> (Score_Result (EvaluationKey "") result)) evaluation in
                                     scoreInfoToIcon msg scoreInfo
                  Nothing         -> scoreInfoToIcon msg Score_Not_Found
 
           where fullname = ud_fullname user
-                user_uid = uid id . ud_uid $ user
+                user_uid = ud_uid user
 
-readCsv :: B.ByteString -> M.Map Uid String
-readCsv bs = foldr (f . dropSpaces) M.empty (B.lines bs)
+readCsv :: T.Text -> M.Map Uid T.Text
+readCsv bs = foldr (f . T.stripStart) M.empty (T.lines bs)
     where
-      f line m | B.null line        = m
-               | B.head line == '#' = m
-               | otherwise          = if (not (null score'))
-                                      then M.insert username' score' m
-                                      else m
-          where
-            (_fullname,unameAndScore) = B.break (== ',') line
- 
-            (username,score) = case B.uncons unameAndScore of
-                                 Just (',',bs) -> B.break (== ',') bs
-                                 _             -> ("","")
- 
-            score' = case B.uncons score of
-                       Just (',',cs) -> BsUTF8.toString cs
-                       _             -> ""
- 
-            username' = Uid . B.unpack . stripSpaces $ username
-
-      dropSpaces = B.dropWhile isSpace
-      stripSpaces = B.reverse . dropSpaces . B.reverse . dropSpaces
+      f line m | T.null line        = m
+               | T.head line == '#' = m
+               | otherwise          =
+                   case T.splitOn "," line of
+                     _fullname : username : score : _ | not (T.null score) ->
+                       let username' = Uid . T.unpack . T.strip $ username
+                       in M.insert username' score m
+                     _ -> m
 
 viewAssessmentPage :: GETContentHandler
 viewAssessmentPage = do
@@ -436,7 +533,7 @@ viewAssessmentContent aDesc = do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
       (msg . msg_ViewAssessment_Course $ "Course:")   .|. adCourse aDesc
       maybe mempty (\g -> (msg . msg_ViewAssessment_Group $ "Group:") .|. g) (adGroup aDesc)
-      (msg . msg_ViewAssessment_Teacher $ "Teacher:") .|. (intercalate ", " . sortHun . adTeacher) aDesc
+      (msg . msg_ViewAssessment_Teacher $ "Teacher:") .|. (intercalate ", " . sortHu . adTeacher) aDesc
       (msg . msg_ViewAssessment_Assessment $ "Assessment:") .|. title
       when (not . null $ description) $
         (msg . msg_ViewAssessment_Description $ "Description:") .|. description
@@ -445,71 +542,67 @@ viewAssessmentContent aDesc = do
       (title, description) = let assessment = adAssessment aDesc
                              in withAssessment assessment (\title description _ _ _ -> (title, description))
 
-evTypeSelection :: I18N -> EvConfig -> H.Html
-evTypeSelection msg selected = Bootstrap.selectionWithLabel "evConfig" evalType (== selected) selection 
-    where selection = [ (binaryConfig, binary)
-                      , (percentageConfig 0.0, percentage)
-                      , (freeFormConfig, freeForm)
-                      ]
-          evalType = msg . msg_NewAssessment_EvaluationType $ "Evaluation Type"
-          binary = msg . msg_NewAssessment_BinaryEvaluation $ "Binary"
-          percentage = msg . msg_NewAssessment_PercentageEvaluation $ "Percentage"
-          freeForm = msg . msg_NewAssessment_FreeFormEvaluation $ "Free form textual"
-
 modifyAssessmentPage :: GETContentHandler
 modifyAssessmentPage = do
+  msg <- i18nE
   ak <- getParameter assessmentKeyPrm
-  (as,cGKey,scoreSubmitted) <- userStory $ do
-    as <- Story.loadAssessment ak
+  (a,cGKey,scoreSubmitted) <- userStory $ do
+    a <- Story.loadAssessment ak
     scoreSubmitted <- Story.isThereAScore ak
     cGKey <- Story.courseOrGroupOfAssessment ak
-    return (as,cGKey,scoreSubmitted)
-  setPageContents . fillAssessmentTemplate $ PD_ModifyAssessment ak as cGKey scoreSubmitted
+    return (a, cGKey, scoreSubmitted)
+  let formContents = getForm (form msg (Just $ assessmentToForm a))
+  setPageContents . fillAssessmentTemplate $ PD_ModifyAssessment ak a cGKey scoreSubmitted formContents
 
 postModifyAssessment :: POSTContentHandler
 postModifyAssessment = do
   msg <- i18nE
-  uploadResult <- uploadFile
   ak <- getParameter assessmentKeyPrm
-  newTitle <- getParameter titleParam
-  newDesc <- getParameter descriptionParam
-  selectedEvType <- getParameter evConfigParam
-  now <- liftIO getCurrentTime
-  let a = Assessment {
-            title         = newTitle
-          , description   = newDesc
-          , evaluationCfg = selectedEvType
-          , created       = now
-          , visible       = True
-          }
-  case uploadResult of
-    [File _name contents] -> do
-      users <- userStory $ do
+  a <- userStory $ Story.loadAssessment ak
+  res <- postForm (form msg (Just $ assessmentToForm a)) Form.InsertFilesIntoView
+  case res of
+    (_, Just formData) -> do
+      cGKey <- userStory $ Story.courseOrGroupOfAssessment ak
+      users <- either usersInCourse usersInGroup cGKey
+      let a' = formToAssessment (A.created a) formData
+          evaluations = toUsernameKey (formToEvaluations msg users formData)
+      setUserAction $ if M.null evaluations
+                      then ModifyAssessment ak a'
+                      else ModifyAssessmentAndScores ak a' evaluations
+    (errors, _) -> do
+      (cGKey, scoreSubmitted) <- userStory $ do
         cGKey <- Story.courseOrGroupOfAssessment ak
-        usernames <- either Story.subscribedToCourse Story.subscribedToGroup cGKey
-        mapM Story.loadUserDesc usernames
-      let evaluations = fromUserDescKey (toUserDescKey ud_uid users (parseEvaluations msg selectedEvType (readCsv contents)))
-      return $ ModifyAssessmentAndScores ak a evaluations
-    _ -> do
-      evaluations <- read <$> getParameter evaluationsParam
-      return $ if M.null evaluations
-                 then ModifyAssessment ak a
-                 else ModifyAssessmentAndScores ak a evaluations
-  
+        (,) <$> pure cGKey <*> Story.isThereAScore ak
+      setErrorContents . fillAssessmentTemplate $ PD_ModifyAssessment ak a cGKey scoreSubmitted errors
+
 modifyAssessmentPreviewPage :: ViewPOSTContentHandler
 modifyAssessmentPreviewPage = do
   msg <- i18nE
-  uploadResult <- uploadFile
   ak <- getParameter assessmentKeyPrm
-  selectedEvType <- getParameter evConfigParam
-  (as,cGKey,scoreSubmitted,users) <- userStory $ do
-    as <- Story.loadAssessment ak
+  (a,cGKey,scoreSubmitted,users) <- userStory $ do
+    a <- Story.loadAssessment ak
     scoreSubmitted <- Story.isThereAScore ak
     cGKey <- Story.courseOrGroupOfAssessment ak
     usernames <- either Story.subscribedToCourse Story.subscribedToGroup cGKey
     users <- mapM Story.loadUserDesc usernames
-    return (as,cGKey,scoreSubmitted,users)
-  let [File _name contents] = uploadResult
-      evaluations = toUserDescKey ud_uid users (parseEvaluations msg selectedEvType (readCsv contents))
-  setPageContents . fillAssessmentTemplate $ PD_ModifyAssessmentPreview ak as cGKey scoreSubmitted users evaluations
+    return (a, cGKey, scoreSubmitted, users)
+  res <- postForm (form msg (Just $ assessmentToForm a)) Form.InsertFilesIntoView
+  let page = case res of
+               (v, Just formData) ->
+                 PD_ModifyAssessmentPreview
+                   ak
+                   (formToAssessment (A.created a) formData)
+                   cGKey
+                   scoreSubmitted
+                   (Just (users, toUidKey (formToEvaluations msg users formData)))
+                   v
+               (errors, _) ->
+                 PD_ModifyAssessmentPreview
+                   ak
+                   a
+                   cGKey
+                   scoreSubmitted
+                   Nothing
+                   errors
+  setPageContents . fillAssessmentTemplate $ page
 

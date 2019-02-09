@@ -74,7 +74,6 @@ routes config = join
     , (changeLanguagePath, changeLanguage)
     ]
   , registrationRoutes config
-  , [ ("/fay", with fayContext fayServe) ]
   , [ (markdownPath, serveMarkdown) ]
     -- Add static handlers
   , [ (staticPath,         serveDirectory "static") ]
@@ -256,7 +255,7 @@ serveResponse = responseCata
 -- Helper type synonyms
 
 type CH     = ContentHandler (PageContents H.Html)
-type CHUA   = ContentHandler UserAction
+type CHUA   = ContentHandler (Either H.Html UserAction)
 type CHData = ContentHandler File
 type CHRest = ContentHandler Aeson.Encoding
 
@@ -264,10 +263,10 @@ type PageRenderer = P.Page CH CH (CH,CHUA) CHUA CHData CHRest
 
 renderResponse :: PageHandler -> PageRenderer
 renderResponse p = P.pfmap
-  (viewHandlerCata (>>= \result -> traverse addBootstrap result))
-  (userViewHandlerCata (>>= \result -> traverse addBootstrap result))
-  (viewModifyHandlerCata (\get post -> (get >>= \result -> traverse addBootstrap result, post)))
-  (modifyHandlerCata Prelude.id)
+  (viewHandlerCata (>>= traverse addBootstrap))
+  (userViewHandlerCata (>>= traverse addBootstrap))
+  (viewModifyHandlerCata (\get post -> (get >>= traverse addBootstrap, (post >>= either ((Left <$>) . addBootstrap) (return . Right)))))
+  (modifyHandlerCata (>>= either ((Left <$>) . addBootstrap) (return . Right)))
   (dataHandlerCata Prelude.id)
   (restViewHandlerCata Prelude.id)
   p
@@ -345,7 +344,7 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
   -- handler calculates the parent page for the given 'p', and runs the
   -- attached userstory from the calculated user action and redirects to
   -- the parent page at the end, otherwise runs the onError handler.
-  runActionOrError :: ContentHandler UserAction -> BeadHandler ()
+  runActionOrError :: ContentHandler (Either H.Html UserAction) -> BeadHandler ()
   runActionOrError handler = do
     response <- loggedInFilter $ \s ->
       checkClearance
@@ -357,9 +356,13 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
       where
         runAction :: ContentHandler Response
         runAction = do
-          userAction <- handler
-          userStory $ userStoryFor userAction
-          return $ redirectToParentPage pageDesc
+          res <- handler
+          case res of
+            Right userAction -> do
+              userStory $ userStoryFor userAction
+              return $ redirectToParentPage pageDesc
+            Left html ->
+              return $ Html html
 
   getJsonOrError :: ContentHandler Aeson.Encoding -> BeadHandler ()
   getJsonOrError handler = do
@@ -379,10 +382,10 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
   userView :: P.UserViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
   userView = post . getContentsOrError . P.userViewPageValue
 
-  viewModify :: P.ViewModifyPage (ContentHandler (PageContents H.Html), ContentHandler UserAction) -> BeadHandler ()
+  viewModify :: P.ViewModifyPage (ContentHandler (PageContents H.Html), ContentHandler (Either H.Html UserAction)) -> BeadHandler ()
   viewModify = (\(get, post) -> getPost (getContentsOrError get) (runActionOrError post)) . P.viewModifyPageValue
 
-  modify :: P.ModifyPage (ContentHandler UserAction) -> BeadHandler ()
+  modify :: P.ModifyPage (ContentHandler (Either H.Html UserAction)) -> BeadHandler ()
   modify = post . runActionOrError . P.modifyPageValue
 
   restView :: P.RestViewPage (ContentHandler Aeson.Encoding) -> BeadHandler ()

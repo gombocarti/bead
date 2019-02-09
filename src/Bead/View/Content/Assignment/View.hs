@@ -8,37 +8,412 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as BsLazy
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
+import           Data.List.NonEmpty (nonEmpty, toList)
 import           Data.String (IsString(..), fromString)
+import           Text.Digestive ((.:))
+import qualified Text.Digestive as DF
+import           Data.Text (Text)
+import qualified Data.Text as T
+import           Data.Time (LocalTime)
 import qualified Data.Time as Time
 
-import qualified Text.Blaze.Html5.Attributes as A (id)
-import           Text.Blaze.Html5.Attributes as A hiding (id)
-import           Text.Blaze.Html5 as H hiding (map)
+import qualified Text.Blaze.Html5.Attributes as A (id, form)
+import           Text.Blaze.Html5.Attributes as A hiding (id, form)
+import qualified Text.Blaze.Html5 as H (map, form)
+import           Text.Blaze.Html5 as H hiding (map, form)
 import           Text.Printf (printf)
 
 import           Bead.Controller.Pages (PageDesc)
 import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Domain.Entity.Assignment as Assignment
-import           Bead.Domain.Shared.Evaluation
+import qualified Bead.Domain.Entity.TestCase as TestCase
+import           Bead.Domain.Evaluation
 import           Bead.View.Fay.HookIds
 import           Bead.View.Fay.Hooks
-import           Bead.View.Content hiding (name, option, required)
+import           Bead.View.Content hiding (name, option, required, nonEmpty, aIsolated)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
+import           Bead.View.Content.Form (Form, View)
+import qualified Bead.View.Content.Form as Form
 import           Bead.View.Markdown
 
 import           Bead.View.Content.Assignment.Data
+
+data FormData = FormData
+  { fName :: Text
+  , fStart :: LocalTime
+  , fEnd   :: LocalTime
+  , fBallotBox :: Bool
+  , fIsolated :: Bool
+  , fNumberOfTries :: Maybe Int
+  , fPassword :: Maybe Text
+  , fSubmissionType :: SubmissionType
+  , fDescription :: Text
+  , fTestScript :: Maybe TestScriptKey
+  , fTestCaseSimple :: Maybe Text
+  , fTestCaseFile :: Maybe FilePath
+  , fEvalConfig :: EvConfig
+  }
+
+aForm :: Text
+aForm = "assignment"
+
+aName :: Text
+aName = "name"
+
+aStart :: Text
+aStart = "start"
+
+aEnd :: Text
+aEnd = "end"
+
+aBallotBox :: Text
+aBallotBox = "ballotBox"
+
+aIsolated :: Text
+aIsolated = "isolated"
+
+aNumberOfTriesToggle :: Text
+aNumberOfTriesToggle = "numberOfTriesToggle"
+
+aNumberOfTries :: Text
+aNumberOfTries = "numberOfTries"
+
+aPasswordToggle :: Text
+aPasswordToggle = "passwordToggle"
+
+aPassword :: Text
+aPassword = "password"
+
+aSubmissionType :: Text
+aSubmissionType = "submissionType"
+
+aDescription :: Text
+aDescription = "description"
+
+aTestScript :: Text
+aTestScript = "testScript"
+
+aTestCaseSimple :: Text
+aTestCaseSimple = "testCaseSimple"
+
+aTestCaseFile :: Text
+aTestCaseFile = "testCaseFile"
+
+aEvalConfig :: Text
+aEvalConfig = "evalConfig"
+
+getForm :: I18N -> PageData -> View
+getForm msg pd = Form.getForm aForm (form msg pd)
+
+form :: I18N -> PageData -> Form FormData
+form msg pd =
+  makeFormData
+  <$>
+  aName .: DF.text (fName <$> existing)
+  <*>
+  aStart .: DF.localTimeFormlet "%D" "%T" (Just start)
+  <*>
+  aEnd .: DF.localTimeFormlet "%D" "%T" (Just end)
+  <*>
+  aBallotBox .: DF.bool (fBallotBox <$> existing <|> Just False)
+  <*>
+  aIsolated .: DF.bool (fIsolated <$> existing <|> Just False)
+  <*>
+  aNumberOfTriesToggle .: DF.bool ((> 0) <$> (existing >>= fNumberOfTries) <|> Just False)
+  <*>
+  aNumberOfTries .: DF.check (T.pack . msg $ msg_NewAssignment_MustBePositive "Must be positive.") (maybe True (> 0)) (DF.optionalStringRead (T.pack . msg $ msg_NewAssignment_MustBeAPositiveInt "Must be a positive integer.") (existing >>= fNumberOfTries))
+  <*>
+  aPasswordToggle .: DF.bool (T.null <$> (existing >>= fPassword) <|> Just False)
+  <*>
+  aPassword .: DF.check (T.pack . msg $ msg_NewAssignment_CannotBeEmpty "Cannot be empty.") (fromMaybe True . (T.null <$>)) (DF.optionalText (existing >>= fPassword))
+  <*>
+  aSubmissionType .: DF.choiceWith
+                       [ ("text", (Assignment.TextSubmission, T.pack . msg $ msg_NewAssignment_TextSubmission "Text"))
+                       , ("zip", (Assignment.ZipSubmission, T.pack . msg $ msg_NewAssignment_ZipSubmission "Zip file"))
+                       ]
+                       (Just Assignment.TextSubmission)
+  <*>
+  aDescription .: DF.text (fDescription <$> existing <|> Just descriptionHelp)
+  <*>
+  maybe
+    (pure Nothing)
+    (\scripts -> (aTestScript .: DF.choiceWith (withoutTesting : toList (fmap (\(tsKey, tsInfo) -> (testScriptKeyCata T.pack tsKey, (Just tsKey, T.pack $ tsiName tsInfo))) scripts)) (Just . fst . snd $ withoutTesting)))
+    (testScripts >>= nonEmpty)
+  <*>
+  maybe
+    (pure Nothing)
+    (const $ aTestCaseSimple .: DF.optionalText (existing >>= fTestCaseSimple))
+    (testScripts >>= nonEmpty)
+  <*>
+  maybe
+    (pure Nothing)
+    (\files ->
+       Just <$>
+         aTestCaseFile .: DF.choiceWith
+                            (toList $ fmap (\f -> let p = filePath f
+                                                      p' = T.pack p
+                                                  in (p', (p, p')))
+                                      files)
+                            (existing >>= fTestCaseFile))
+    (do
+        ts <- testScripts
+        _ <- nonEmpty ts
+        nonEmpty userFiles
+    )
+  <*>
+  aEvalConfig .: DF.choiceWith
+                   [ ("binary", (binaryConfig, T.pack . msg $ msg_NewAssignment_BinEval "Binary"))
+                   , ("percentage", (percentageConfig 0.0, T.pack . msg $ msg_NewAssignment_PctEval "Percentage"))
+                   , ("freeForm", (freeFormConfig, T.pack . msg $ msg_NewAssignment_FftEval "Free form textual"))
+                   ]
+                   (fEvalConfig <$> existing)
+    where
+      makeFormData :: Text
+                   -> LocalTime
+                   -> LocalTime
+                   -> Bool
+                   -> Bool
+                   -> Bool
+                   -> Maybe Int
+                   -> Bool
+                   -> Maybe Text
+                   -> SubmissionType
+                   -> Text
+                   -> Maybe TestScriptKey
+                   -> Maybe Text
+                   -> Maybe FilePath
+                   -> EvConfig
+                   -> FormData
+      makeFormData name start end ballotBox isolated numberOfTriesToggle numberOfTries passwordToggle password submType desc ts tcSimple tcFile evConfig =
+        FormData
+          name
+          start
+          end
+          ballotBox
+          isolated
+          (if numberOfTriesToggle then numberOfTries else Nothing)
+          (if passwordToggle then password else Nothing)
+          submType
+          desc
+          ts
+          tcSimple
+          tcFile
+          evConfig
+
+      existing :: Maybe FormData
+      existing = pageDataCata
+                   (\_timeZoneConv _time _course _testScripts _usersFile -> Nothing) -- new Course
+                   (\_timeZoneConv _time _group _testScripts _usersFile -> Nothing) -- new Group
+                   (\timeZoneConv _ak a _testScripts _usersFile test _evalTypeMod -> -- modify assignment 
+                      Just $ assignmentToFormData timeZoneConv (test >>= \(_, testCase, testScript) -> return (testCase, testScript)) a)
+                   (\timeZoneConv _ak a _testInfo test -> -- view assignment
+                      Just $ assignmentToFormData timeZoneConv (test >>= \(_, testCase, testScript) -> return (testCase, testScript)) a)
+                   (\_timeZoneConv _time _course _testScripts _usersFile _a _testScriptCreation -> Nothing) -- preview new course assignment
+                   (\_timeZoneConv _time _group _testScripts _usersFile _a _testScriptCreation -> Nothing) -- preview new group assignment
+                   (\timeZoneConv _ak a _testScripts _usersFile test _testScriptModification _evalTypeMod -> Nothing) -- preview assignment modification
+                   pd
+
+      start :: LocalTime
+      end :: LocalTime
+      (start, end) = pageDataCata
+                       (\conv now _ _ _ -> let t = conv now in (t, t))
+                       (\conv now _ _ _ -> let t = conv now in (t, t))
+                       (\conv _ a _ _ _ _ -> (conv (Assignment.start a), conv (Assignment.end a)))
+                       (\conv _ a _ _ -> (conv (Assignment.start a), conv (Assignment.end a)))
+                       (\conv now _ _ _ _ _ -> let t = conv now in (t, t))
+                       (\conv now _ _ _ _ _ -> let t = conv now in (t, t))
+                       (\conv _ a _ _ _ _ _ -> (conv (Assignment.start a), conv (Assignment.end a)))
+                       pd
+
+      testScripts :: Maybe [(TestScriptKey, TestScriptInfo)]
+      testScripts = pageDataCata
+                      (\_ _ _ scripts _ -> scripts)
+                      (\_ _ _ scripts _ -> scripts)
+                      (\_ _ _ scripts _ _ _ -> scripts)
+                      (\_ _ _ _ _ -> Nothing)
+                      (\_ _ _ scripts _ _ _ -> scripts)
+                      (\_ _ _ scripts _ _ _ -> scripts)
+                      (\_ _ _ scripts _ _ _ _ -> scripts)
+                      pd
+
+      userFiles :: [UsersFile FilePath]
+      userFiles = pageDataCata
+                    (\_ _ _ _ files -> files)
+                    (\_ _ _ _ files -> files)
+                    (\_ _ _ _ files _ _ -> files)
+                    (\_ _ _ _ _ -> [])
+                    (\_ _ _ _ files _ _ -> files)
+                    (\_ _ _ _ files _ _ -> files)
+                    (\_ _ _ _ files _ _ _ -> files)
+                    pd
+
+      filePath :: UsersFile FilePath -> FilePath
+      filePath = usersFile id id
+
+      withoutTesting :: (Text, (Maybe TestScriptKey, Text))
+      withoutTesting = ("withoutTest", (Nothing, T.pack . msg $ msg_NewAssignment_NoTesting "Assignment without testing"))
+
+      descriptionHelp :: Text
+      descriptionHelp = T.pack $ msg $ msg_NewAssignment_Description_Default $ unlines
+        [ unwords
+          [ "This text shall be in markdown format.  Here are some quick"
+          , "examples:"
+          ]
+        , ""
+        , "  - This is a bullet list item with *emphasis* (italic)."
+        , "  - And this is another item in the list with "
+        , "    **strong** (bold). Note that the rest of the item"
+        , "    shall be aligned."
+        , ""
+        , unwords
+          [ "Sometimes one may want to write verbatim text, this how it can"
+          , "be done.  However, `verbatim` words may be inlined any time by"
+          , "using the backtick (`` ` ``) symbol."
+          ]
+        , ""
+        , "~~~~~"
+        , "verbatim text"
+        , "~~~~~"
+        , ""
+        , unwords
+          [ "Note that links may be also [inserted](http://haskell.org/). And"
+          , "when everything else fails, <a>pure</a> <b>HTML code</b> "
+          , "<i>may be embedded</i>."
+          ]
+        ]
+
+assignmentToFormData :: UserTimeConverter -> Maybe (TestCase, TestScriptKey) -> Assignment -> FormData
+assignmentToFormData timeZoneConv test a =
+  let settings = Assignment.aspects a
+  in FormData
+       (T.pack $ Assignment.name a)
+       (timeZoneConv $ Assignment.start a)
+       (timeZoneConv $ Assignment.end a)
+       (Assignment.isBallotBox settings)
+       (Assignment.isIsolated settings)
+       (Assignment.noOfTries Nothing Just settings)
+       (T.pack <$> Assignment.getPassword settings)
+       (Assignment.aspectsToSubmissionType settings)
+       (T.pack $ Assignment.desc a)
+       (snd <$> test)
+       (fst <$> test >>= \tc -> TestCase.testCaseValue (Just . T.pack) (const Nothing) (TestCase.tcValue tc))
+       (fst <$> test >>= \tc -> TestCase.testCaseValue (const Nothing) (const $ Just $ TestCase.tcName tc) (TestCase.tcValue tc))
+       (Assignment.evType a)
+
+view :: View -> IHtml
+view v = do
+  msg <- getI18N
+  return $ Bootstrap.rowColMd12 $ 
+    H.form ! A.method "post" $ do
+      let name = Form.textInput aName v
+      Bootstrap.formGroup
+        (T.pack . msg $ msg_NewAssignment_Title "Title")
+        name
+        (Form.errorsOf aName name v)
+      Bootstrap.row $ do
+        Bootstrap.colMd6 $ do
+          let start = Form.dateTime aStart v
+          Bootstrap.formGroup
+            (T.pack . msg $ msg_NewAssignment_StartDate "Opens")
+            start
+            (Form.errorsOf aStart start v)
+        Bootstrap.colMd6 $ do
+          let end = Form.dateTime aEnd v
+          Bootstrap.formGroup
+            (T.pack . msg $ msg_NewAssignment_EndDate "Closes")
+            end
+            (Form.errorsOf aEnd end v)
+      Bootstrap.rowColMd12 $
+        H.div ! A.class_ "h4" $ toMarkup (msg $ msg_NewAssignment_Properties "Properties")
+      Bootstrap.row $ do
+        Bootstrap.colMd12 $ do
+          Bootstrap.html $ 
+            Form.toggle
+              (T.pack . msg $ msg_NewAssignment_BallotBox "Ballot Box")
+              aBallotBox
+              v
+          ballotBoxHelp msg
+        Bootstrap.colMd12 $ do
+          Bootstrap.html $ 
+            Form.toggle
+              (T.pack . msg $ msg_NewAssignment_Isolated "Isolated")
+              aIsolated
+              v
+          isolatedHelp msg
+      Bootstrap.row $ do
+        Bootstrap.colMd12 $ do
+          Bootstrap.row $
+            Bootstrap.colMd12 $
+              Bootstrap.html $
+                Form.toggle
+                  (T.pack . msg $ msg_NewAssignment_NoOfTries "Number of tries")
+                  aNumberOfTriesToggle
+                  v
+          Bootstrap.row $
+            Bootstrap.colMd12 $
+              Bootstrap.formGroup
+                (T.pack . msg $ msg_NewAssignment_NoOfTries "Number of tries")
+                (Form.textInput aNumberOfTries v)
+                []
+
+          Bootstrap.row $
+            Bootstrap.colMd12 $ do
+              Bootstrap.html $
+                Form.toggle
+                  (T.pack . msg $ msg_NewAssignment_PasswordProtected "Password-protected")
+                  aPasswordToggle
+                  v
+              Bootstrap.formGroup
+                (T.pack . msg $ msg_NewAssignment_Password "Password")
+                (Form.textInput aPassword v)
+                [Bootstrap.Help (passwordHelp msg)]
+
+              Bootstrap.formGroup
+                (T.pack . msg $ msg_NewAssignment_SubmissionType "Submission Type")
+                (Form.selection aSubmissionType v)
+                []
+
+              Bootstrap.formGroup
+                (T.pack . msg $ msg_NewAssignment_Description "Description")
+                (Form.textArea aDescription Bootstrap.Large v)
+                []
+
+              Bootstrap.formGroup
+                (T.pack . msg $ msg_NewAssignment_EvaluationType "Evaluation Type")
+                (Form.selection aEvalConfig v)
+                []
+            where
+              isolatedHelp :: I18N -> Html
+              isolatedHelp msg = H.p $ toMarkup $ msg $ msg_NewAssignment_Info_Isolated $ concat
+                [ "(Recommended for tests.) Submissions for other assignments of the course are not visible in the "
+                , "precense of an isolated assignments. Note: If there is more than one isolated assignment for the "
+                , "same course, all the isolated assignment and submissions will be visible for the students."
+                ]
+
+              passwordHelp :: I18N -> Text
+              passwordHelp msg = T.pack . msg $ msg_NewAssignment_Info_Password $ concat
+                [ "(Recommended for tests.) Submissions may be only submitted by providing the password. "
+                , "The teacher shall use the password during the test in order to authenticate the "
+                , "submission for the student."
+                ]
+
+              ballotBoxHelp :: I18N -> Html
+              ballotBoxHelp msg = H.p $ toMarkup $ msg $ msg_NewAssignment_Info_BallotBox $ concat
+                [ "(Recommended for tests.) Students will not be able to access submissions and "
+                , "their evaluations until the assignment is closed."
+                ]
 
 newAssignmentContent :: PageData -> IHtml
 newAssignmentContent pd = do
   msg <- getI18N
   let hook = assignmentEvTypeHook
 
-  -- Renders a evaluation selection or hides it if there is a submission already for the assignment,
+  -- Renders an evaluation selection or hides it if there is a submission already for the assignment,
   -- and renders an explanation.
   evalConfig <- do
     let evaluationTypeSelection = return $ do
-          Bootstrap.selectionWithLabel
-            (evHiddenValueId hook)
+          Bootstrap.selectionWithLabel'
+            "eval-type-value"
             (msg $ msg_NewAssignment_EvaluationType "Evaluation Type")
             (== currentEvaluationType)
             [ (binaryConfig, fromString . msg $ msg_NewAssignment_BinEval "Binary")
@@ -65,18 +440,12 @@ newAssignmentContent pd = do
               $ H.form ! A.method "post"
               $ H.div ! A.id (fromString $ hookId assignmentForm) $ do
 
-                Bootstrap.formGroup $ do
+                Bootstrap.formGroup' $ do
                     let assignmentTitleField = fromString $ fieldName assignmentNameField
-
-                        assignmentTitlePlaceholder = fromString $
-                           fromAssignment
-                                (const "")
-                                (fromString . msg $ msg_NewAssignment_Title_Default "Unnamed Assignment")
-                                pd
 
                         assignmentTitle = fromAssignment (fromString . Assignment.name) mempty pd
 
-                    Bootstrap.labelFor assignmentTitleField (fromString $ msg $ msg_NewAssignment_Title "Title")
+                    Bootstrap.labelFor'  assignmentTitleField (fromString $ msg $ msg_NewAssignment_Title "Title")
                     editOrReadOnly pd $ Bootstrap.textInputFieldWithDefault assignmentTitleField assignmentTitle
 
                     H.p ! class_ "help-block"$ fromString . msg $ msg_NewAssignment_Info_Normal $ concat
@@ -119,19 +488,19 @@ newAssignmentContent pd = do
                       pd
 
                 -- Opening and closing dates of the assignment
-                Bootstrap.formGroup $ do
+                Bootstrap.formGroup' $ do
                   Bootstrap.row $ do
 
                     -- Opening date of the assignment
                     Bootstrap.colMd6 $ do
                       let assignmentStart = fieldName assignmentStartField
-                      Bootstrap.labelFor assignmentStart $ fromString $ msg $ msg_NewAssignment_StartDate "Opens"
+                      Bootstrap.labelFor'  assignmentStart $ fromString $ msg $ msg_NewAssignment_StartDate "Opens"
                       Bootstrap.datetimePicker assignmentStart startDateStringValue isEditPage
 
                     -- Closing date of the assignment
                     Bootstrap.colMd6 $ do
                       let assignmentEnd = fieldName assignmentEndField
-                      Bootstrap.labelFor assignmentEnd $ msg $ msg_NewAssignment_EndDate "Closes"
+                      Bootstrap.labelFor'  assignmentEnd $ msg $ msg_NewAssignment_EndDate "Closes"
                       Bootstrap.datetimePicker assignmentEnd endDateStringValue isEditPage
 
                 Bootstrap.rowColMd12 $ H.hr
@@ -143,9 +512,7 @@ newAssignmentContent pd = do
                     readOnly = False
 
                     assignmentPropertiesSection ed = do
-                      let pwd = if Assignment.isPasswordProtected aas
-                                   then Just (Assignment.getPassword aas)
-                                   else Nothing
+                      let pwd = Assignment.getPassword aas
                           noOfTries = if Assignment.isNoOfTries aas
                                         then Just (Assignment.getNoOfTries aas)
                                         else Nothing
@@ -188,7 +555,7 @@ newAssignmentContent pd = do
                                     (Assignment.NoOfTries 0)
                                     (msg $ msg_NewAssignment_NoOfTries "No of tries")
 
-                      Bootstrap.row $ Bootstrap.colMd6 $ Bootstrap.formGroup $
+                      Bootstrap.row $ Bootstrap.colMd6 $ Bootstrap.formGroup' $
                             editable $ numberInput assignmentNoOfTries (Just 1) (Just 1000) noOfTries ! Bootstrap.formControl
 
                       Bootstrap.helpBlock $ msg $ msg_NewAssignment_Info_NoOfTries $
@@ -207,10 +574,10 @@ newAssignmentContent pd = do
                                 , "submission for the student."
                                 ]
 
-                      Bootstrap.row $ Bootstrap.colMd6 $ Bootstrap.formGroup $ do
+                      Bootstrap.row $ Bootstrap.colMd6 $ Bootstrap.formGroup' $ do
                           H.label $ fromString $ msg $ msg_NewAssignment_Password "Password"
                           editable $ Bootstrap.inputForFormControl
-                                     ! name assignmentPwd ! type_ "text"
+                                     ! A.name assignmentPwd ! type_ "text"
                                      ! value (fromString $ fromMaybe "" pwd)
 
                       Bootstrap.rowColMd12 $ H.hr
@@ -229,9 +596,9 @@ newAssignmentContent pd = do
                 submissionTypeSelection msg pd
 
                 -- Assignment Description
-                Bootstrap.formGroup $ do
+                Bootstrap.formGroup' $ do
                     let assignmentDesc = fromString $ fieldName assignmentDescField
-                    Bootstrap.labelFor assignmentDesc $ fromString . msg $ msg_NewAssignment_Description "Description"
+                    Bootstrap.labelFor' assignmentDesc $ fromString . msg $ msg_NewAssignment_Description "Description"
                     editOrReadOnly pd $ Bootstrap.textAreaField assignmentDesc Bootstrap.Large $ do
                       fromString $ fromAssignment Assignment.desc (fromString . msg $
                         msg_NewAssignment_Description_Default $ unlines
@@ -264,7 +631,7 @@ newAssignmentContent pd = do
 
                 -- Preview of the assignment
                 let assignmentPreview a = do
-                      Bootstrap.formGroup $ do
+                      Bootstrap.formGroup' $ do
                         H.label $ fromString $ msg $ msg_NewAssignment_AssignmentPreview "Assignment Preview"
                         H.div # assignmentTextDiv $ markdownToHtml $ Assignment.desc a
 
@@ -279,15 +646,15 @@ newAssignmentContent pd = do
                   pd
 
                 -- Assignment Test Script Selection
-                Bootstrap.formGroup $ do
+                Bootstrap.formGroup' $ do
                       testScriptSelection msg pd
 
                 -- Test Case area
-                Bootstrap.formGroup $ do
+                Bootstrap.formGroup' $ do
                     testCaseArea msg pd
 
                 -- Evaluation config
-                Bootstrap.formGroup $ do
+                Bootstrap.formGroup' $ do
                   let previewAndCommitForm cfg = do
                         evalSelectionDiv hook
                         evalConfig
@@ -378,7 +745,7 @@ newAssignmentContent pd = do
       submissionTypeSelection msg pd = do
 
         let submissionTypeSelection =
-              Bootstrap.selectionWithLabel
+              Bootstrap.selectionWithLabel'
                 (fieldName assignmentSubmissionTypeField)
                 (msg $ msg_NewAssignment_SubmissionType "Submission Type")
                 (== currentSubmissionType)
@@ -423,7 +790,7 @@ newAssignmentContent pd = do
             ts
 
           tsSelection ts = do
-            Bootstrap.selectionWithLabel
+            Bootstrap.selectionWithLabel'
               testScriptField
               (msg $ msg_NewAssignment_TestScripts "Tester")
               (const False)
@@ -437,7 +804,7 @@ newAssignmentContent pd = do
               preview ts tsk = maybe (return ()) (tsSelectionPreview tsk) ts
 
           tsSelectionPreview tsk ts = do
-            Bootstrap.selectionWithLabel
+            Bootstrap.selectionWithLabel'
               testScriptField
               (msg $ msg_NewAssignment_TestScripts "Tester")
               ((Just tsk)==)
@@ -449,7 +816,7 @@ newAssignmentContent pd = do
             ts
 
           mtsSelection mts ts = do
-            Bootstrap.selectionWithLabel
+            Bootstrap.selectionWithLabel'
               testScriptField
               (msg $ msg_NewAssignment_TestScripts "Tester")
               (def mts)
@@ -467,7 +834,7 @@ newAssignmentContent pd = do
               _                           -> return ()
             where
               mtsSelection' tsk ts = do
-                Bootstrap.selectionWithLabel
+                Bootstrap.selectionWithLabel'
                   testScriptField
                   (msg $ msg_NewAssignment_TestScripts "Test scripts")
                   (def tsk)
@@ -497,7 +864,7 @@ newAssignmentContent pd = do
         (\_tz _k _a tsType fs tc tm _ev -> overwriteTestCaseAreaPreview fs tsType tc tm)
         where
           textArea val = do
-            Bootstrap.labelFor (fieldName assignmentTestCaseField) (msg $ msg_NewAssignment_TestCase "Test cases")
+            Bootstrap.labelFor' (fieldName assignmentTestCaseField) (msg $ msg_NewAssignment_TestCase "Test cases")
             editOrReadOnly pd $ Bootstrap.textAreaOptionalField (fieldName assignmentTestCaseField) Bootstrap.Medium (maybe mempty fromString val)
 
           createTestCaseAreaPreview fs ts tcp = case tcp of

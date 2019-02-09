@@ -80,7 +80,7 @@ postUploadFile = do
                  (return . StoryError)
                  (uncurry saveFile)
                )
-  return . StatusMessage $
+  setUserAction $ StatusMessage $
     if (null $ filter isFailure results)
       then (msg_UploadFile_Successful "File upload was successful.")
       else (msg_UploadFile_ErrorInManyUploads "An error occured uploading one or more files.")

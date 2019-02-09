@@ -39,7 +39,7 @@ index authError = do
           msg $ msg_Index_Body "This page can be only used with an account registered in the Active Directory of the hosting institute."
 
         postForm (routeOf $ P.login ()) $ do
-          Bootstrap.textInputWithAttr (fieldName loginUsername) (msg $ msg_Login_Username "Username:") "" (A.autofocus "")
+          Bootstrap.textInputWithAttr (fieldName loginUsername) (msg $ msg_Login_Username "Username:") (A.autofocus "")
           Bootstrap.passwordInput (fieldName loginPassword) (msg $ msg_Login_Password "Password:")
           Bootstrap.submitButtonColorful  (fieldName loginSubmitBtn) (msg $ msg_Login_Submit "Log in")
 

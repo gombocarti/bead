@@ -2,7 +2,7 @@ module Bead.Domain.Entity.Assessment where
 
 import Data.Time (UTCTime)
 
-import Bead.Domain.Shared.Evaluation
+import Bead.Domain.Evaluation
 
 -- | Assessment for a student, without any submission
 -- just an evaluation for it.

@@ -27,7 +27,7 @@ import           Bead.Controller.Pages as Pages
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.SeeMore
-import           Bead.Domain.Shared.Evaluation
+import           Bead.Domain.Evaluation
 
 type CommentOrFeedback = Either (CommentKey, Comment) Feedback
 

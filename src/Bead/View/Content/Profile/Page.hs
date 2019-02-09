@@ -37,17 +37,18 @@ changeUserDetails =
     <$> getParameter regFullNamePrm
     <*> getParameter userTimeZonePrm
     <*> getParameter userLanguagePrm
+  >>= setUserAction
 
 #ifdef SSO
 changePassword = ModifyHandler $ do
-  return $ LogMessage "With single sign-on, one cannot change password from the Profile page."
+  setUserAction $ LogMessage "With single sign-on, one cannot change password from the Profile page."
 #else
 changePassword = ModifyHandler $ do
   oldPwd <- getParameter oldPasswordPrm
   newPwd <- getParameter newPasswordPrm
   checkCurrentAuthPassword oldPwd
   updateCurrentAuthPassword newPwd
-  return . StatusMessage $ msg_Profile_PasswordHasBeenChanged "The password has been changed."
+  setUserAction $ StatusMessage $ msg_Profile_PasswordHasBeenChanged "The password has been changed."
 #endif
 
 profileContent :: [TimeZoneName] -> User -> DictionaryInfos -> IHtml
@@ -94,14 +95,14 @@ profileContent ts user ls = do
       Bootstrap.readOnlyTextInputWithDefault "" (msg $ msg_Profile_Email "Email") (emailCata fromString $ u_email user)
       Bootstrap.readOnlyTextInputWithDefault "" (msg $ msg_Profile_FullName "Full name") fullName
       hiddenInput regFullNameField (u_name user)
-      Bootstrap.selectionWithLabel userLanguageField (msg $ msg_Profile_Language "Language") (== u_language user) languages
-      Bootstrap.selectionWithLabel userTimeZoneField (msg $ msg_Profile_TimeZone "Time zone") (== u_timezone user) timeZones
+      Bootstrap.selectionWithLabel' userLanguageField (msg $ msg_Profile_Language "Language") (== u_language user) languages
+      Bootstrap.selectionWithLabel' userTimeZoneField (msg $ msg_Profile_TimeZone "Time zone") (== u_timezone user) timeZones
 #else
       Bootstrap.labeledText (msg $ msg_Profile_User "Username") (usernameCata fromString $ u_username user)
       Bootstrap.labeledText (msg $ msg_Profile_Email "Email") (emailCata fromString $ u_email user)
       Bootstrap.textInputWithDefault regFullNameField (msg $ msg_Profile_FullName "Full name") fullName
-      Bootstrap.selectionWithLabel userLanguageField (msg $ msg_Profile_Language "Language") (== u_language user) languages
-      Bootstrap.selectionWithLabel userTimeZoneField (msg $ msg_Profile_TimeZone "Time zone") (== u_timezone user) timeZones
+      Bootstrap.selectionWithLabel' userLanguageField (msg $ msg_Profile_Language "Language") (== u_language user) languages
+      Bootstrap.selectionWithLabel' userTimeZoneField (msg $ msg_Profile_TimeZone "Time zone") (== u_timezone user) timeZones
 #endif
 
     timeZones = map (Prelude.id &&& timeZoneName Prelude.id) ts

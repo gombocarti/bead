@@ -50,7 +50,7 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime(..))
 
-import           Bead.Domain.Shared.Evaluation
+import           Bead.Domain.Evaluation
 
 #ifdef TEST
 import           Test.Tasty.Arbitrary
@@ -267,14 +267,12 @@ containsAspect :: (Aspect -> Bool) -> Aspects -> Bool
 containsAspect pred = fromAspects (not . Set.null . Set.filter pred)
 
 -- Returns the first password found in the assignment aspects set, if there
--- is no such password throws an error
-getPassword :: Aspects -> String
+-- is no such password, returns Nothing
+getPassword :: Aspects -> Maybe String
 getPassword = fromAspects $ \as ->
   case (Set.toList . Set.filter isPasswordAspect $ as) of
-    []      -> err
-    (pwd:_) -> aspect err id err err err pwd
-  where
-    err = error "getPassword: no password aspect was filtered in"
+    []      -> Nothing
+    (pwd:_) -> aspect Nothing Just Nothing Nothing (const Nothing) pwd
 
 -- | Set the assignments passwords in the assignment aspect set.
 -- if the set already contains a password the password is replaced.

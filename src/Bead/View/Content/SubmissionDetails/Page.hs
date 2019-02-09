@@ -77,7 +77,7 @@ submissionDetailsPostHandler = do
     Story.doesBlockSubmissionView sk
     Story.isAccessibleSubmission sk
 
-  return $! SubmissionComment sk Comment {
+  setUserAction $! SubmissionComment sk Comment {
                      comment = c
                    , commentAuthor = uname
                    , commentDate = now
@@ -99,7 +99,7 @@ submissionDetailsContent p = do
     let tc   = uTime p
     Bootstrap.rowColMd12 $ Bootstrap.table $ tbody $ do
       (msg $ msg_SubmissionDetails_Course "Course, group:")  .|. sdGroup info
-      (msg $ msg_SubmissionDetails_Admins "Teacher:")        .|. (intercalate ", " . sortHun $ sdTeacher info)
+      (msg $ msg_SubmissionDetails_Admins "Teacher:")        .|. (intercalate ", " . sortHu $ sdTeacher info)
       (msg $ msg_SubmissionDetails_Assignment "Assignment:") .|. (Assignment.name $ sdAssignment info)
       (msg $ msg_SubmissionDetails_Deadline "Deadline:")     .|. (showDate . tc . Assignment.end $ sdAssignment info)
       maybe (return ()) (uncurry (.|.)) (remainingTries msg (smLimit p))
@@ -138,7 +138,7 @@ submissionDetailsContent p = do
       H.p $ fromString . msg $ msg_SubmissionDetails_BallotBox_Comment_Info $
         "When ballot box mode is active, no student comments are shown until the deadline."
     postForm (routeOf $ submissionDetails (aKey p) (smKey p)) $ do
-      Bootstrap.textArea (fieldName commentValueField)
+      Bootstrap.textArea' (fieldName commentValueField)
                          (fromString $ msg $ msg_SubmissionDetails_NewComment "New comment")
                          Bootstrap.Small
                          mempty

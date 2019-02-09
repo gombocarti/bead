@@ -210,7 +210,7 @@ i18nH = do
   return $ maybe trans unDictionary dict
 
 -- | Renders a Page with the given IHtml contents.
---   Implicit 'UserState' and 'PageSettings' influences the result.
+--   Implicit 'UserState' and 'PageSettings' influence the result.
 bootstrapPage :: P.Page' IHtml -> ContentHandler Html
 bootstrapPage page = do
   state <- userState

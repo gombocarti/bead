@@ -5,7 +5,7 @@ module Bead.View.Content.Score.Page (
   , modifyUserScore
   ) where
 
-import           Bead.View.Content
+import           Bead.View.Content hiding (evConfig)
 import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.RequestParams
@@ -14,7 +14,7 @@ import           Bead.View.Content.ScoreInfo (scoreInfoToText)
 import           Bead.Controller.Pages (PageDesc)
 import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
-import           Bead.Domain.Shared.Evaluation hiding (evConfig)
+import           Bead.Domain.Evaluation hiding (evConfig)
 
 import           Text.Blaze.Html5 (Html,Attribute,(!))
 import qualified Text.Blaze.Html5 as H
@@ -74,13 +74,13 @@ newScorePostHandler = do
   ak <- getParameter $ assessmentKeyPrm
   evConfig <- evConfig <$> userStory (Story.loadAssessment ak)
   evaluation <- getEvaluation evConfig
-  return $ either id (SaveUserScore username ak) evaluation
+  setUserAction $ either id (SaveUserScore username ak) evaluation
 
 getEvaluation :: EvConfig -> ContentHandler (Either UserAction Evaluation)
 getEvaluation evConfig = do
   commentOrResult <-
     evConfigCata
-    (getJSONParam (fieldName evaluationResultField) "No evaluation can be found.")
+    ({-getJSONParam (fieldName evaluationResultField) "No evaluation can be found."-} undefined) 
     (\_ -> do
       percentage  <- getParameter evaluationPercentagePrm
       return . EvCmtResult $ percentageResult (fromIntegral percentage / 100))
@@ -90,7 +90,7 @@ getEvaluation evConfig = do
   withEvalOrComment commentOrResult
     (return . Left . ErrorMessage $ msg_Evaluation_EmptyCommentAndFreeFormResult "Comments are not supported yet.")
     (\result -> return . Right $ Evaluation {
-        evaluationResult = result
+          evaluationResult = result
         , writtenEvaluation = ""       
         })
 
@@ -115,7 +115,7 @@ modifyScorePostHandler = do
                            ak <- Story.assessmentOfScore sk
                            Story.loadAssessment ak)
   evaluation <- getEvaluation evConfig
-  return $ either id (ModifyUserScore sk) evaluation
+  setUserAction $ either id (ModifyUserScore sk) evaluation
 
 scoreContent :: PageData -> IHtml
 scoreContent pd = do
@@ -182,7 +182,7 @@ viewScoreContent sd = do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
       (msg . msg_ViewUserScore_Course $ "Course:")   .|. scdCourse sd
       maybe mempty (\g -> (msg . msg_ViewUserScore_Group $ "Group:") .|. g) (scdGroup sd)
-      (msg . msg_ViewUserScore_Teacher $ "Teacher:") .|. (intercalate ", " . sortHun . scdTeacher) sd
+      (msg . msg_ViewUserScore_Teacher $ "Teacher:") .|. (intercalate ", " . sortHu . scdTeacher) sd
       (msg . msg_ViewUserScore_Assessment $ "Assessment:") .|. aTitle
       when (not . null $ aDesc) $
         (msg . msg_ViewUserScore_Description $ "Description:") .|. aDesc
@@ -233,9 +233,9 @@ evaluationFrameWithDefault msg evConfig evResult content = do
 
 binaryInput :: I18N -> Result -> Html
 binaryInput msg res = do
-  Bootstrap.formGroup $ H.div $ Bootstrap.radioButtonGroup (fieldName evaluationResultField) $
-            [ (res == Passed, encodeToFay' "inputEvalResult" $ binary Passed, msg $ msg_Evaluation_Accepted "Accepted")
-            , (res == Failed, encodeToFay' "inputEvalResult" $ binary Failed, msg $ msg_Evaluation_Rejected "Rejected")
+  Bootstrap.formGroup' $ H.div $ Bootstrap.radioButtonGroup (fieldName evaluationResultField) $
+            [ (res == Passed, undefined {-encodeToFay' "inputEvalResult" $ binary Passed-}, msg $ msg_Evaluation_Accepted "Accepted")
+            , (res == Failed, undefined {-encodeToFay' "inputEvalResult" $ binary Failed-}, msg $ msg_Evaluation_Rejected "Rejected")
             ]
   where
     binary = EvCmtResult . binaryResult
@@ -243,7 +243,7 @@ binaryInput msg res = do
  -- When the page is dynamic the percentage spinner is hooked on the field
 percentageInput :: I18N -> String -> Html
 percentageInput msg defaultText = do
-  Bootstrap.formGroup . evaluationDiv . Bootstrap.rowColMd12 $ do 
+  Bootstrap.formGroup' . evaluationDiv . Bootstrap.rowColMd12 $ do 
            H.toMarkup . msg $ msg_Evaluation_Percentage "Percentage: "
            H.input ! A.name (fieldName evaluationPercentagePrm) ! A.type_ "number"
                    ! A.min "0" ! A.max "100"

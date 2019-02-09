@@ -17,8 +17,9 @@ import           Data.Time (getCurrentTime)
 
 import qualified Bead.Controller.UserStories as S
 import qualified Bead.Domain.Entity.Assignment as Assignment
-import           Bead.View.Content
+import           Bead.View.Content hiding (getForm, postForm)
 import           Bead.View.ContentHandler (getJSONParameters, contentHandlerError, modifyPageSettings)
+import qualified Bead.View.Content.Form as Form
 import           Bead.View.RequestParams
 
 import           Bead.View.Content.Assignment.Data
@@ -49,7 +50,9 @@ newCourseAssignmentPage = do
     return ((ck, course), nonEmptyList tss', ufs)
   now <- liftIO $ getCurrentTime
   tz <- userTimeZoneToLocalTimeConverter
-  setPageContents $ newAssignmentContent $ PD_Course tz now c tss ufs
+  msg <- i18nE
+  let input = getForm msg (PD_Course tz now c tss ufs)
+  setPageContents $ view input
 
 postCourseAssignment :: POSTContentHandler
 postCourseAssignment = do
@@ -57,6 +60,7 @@ postCourseAssignment = do
     <$> getParameter (customCourseKeyPrm (fieldName selectedCourse))
     <*> getAssignment
     <*> readTCCreation
+  >>= setUserAction
 
 newCourseAssignmentPreviewPage :: ViewPOSTContentHandler
 newCourseAssignmentPreviewPage = do
@@ -133,7 +137,9 @@ newGroupAssignmentPage = do
     ufs  <- map fst <$> S.listUsersFiles
     return ((gk, group), nonEmptyList tss', ufs)
   tz <- userTimeZoneToLocalTimeConverter
-  setPageContents $ newAssignmentContent $ PD_Group tz now g tss ufs
+  msg <- i18nE
+  let input = getForm msg (PD_Group tz now g tss ufs)
+  setPageContents $ view input
 
 postGroupAssignment :: POSTContentHandler
 postGroupAssignment = do
@@ -141,6 +147,7 @@ postGroupAssignment = do
   <$> getParameter (customGroupKeyPrm (fieldName selectedGroup))
   <*> getAssignment
   <*> readTCCreation
+  >>= setUserAction
 
 newGroupAssignmentPreviewPage :: ViewPOSTContentHandler
 newGroupAssignmentPreviewPage = do
@@ -182,6 +189,7 @@ postModifyAssignment = do
   <$> getAssignmentKey
   <*> getAssignment
   <*> readTCModification
+  >>= setUserAction
 
 modifyAssignmentPreviewPage :: ViewPOSTContentHandler
 modifyAssignmentPreviewPage = do

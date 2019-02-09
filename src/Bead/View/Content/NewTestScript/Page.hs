@@ -54,7 +54,7 @@ postNewTestScript = do
     Story.isAdministratedCourse ck
     (course,_groupkeys) <- Story.loadCourse ck
     return (script' $ courseTestScriptType course)
-  return $ UA.CreateTestScript ck script
+  setUserAction $ UA.CreateTestScript ck script
 
 modifyTestScriptPage :: GETContentHandler
 modifyTestScriptPage = do
@@ -77,7 +77,7 @@ postModifyTestScript = do
   script <- userStory $ do
     (testscript, _coursekey) <- Story.loadTestScript tsk
     return (script' $ tsType testscript)
-  return $ UA.ModifyTestScript tsk script
+  setUserAction $ UA.ModifyTestScript tsk script
 
 testScriptContent :: PageData -> IHtml
 testScriptContent pd = pageDataCata checkIfThereCourses modify pd
@@ -100,13 +100,13 @@ pageContent pd = do
   msg <- getI18N
 
   let textField param label valueSelector = pageDataCata
-        (const $ Bootstrap.textInput (fieldName param) (msg label) "")
+        (const $ Bootstrap.textInput' (fieldName param) (msg label) "")
         (\_name _key script -> Bootstrap.textInputWithDefault (fieldName param) (msg label) (valueSelector script))
         pd
 
   let textArea param label height valueSelector = pageDataCata
-        (const $ Bootstrap.textArea (fieldName param) (msg label) height "")
-        (\_name _key script -> Bootstrap.textArea (fieldName param) (msg label) height (fromString (valueSelector script)))
+        (const $ Bootstrap.textArea' (fieldName param) (msg label) height "")
+        (\_name _key script -> Bootstrap.textArea' (fieldName param) (msg label) height (fromString (valueSelector script)))
         pd
 
   let utf8TextArea param label height valueSelector = pageDataCata
@@ -132,7 +132,7 @@ pageContent pd = do
     testScriptPage = pageDataCata (const (Pages.newTestScript ())) (\_name key _script -> Pages.modifyTestScript key ())
 
     course msg = pageDataCata
-      (Bootstrap.selectionWithLabel (fieldName testScriptCourseKeyField) (msg $ msg_NewTestScript_Course "Course:")
+      (Bootstrap.selectionWithLabel' (fieldName testScriptCourseKeyField) (msg $ msg_NewTestScript_Course "Course:")
                                     (const False) . map (id *** courseNameAndType))
       (\courseName _key _script -> fromString courseName)
       pd

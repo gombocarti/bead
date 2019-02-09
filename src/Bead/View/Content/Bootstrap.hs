@@ -12,11 +12,15 @@ import           Data.Data
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
 import           Data.String
+import           Data.Text (Text)
+import qualified Data.Text as T
+import           Data.Tuple.Utils (thd3)
 
 import qualified Text.Blaze as B
-import           Text.Blaze.Html5 hiding (map)
+import           Text.Blaze (toMarkup, toValue)
+import           Text.Blaze.Html5 hiding (map, html)
 import qualified Text.Blaze.Html5 as H hiding (map)
-import           Text.Blaze.Html5.Attributes
+import           Text.Blaze.Html5.Attributes (class_, role, name, type_, for, href)
 import qualified Text.Blaze.Html5.Attributes as A
 
 import           Bead.View.Fay.JSON.ServerSide
@@ -78,7 +82,7 @@ fadeOutFooterButton custom ttl text = do
     ! role "button"
     ! A.title (fromString ttl)
     ! href "#"
-    ! disabled ""
+    ! disabled
     $ (fromString text)
 
 -- | Creates a warning style button, if the user clicks on the button the footer fades away.
@@ -87,7 +91,7 @@ fadeOutFooterWarningButton = fadeOutFooterButton "btn-warning"
 -- | Creates a danger style button, if the user clicks on the button the footer fades away
 fadeOutFooterDangerButton = fadeOutFooterButton "btn-danger"
 
-formGroup = H.div ! class_ "form-group"
+formGroup' = H.div ! class_ "form-group"
 
 inputGroup = H.div ! class_ "input-group"
 
@@ -174,13 +178,14 @@ datetimePicker paramName date on =
     input ! formControl
           ! name (fromString paramName)
           ! type_ "text"
-          ! readonly ""
-          ! required ""
-          ! value (fromString date)
+          ! readonly
+          ! required
+          ! A.value (fromString date)
     H.span ! class_ "input-group-addon" $ H.span ! class_ "glyphicon glyphicon-calendar" $ mempty
-    when on $ dateTimePickerScript paramName
+    when on $ dateTimePickerScript (T.pack paramName)
 
-dateTimePickerScript pickerId = script . fromString $ concat
+dateTimePickerScript :: Text -> H.Html
+dateTimePickerScript pickerId = script . toMarkup $ T.concat
   [ "$(function () {"
   ,   "$('#", pickerId, "').datetimepicker({"
   ,     "format: 'YYYY-MM-DD HH:mm:ss',"
@@ -235,9 +240,9 @@ helpBlock text = p ! class_ "help-block" $ fromString text
 
 -- | Creates a form control selection with the given parameter name, a selector
 -- function which determines the selected value, and possible values
-selection :: (Show a, Data a) => String -> (a -> Bool) -> [(a, String)] -> Html
-selection paramName selector values =
-  formGroup $ selectionPart
+selection' :: (Show a, Data a) => String -> (a -> Bool) -> [(a, String)] -> Html
+selection' paramName selector values =
+  formGroup' $ selectionPart'
     paramName
     [class_ "form-control", A.required ""]
     selector
@@ -245,10 +250,20 @@ selection paramName selector values =
 
 -- | Creates a form control selection with the given parameter name, a label, a selector
 -- function which determines the selected value, and possible values
-selectionWithLabel :: (Show a, Data a) => String -> String -> (a -> Bool) -> [(a, String)] -> Html
-selectionWithLabel paramName labelText selector values = formGroup $ do
-  labelFor paramName labelText
+selectionWithLabel :: String -> Text -> H.Attribute -> [(Text, Text, Bool)] -> Html
+selectionWithLabel paramName labelText attr options = formGroup' $ do
+  labelFor' paramName (T.unpack labelText)
   selectionPart
+    paramName
+    (attr : [class_ "form-control", A.required ""])
+    options
+
+-- | Creates a form control selection with the given parameter name, a label, a selector
+-- function which determines the selected value, and possible values
+selectionWithLabel' :: (Show a, Data a) => String -> String -> (a -> Bool) -> [(a, String)] -> Html
+selectionWithLabel' paramName labelText selector values = formGroup' $ do
+  labelFor' paramName labelText
+  selectionPart'
     paramName
     [class_ "form-control", A.required ""]
     selector
@@ -258,7 +273,7 @@ selectionWithLabel paramName labelText selector values = formGroup $ do
 -- function which determines the selected value, and possible values
 selectionWithPlaceholder :: (Show a, Data a) => String -> String -> [(a, String)] -> Html
 selectionWithPlaceholder paramName placeholder values =
-  formGroup $ selectionPartWithPlaceholder
+  formGroup' $ selectionPartWithPlaceholder
     paramName
     [class_ "form-control", A.required ""]
     placeholder
@@ -266,8 +281,8 @@ selectionWithPlaceholder paramName placeholder values =
 
 -- | Creates a form control optional selection with the given parameter name, a label, a selector
 -- function which determines the selected value, and possible values
-selectionOptionalWithLabel paramName labelText selector values = formGroup $ do
-  labelFor paramName labelText
+selectionOptionalWithLabel paramName labelText selector values = formGroup' $ do
+  labelFor' paramName labelText
   selectionOptionalPart
     paramName
     [class_ "form-control"]
@@ -310,11 +325,11 @@ smallSubmitButton nameValue text =
 
 -- | Creates a password input with the given name as id, a given label within a form-group control
 passwordInput paramName labelText =
-  formGroup $ do
-    labelFor paramName labelText
+  formGroup' $ do
+    labelFor' paramName labelText
     H.input ! formControl
             ! type_ "password"
-            ! required ""
+            ! A.required ""
             ! name (fromString paramName)
             ! A.id (fromString paramName)
 
@@ -333,24 +348,22 @@ optionalTextInputFieldWithDefault paramName value =
             ! A.value (fromString value)
 
 -- | Creates a text input with the given name as id, a given label and a placeholder text
-textInputWithAttr paramName labelText placeholderText attr =
-  formGroup $ do
-    labelFor paramName labelText
+textInputWithAttr paramName labelText attr =
+  formGroup' $ do
+    labelFor' paramName labelText
     H.input ! formControl
             ! type_ "text"
-            ! A.required ""
             ! A.name (fromString paramName)
             ! A.id (fromString paramName)
-            ! A.placeholder (fromString placeholderText)
             ! attr
 
-textInput paramName labelText placeholderText =
-  textInputWithAttr paramName labelText placeholderText mempty
+textInput' paramName labelText placeholderText =
+  textInputWithAttr paramName labelText (A.placeholder (fromString placeholderText))
 
 -- | Creates an optional text input with the given name as id, a given label and a placeholder text
 optionalTextInput paramName labelText placeholderText =
-  formGroup $ do
-    labelFor paramName labelText
+  formGroup' $ do
+    labelFor' paramName labelText
     H.input ! formControl
             ! type_ "text"
             ! A.name (fromString paramName)
@@ -359,29 +372,223 @@ optionalTextInput paramName labelText placeholderText =
 
 -- | Creates an optional text input with the given name as id, a given label and a default value
 optionalTextInputWithDefault paramName labelText value =
-    formGroup $ do
-      labelFor paramName labelText
+    formGroup' $ do
+      labelFor' paramName labelText
       optionalTextInputFieldWithDefault paramName value
 
 
 -- | Creates a text input with the given name as id, a given label and a default value
 textInputWithDefault paramName labelText value =
-  formGroup $ do
-    labelFor paramName labelText
+  formGroup' $ do
+    labelFor' paramName labelText
     textInputFieldWithDefault paramName value
 
 readOnlyTextInputWithDefault paramName labelText value =
-  formGroup $ do
-    labelFor paramName labelText
+  formGroup' $ do
+    labelFor' paramName labelText
     (textInputFieldWithDefault paramName value) ! A.readonly ""
 
+data OnOff = On | Off
+
+type DateFormat = Text
+type TimeFormat = Text
+
+textInput :: Text -> TextVisibility -> Maybe Text -> Input
+textInput ident visibility contents = Input ident (TextInput visibility contents) []
+
+textArea :: Text -> Size -> Maybe Text -> Input
+textArea ident size contents = Input ident (TextArea size contents) []
+
+selection :: Text -> [(Text, Text, Bool)] -> Input
+selection ident options = Input ident (FixedChoiceInput options) []
+
+file :: Text -> Input
+file ident = Input ident File []
+
+toggle :: Text -> Text -> OnOff -> Input
+toggle ident label state = Input ident (Toggle label state) []
+
+dateTime :: Text -> Text -> Text -> Input
+dateTime ident date time = Input ident (DateTime date time) []
+
+data InputType = TextInput TextVisibility (Maybe Text)
+               | TextArea Size (Maybe Text)
+               | FixedChoiceInput [(Text, Text, Bool)]
+               | File
+               | Toggle Text OnOff
+               | DateTime Text Text
+
+data TextVisibility = PlainText | Password
+
+inputTypeCata :: (TextVisibility -> Maybe Text -> a)
+              -> (Size -> Maybe Text -> a)
+              -> ([(Text, Text, Bool)] -> a)
+              -> a
+              -> (Text -> OnOff -> a)
+              -> (Text -> Text -> a)
+              -> InputType
+              -> a
+inputTypeCata textInput_ textArea_ fixed_ file_ toggle_ dateTime_ inputType_ =
+  case inputType_ of
+    TextInput v value -> textInput_ v value
+    TextArea s value -> textArea_ s value
+    FixedChoiceInput values -> fixed_ values
+    File -> file_
+    Toggle label state -> toggle_ label state
+    DateTime date time -> dateTime_ date time
+
+data Input = Input Text InputType [Attribute]
+
+identifier :: Input -> Text
+identifier (Input ident _ _) = ident
+
+inputType :: Input -> InputType
+inputType (Input _ typ _) = typ
+
+html :: Input -> H.Html
+html (Input ident typ attrs) =
+  inputTypeCata
+    (textInputToHtml ident attrs)
+    (textAreaToHtml ident attrs)
+    (fixedChoiceToHtml ident attrs)
+    (fileToHtml ident attrs)
+    (toggleToHtml ident attrs)
+    (dateTimeToHtml ident attrs)
+    typ
+
+textInputToHtml :: Text -> [Attribute] -> TextVisibility -> Maybe Text -> H.Html
+textInputToHtml ident attrs visib value_ =
+  H.input ! formControl
+          ! A.name (toValue ident)
+          ! A.id (toValue ident)
+          ! inputType_
+          ! maybe mempty value value_
+          ! mconcat attrs
+
+  where
+    inputType_ :: H.Attribute
+    inputType_ = type_ . toValue $ case visib of
+                                     PlainText -> "text" :: Text
+                                     Password -> "password"
+
+textAreaToHtml :: Text -> [Attribute] -> Size -> Maybe Text -> H.Html
+textAreaToHtml ident attrs size contents =
+  H.textarea ! formControl
+             ! A.rows (toValue . show $ textAreaRows size)
+             ! A.id (toValue ident)
+             ! A.name (toValue ident)
+             ! textAreaStyle
+             ! mconcat attrs
+             $ maybe mempty toMarkup contents
+
+fixedChoiceToHtml :: Text -> [Attribute] -> [(Text, Text, Bool)] -> H.Html
+fixedChoiceToHtml ident attrs options =
+  let tag = case filter thd3 options of
+              (_:_:_) -> H.select ! A.multiple ""
+              _       -> H.select
+  in tag ! A.id (toValue ident)
+         ! formControl
+         ! mconcat attrs
+         $ mapM_ optionToHtml options
+
+  where
+    optionToHtml :: (Text, Text, Bool) -> Html
+    optionToHtml (value_, label_, selected) =
+      H.option ! A.value (toValue value_)
+               !? (selected, A.selected "")
+               $ toMarkup label_
+
+fileToHtml :: Text -> [Attribute] -> H.Html
+fileToHtml ident attrs =
+  H.input ! A.type_ "file"
+          ! A.id (toValue ident)
+          ! A.name (toValue ident)
+          ! mconcat attrs
+
+toggleToHtml :: Text -> [Attribute] -> Text -> OnOff -> H.Html
+toggleToHtml ident attrs label state =
+  H.div ! class_ "checkbox"
+        !? (isOn, A.checked "")
+        ! mconcat attrs $
+    H.label $ do
+      H.input ! type_ "checkbox"
+              ! A.id (toValue ident)
+              ! A.name (toValue ident)
+      toMarkup label
+
+    where
+      isOn :: Bool
+      isOn = case state of
+               On -> True
+               _  -> False
+
+dateTimeToHtml :: Text -> [Attribute] -> Text -> Text -> H.Html
+dateTimeToHtml ident attrs date time =
+  H.div ! class_ "input-group date"
+        ! A.id (toValue ident)
+        ! mconcat attrs
+        $ do
+    input ! formControl
+          ! name (toValue ident)
+          ! type_ "text"
+          ! readonly
+          ! value (T.unwords [date, time])
+    H.span ! class_ "input-group-addon" $ H.span ! class_ "glyphicon glyphicon-calendar" $ mempty
+    dateTimePickerScript ident
+
+with :: Input -> [Attribute] -> Input
+with (Input ident typ attrs) attrs' = Input ident typ (attrs' ++ attrs)
+
+required :: Attribute
+required = A.required ""
+
+readonly :: Attribute
+readonly = A.readonly ""
+
+disabled :: Attribute
+disabled = A.disabled ""
+
+placeholder :: Text -> Attribute
+placeholder t = A.placeholder (toValue t)
+
+value :: Text -> Attribute
+value t = A.value (toValue t)
+
+formGroup :: Text -> Input -> [Help] -> Html
+formGroup label input help = H.div ! class_ "form-group"
+                                   !? (isErroneous, class_ "has-error")
+                                   $ lbl <> html input <> helpBlock
+  where
+    lbl :: Html
+    lbl = H.label ! for (B.toValue (identifier input))
+                  $ B.toMarkup label
+
+    isErroneous :: Bool
+    isErroneous = any (helpTextCata (const True) (const False)) help
+    
+    helpBlock :: Html
+    helpBlock = case help of
+                  [] -> mempty
+                  [h] -> ((H.p ! class_ "help-block") . toMarkup . helpTextCata id id) h
+                  _ -> H.ul ! class_ "help-block" $
+                         mapM_ (H.li . toMarkup . helpTextCata id id) help
+
+data Help = ErrorExplanation Text
+          | Help Text
+
+helpTextCata :: (Text -> a) -> (Text -> a) -> Help -> a
+helpTextCata errorExplanation helpText help =
+  case help of
+    ErrorExplanation err -> errorExplanation err
+    Help t -> helpText t
+
 -- | Creates a label for the given id and given text
-labelFor name text =
+labelFor' name text =
   H.label ! for (fromString name) $ (fromString text)
 
 -- | Creates a labeled text as a form group element
 labeledText name value =
-  formGroup $ do
+  formGroup' $ do
     H.label $ fromString $ name
     H.span ! formControl $ value
 
@@ -435,21 +642,21 @@ textAreaStyle :: H.Attribute
 textAreaStyle = A.style "font-family: monospace;"
 
 -- | Creates a text area input with the given name as id, a given label
-textArea paramName labelText height html =
-  formGroup $ do
-    labelFor paramName labelText
+textArea' paramName labelText height html =
+  formGroup' $ do
+    labelFor' paramName labelText
     textAreaField paramName height html
 
 -- | Creates an optional text area input with the given name as id, a given label
 optionalTextArea paramName labelText height html =
-  formGroup $ do
-    labelFor paramName labelText
+  formGroup' $ do
+    labelFor' paramName labelText
     textAreaOptionalField paramName height html
 
 -- | Creates a text area input with the given name as id, a given label
 utf8TextArea paramName labelText height html =
-  formGroup $ do
-    labelFor paramName labelText
+  formGroup' $ do
+    labelFor' paramName labelText
     textAreaField paramName height ! A.acceptCharset "utf-8" $ html
 
 -- | Creates a radio button group, with a given values and labels, the parameter name
@@ -521,9 +728,13 @@ alertAlgebra
 
 -- HTML helpers
 
-optionTag :: String -> String -> Bool -> Html
-optionTag value text False = H.option ! A.value (fromString value)                 $ fromString text
-optionTag value text True  = H.option ! A.value (fromString value) ! A.selected "" $ fromString text
+optionTag :: (ToValue a, ToMarkup b) => a -> b -> Bool -> Html
+optionTag value text selected
+  | selected  = option ! A.selected ""
+  | otherwise = option
+  where
+    option :: Html
+    option = H.option ! A.value (toValue value) $ toMarkup text
 
 selectTag :: String -> Html -> Html
 selectTag name =
@@ -537,19 +748,25 @@ selectOptionalTag name =
              ! A.name (fromString name)
 
 -- Encodes the value to Fay JSON representation or throw an error for the given name
-encode :: (Data a, Show a, IsString s) => String -> a -> s
-encode name value = fromString $ fromMaybe (name ++ ": error encoding value") (encodeToFay value)
+encode :: (Data a, Show a) => String -> a -> String
+encode name value = fromMaybe (name ++ ": error encoding value") (encodeToFay value)
 
 selectionPartWithPlaceholder :: (Show a, Data a) =>
   String -> [Attribute] -> String -> [(a, String)] -> Html
-selectionPartWithPlaceholder name attrs placeholder options = foldl (!) (selectTag name) attrs $ optionTag "" placeholder False <> mapM_ option options
+selectionPartWithPlaceholder name attrs placeholder options = foldl (!) (selectTag name) attrs $ optionTag ("" :: String) placeholder False <> mapM_ option options
   where
     option :: (Show a, Data a) => (a, String) -> Html
     option (v,t) = optionTag (encode "selection" v) t False
 
-selectionPart :: (Show a, Data a) =>
+selectionPart :: String -> [Attribute] -> [(Text, Text, Bool)] -> Html
+selectionPart name attrs options = (selectTag name) ! (mconcat attrs) $ mapM_ option options
+  where
+    option :: (Text, Text, Bool) -> Html
+    option (ident, view, selected) = optionTag ident view selected
+
+selectionPart' :: (Show a, Data a) =>
   String -> [Attribute] -> (a -> Bool) -> [(a, String)] -> Html
-selectionPart name attrs def = foldl (!) (selectTag name) attrs . mapM_ option
+selectionPart' name attrs def = foldl (!) (selectTag name) attrs . mapM_ option
   where
     option (v,t) = optionTag (encode "selection" v) t (def v)
 
@@ -591,6 +808,9 @@ tooltip = dataToggle "tooltip"
 
 -- | Place the tooltip on the top
 tooltipAtTop = dataPlacement "top"
+
+hasError :: H.Attribute
+hasError = A.class_ "has-error"
 
 -- | Constants
 

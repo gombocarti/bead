@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Bead.Domain.Entities (
     AuthFailure(..)
   , Submission(..)
@@ -15,8 +16,6 @@ module Bead.Domain.Entities (
   , allBinaryEval
   , allPercentEval
   , Evaluation(..)
-  , evaluationCata
-  , withEvaluation
   , resultString
   , evaluationToFeedback
   , CourseCode(..)
@@ -76,16 +75,6 @@ module Bead.Domain.Entities (
   , mkUserDescription
   , UserRegistration(..)
   , userRegistration
-  , TestScriptType(..)
-  , testScriptTypeCata
-  , TestScript(..)
-  , testScriptCata
-  , withTestScript
-  , testScriptAppAna
-  , TestCase(..)
-  , testCaseCata
-  , withTestCase
-  , testCaseAppAna
   , UsersFile(..)
   , usersFile
   , FileInfo(..)
@@ -93,19 +82,19 @@ module Bead.Domain.Entities (
   , withFileInfo
   , fileInfoAppAna
   , Score(..)
-  , score
   , PageSettings(..)
   , defaultPageSettings
-  , CompareHun(..)
-  , sortHun
   , StatusMessage(..)
   , statusMessage
 
+  , module Bead.Domain.String
   , module Bead.Domain.Entity.Assessment
   , module Bead.Domain.Entity.Assignment
   , module Bead.Domain.Entity.Comment
   , module Bead.Domain.Entity.Feedback
   , module Bead.Domain.Entity.TestCase
+  , module Bead.Domain.Entity.TestScript
+  , module Bead.Domain.Evaluation
 
 #ifdef TEST
   , entityTests
@@ -122,11 +111,13 @@ import           Data.Time (UTCTime(..), LocalTime, defaultTimeLocale)
 import           Data.Time.Format (formatTime)
 import           GHC.Generics (Generic)
 
+import           Bead.Domain.String (CompareHu(..), sortHu)
 import           Bead.Domain.Entity.Assessment
 import           Bead.Domain.Entity.Assignment
 import           Bead.Domain.Entity.Comment
 import           Bead.Domain.Entity.Feedback
 import           Bead.Domain.Entity.TestCase
+import           Bead.Domain.Entity.TestScript
 import           Bead.Domain.Evaluation
 import           Bead.View.Translation
 
@@ -179,18 +170,6 @@ allBinaryEval = sequence . map binaryEval
 
 allPercentEval :: [EvaluationData b p f] -> Maybe [p]
 allPercentEval = sequence . map percentEval
-
--- | Evaluation of a submission
-data Evaluation = Evaluation {
-    evaluationResult  :: EvResult
-  , writtenEvaluation :: String
-  } deriving (Eq, Read, Show)
-
--- | Template function for the evaluation
-evaluationCata f (Evaluation result written) = f result written
-
--- | Template function with flipped parameter for the evaluation
-withEvaluation e f = evaluationCata f e
 
 resultString :: EvResult -> TransMsg
 resultString = evResultCata
@@ -445,13 +424,6 @@ languageCata f (Language l) = f l
 
 instance Hashable Language
 
--- User ID is unique identifier for the user, which
--- can be different than the username
-newtype Uid = Uid String
-  deriving (Data, Eq, Ord, Read, Show, Typeable)
-
-uid f (Uid x) = f x
-
 -- | Logged in user
 data User = User {
     u_role     :: Role
@@ -496,7 +468,7 @@ data UserDesc = UserDesc {
   } deriving Eq
 
 instance Ord UserDesc where
-  compare = compareHun
+  compare = compareHu
 
 mkUserDescription :: User -> UserDesc
 mkUserDescription u = UserDesc {
@@ -504,6 +476,13 @@ mkUserDescription u = UserDesc {
   , ud_fullname = u_name u
   , ud_uid      = u_uid u
   }
+
+-- User ID is unique identifier for the user, which
+-- can be different than the username
+newtype Uid = Uid String
+  deriving (Data, Eq, Ord, Read, Show, Typeable)
+
+uid f (Uid x) = f x
 
 -- | User awaiting for registration
 data UserRegistration = UserRegistration {
@@ -517,58 +496,6 @@ data UserRegistration = UserRegistration {
 -- | Template function for the UserRegistration
 userRegistration f (UserRegistration username email name token timeout) =
   f username email name token timeout
-
--- Test Script Type represents a choice: The test cases for the
--- test script will be uploaded as plain text or a zip file
-data TestScriptType
-  = TestScriptSimple
-  | TestScriptZipped
-  deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
-
--- Template function for the TestScriptType
-testScriptTypeCata
-  simple
-  zipped
-  t = case t of
-    TestScriptSimple -> simple
-    TestScriptZipped -> zipped
-
-#ifdef TEST
-instance Arbitrary TestScriptType where
-  arbitrary = elements [TestScriptSimple, TestScriptZipped]
-  shrink = testScriptTypeCata
-    [TestScriptZipped]
-    []
-#endif
-
--- Test Script defines a scripts that can be integrated with the
--- testing framework for the given course.
-data TestScript = TestScript {
-    tsName :: String -- The name of the script
-  , tsDescription :: String -- The short description of the script
-  , tsNotes :: String -- The notes for the creator of the test cases, which are associated with the script
-  , tsScript :: String -- The script itself that will be subsctituated to the test frameworks shell script
-  , tsType :: TestScriptType -- The type of the test script
-  } deriving (Eq, Show, Read)
-
--- Template function for the TestScript
-testScriptCata
-  tc -- Transformation of the test script type
-  f
-  (TestScript
-    name
-    description
-    notes
-    script
-    type_)
-  = f name description notes script (tc type_)
-
--- Template function for the TestScript with flipped parameters
-withTestScript t tc f = testScriptCata tc f t
-
--- Applicative functor based TestScript value creation
-testScriptAppAna name desc notes script type_
-  = TestScript <$> name <*> desc <*> notes <*> script <*> type_
 
 -- A file that a user can upload. Usually it is either a path or file contents.
 data UsersFile a
@@ -622,42 +549,14 @@ instance PermissionObj UserRegistration where
 
 -- * Ordering
 
--- Hungarian related charecter comparing, for special characters
--- uses the given list otherwise the normal comparism is called
--- capitals and non capitals are different characters
-class CompareHun c where
-  compareHun :: c -> c -> Ordering
+instance CompareHu Username where
+  compareHu (Username u) (Username u') = compareHu u u'
 
-instance CompareHun Char where
-  compareHun c c' = maybe (compare c c') id
-    ((compare <$> idxSmall   c <*> idxSmall   c') <|>
-     (compare <$> idxCapital c <*> idxCapital c'))
-    where
-      idxSmall   x = findIndex (x==) hunSmall
-      idxCapital x = findIndex (x==) hunCapital
-      hunSmall   = "aábcdeéfghiíjklmnoóöőpqrstuúüűvwxyz"
-      hunCapital = "AÁBCDEÉFGHIÍJKLMNOÓÖŐPQRSTUÚÜŰVWXYZ"
-
-instance CompareHun c => CompareHun [c] where
-  compareHun [] []    = EQ
-  compareHun [] (_:_) = LT
-  compareHun (_:_) [] = GT
-  compareHun (x:xs) (y:ys)
-    = case compareHun x y of
-        EQ -> compareHun xs ys
-        other -> other
-
-instance CompareHun Username where
-  compareHun (Username u) (Username u') = compareHun u u'
-
-instance CompareHun UserDesc where
-  compareHun (UserDesc username fullname _uid) (UserDesc username' fullname' _uid') =
-    case compareHun fullname fullname' of
-      EQ -> compareHun username username'
+instance CompareHu UserDesc where
+  compareHu (UserDesc username fullname _uid) (UserDesc username' fullname' _uid') =
+    case compareHu fullname fullname' of
+      EQ -> compareHu username username'
       other -> other
-
-sortHun :: [String] -> [String]
-sortHun = sortBy compareHun
 
 -- Status message is shown for the user on the UI
 data StatusMessage a
@@ -686,23 +585,7 @@ defaultPageSettings = PageSettings { needsLatex = False }
 #ifdef TEST
 
 entityTests = do
-  compareHunTests
   roleTest
-
-compareHunTests = group "compareHun" $ eqPartitions compareHun'
-  [ Partition "Small normal letters a-a" ('a', 'a') EQ ""
-  , Partition "Small normal letters d-z" ('d', 'z') LT ""
-  , Partition "Small normal letters z-a" ('z', 'a') GT ""
-  , Partition "Capital normal letters A-A" ('A', 'A') EQ ""
-  , Partition "Capital normal letters D-Z" ('D', 'Z') LT ""
-  , Partition "Capital normal letters Z-A" ('Z', 'A') GT ""
-  , Partition "Small accented letters á-á" ('á', 'á') EQ ""
-  , Partition "Small accented letters é-ú" ('é', 'ú') LT ""
-  , Partition "Small accented letters ű-á" ('ű', 'á') GT ""
-  , Partition "Capital accented letters Á-Á" ('á', 'á') EQ ""
-  , Partition "Capital accented letters É-Ú" ('É', 'Ú') LT ""
-  , Partition "Capital accented letters Ű-Á" ('Ű', 'Á') GT ""
-  ] where compareHun' = uncurry compareHun
 
 roleTest =
   assertProperty

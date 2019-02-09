@@ -102,7 +102,7 @@ abstractEvaluationPostHandler getEvKeyParameter evCommand = do
   config <- getParameter evalConfigParam
   commentOrResult <-
     evConfigCata
-      (getJSONParam (fieldName evaluationResultField) "No evaluation can be found.")
+      (undefined {-getJSONParam (fieldName evaluationResultField) "No evaluation can be found."-})
       (\_ -> do
         percentage  <- getParameterWithDefault 0 evaluationPercentagePrm
         commentOnly <- getParameter evaluationCommentOnlyPrm
@@ -117,16 +117,16 @@ abstractEvaluationPostHandler getEvKeyParameter evCommand = do
       config
   withEvalOrComment commentOrResult
     (case null commentText of
-      True -> return $
+      True -> setUserAction $
         ErrorMessage (msg_Evaluation_EmptyCommentAndFreeFormResult "Neither comment nor evaluation was given!")
       False -> do
         (mrole,mname) <- (getRole &&& getName) <$> userState
         let uname = fromMaybe "???" mname
         case mrole of
-          Nothing -> return $ LogMessage "The user is not logged in" -- Impossible
+          Nothing -> setUserAction $ LogMessage "The user is not logged in" -- Impossible
           Just role -> do
             now <- liftIO $ getCurrentTime
-            return $ SubmissionComment sk Comment {
+            setUserAction $ SubmissionComment sk Comment {
                comment = commentText
              , commentAuthor = uname
              , commentDate = now
@@ -138,7 +138,7 @@ abstractEvaluationPostHandler getEvKeyParameter evCommand = do
           evaluationResult = result
         , writtenEvaluation = commentText
         }
-      return $ evCommand key e)
+      setUserAction $ evCommand key e)
   where
     roleToCommentType = roleCata
       CT_Student
@@ -170,16 +170,16 @@ evaluationFrame evConfig msg content = do
   hiddenInput (fieldName evalConfigParam) (encodeToFay' "inputEvalType" evConfig)
   withEvConfig evConfig
     (do content
-        Bootstrap.formGroup $ evaluationDiv $
+        Bootstrap.formGroup' $ evaluationDiv $
           Bootstrap.radioButtonGroup (fieldName evaluationResultField) $
-            [ (True,  encodeToFay' "inputEvalResult" EvCmtComment   , msg $ msg_Evaluation_New_Comment "New Comment")
-            , (False, encodeToFay' "inputEvalResult" $ binary Passed, msg $ msg_Evaluation_Accepted "Accepted")
-            , (False, encodeToFay' "inputEvalResult" $ binary Failed, msg $ msg_Evaluation_Rejected "Rejected")
+            [ (True,  undefined {-encodeToFay' "inputEvalResult" EvCmtComment -}  , msg $ msg_Evaluation_New_Comment "New Comment")
+            , (False, undefined {- encodeToFay' "inputEvalResult" $ binary Passed -}, msg $ msg_Evaluation_Accepted "Accepted")
+            , (False, undefined {-encodeToFay' "inputEvalResult" $ binary Failed-}, msg $ msg_Evaluation_Rejected "Rejected")
             ])
     -- When the page is dynamic the percentage spinner is hooked on the field
     (\_ ->
       do content
-         Bootstrap.formGroup . evaluationDiv $ do
+         Bootstrap.formGroup' . evaluationDiv $ do
            Bootstrap.colMd4 $
              Bootstrap.radioButtonGroup (fieldName evaluationCommentOnlyPrm) $
                [ (True,  show True,  msg $ msg_Evaluation_New_Comment "New Comment")

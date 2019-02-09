@@ -12,15 +12,6 @@ Build-Type:          Simple
 Cabal-Version:       >= 1.8
 
 Data-Files:
-  snaplets/fay/devel.cfg,
-  snaplets/fay/src/Fay/JQueryUI.hs,
-  snaplets/fay/src/DynamicContents.hs,
-  snaplets/fay/src/Bead/Domain/Shared/Evaluation.hs,
-  snaplets/fay/src/Bead/View/Validators.hs,
-  snaplets/fay/src/Bead/View/Fay/HookIds.hs,
-  snaplets/fay/src/Bead/View/Fay/Hooks.hs,
-  snaplets/fay/src/Bead/View/Fay/JSON/ClientSide.hs,
-
   static/fonts/glyphicons-halflings-regular.woff,
   static/fonts/glyphicons-halflings-regular.ttf,
   static/bootstrap.custombutton.css,
@@ -190,6 +181,7 @@ Library
     bytestring,
     containers,
     deepseq,
+    digestive-functors,
     directory,
     hashable,
     HUnit,
@@ -252,12 +244,13 @@ Library
     Bead.Domain.Entity.Feedback
     Bead.Domain.Entity.Notification
     Bead.Domain.Entity.TestCase
+    Bead.Domain.Entity.TestScript
     Bead.Domain.Entities
     Bead.Domain.Evaluation
     Bead.Domain.Func
+    Bead.Domain.JSON
     Bead.Domain.Relationships
     Bead.Domain.RolePermission
-    Bead.Domain.Shared.Evaluation
     Bead.Domain.String
     Bead.Domain.TimeZone
     Bead.Domain.Types
@@ -281,6 +274,7 @@ Library
     Bead.View.Content.Evaluation.Page
     Bead.View.Content.EvaluationTable.Page
     Bead.View.Content.GroupRegistration.Page
+    Bead.View.Content.Form
     Bead.View.Content.Home.Data
     Bead.View.Content.Home.Page
     Bead.View.Content.Home.View
@@ -321,6 +315,7 @@ Library
     Bead.View.Fay.Hooks
     Bead.View.Fay.HookIds
     Bead.View.Fay.JSON.ServerSide
+    Bead.View.FileUploads
     Bead.View.I18N
     Bead.View.Login
     Bead.View.Logger

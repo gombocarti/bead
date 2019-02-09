@@ -72,12 +72,14 @@ deleteUsersFromCourseHandler =
   UA.DeleteUsersFromCourse
     <$> (getParameter delUserFromCourseKeyPrm)
     <*> (getParameterValues delUserFromCoursePrm)
+  >>= setUserAction
 
 deleteUsersFromGroupHandler :: POSTContentHandler
 deleteUsersFromGroupHandler =
   UA.DeleteUsersFromGroup
     <$> (getParameter delUserFromGroupKeyPrm)
     <*> (getParameterValues delUserFromGroupPrm)
+  >>= setUserAction
 
 navigation :: [Pages.Page a b c d e f] -> IHtml
 navigation links = do
