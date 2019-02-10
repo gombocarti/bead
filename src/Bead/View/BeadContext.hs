@@ -31,7 +31,6 @@ import           Text.Regex.TDFA
 
 import           Snap hiding (Config(..), getCookie)
 import qualified Snap
-import           Snap.Snaplet.Fay
 
 import           Bead.Config as Config
 import           Bead.Controller.Logging
@@ -295,7 +294,6 @@ data BeadContext = BeadContext {
   , _sendEmailContext   :: Snaplet SendEmailContext
 #endif
   , _randomPasswordContext :: Snaplet PasswordGeneratorContext
-  , _fayContext     :: Snaplet Fay
   , _tempDirContext :: Snaplet TempDirectoryContext
   , _configContext  :: Snaplet ConfigServiceContext
 #ifndef SSO

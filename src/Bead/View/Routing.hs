@@ -28,7 +28,6 @@ import qualified Prelude
 import qualified Text.Blaze.Html5 as H
 
 import qualified Data.ByteString.Char8 as BS
-import           Snap.Snaplet.Fay
 import           Snap.Util.FileServe (serveDirectory)
 
 import           Bead.Config (Config(..))
@@ -74,7 +73,6 @@ routes config = join
     , (changeLanguagePath, changeLanguage)
     ]
   , registrationRoutes config
-  , [ ("/fay", with fayContext fayServe) ]
   , [ (markdownPath, serveMarkdown) ]
     -- Add static handlers
   , [ (staticPath,         serveDirectory "static") ]

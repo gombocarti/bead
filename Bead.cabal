@@ -12,14 +12,10 @@ Build-Type:          Simple
 Cabal-Version:       >= 1.8
 
 Data-Files:
-  snaplets/fay/devel.cfg,
-  snaplets/fay/src/Fay/JQueryUI.hs,
-  snaplets/fay/src/DynamicContents.hs,
   snaplets/fay/src/Bead/Domain/Shared/Evaluation.hs,
   snaplets/fay/src/Bead/View/Validators.hs,
   snaplets/fay/src/Bead/View/Fay/HookIds.hs,
   snaplets/fay/src/Bead/View/Fay/Hooks.hs,
-  snaplets/fay/src/Bead/View/Fay/JSON/ClientSide.hs,
 
   static/fonts/glyphicons-halflings-regular.woff,
   static/fonts/glyphicons-halflings-regular.ttf,
@@ -210,7 +206,6 @@ Library
     snap-core,
     snap-server,
     snap-blaze,
-    snaplet-fay,
     stm,
     template-haskell,
     temporary,
