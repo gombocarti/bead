@@ -65,7 +65,6 @@ bootStrapDocument settings body' = do
         js "/bootstrap.min.js"
         css "/bootstrap-datetimepicker.min.css"
         js "/bootstrap-datetimepicker.min.js"
-        js "/fay/DynamicContents.js"
         when (needsLatex settings) $ do
           css "/katex/katex.min.css"
           js  "/katex/katex.min.js"

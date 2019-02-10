@@ -10,6 +10,7 @@ RUN apt-get update && \
       libffi-dev \
       libgmp-dev \
       make \
+      netbase \
       xz-utils \
       zlib1g-dev \
       git \
