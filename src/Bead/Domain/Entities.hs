@@ -118,6 +118,7 @@ import qualified Data.ByteString.Char8 as BC
 import           Data.Data
 import           Data.Hashable (Hashable)
 import           Data.List (findIndex, sortBy)
+import           Data.Maybe (fromMaybe)
 import           Data.Time (UTCTime(..), LocalTime, defaultTimeLocale)
 import           Data.Time.Format (formatTime)
 import           GHC.Generics (Generic)
@@ -622,21 +623,19 @@ instance PermissionObj UserRegistration where
 
 -- * Ordering
 
--- Hungarian related charecter comparing, for special characters
--- uses the given list otherwise the normal comparism is called
--- capitals and non capitals are different characters
+-- Hungarian related charecter comparing, for accented characters.
+-- Uses a given list, otherwise regular compare is applied.
 class CompareHun c where
   compareHun :: c -> c -> Ordering
 
 instance CompareHun Char where
-  compareHun c c' = maybe (compare c c') id
-    ((compare <$> idxSmall   c <*> idxSmall   c') <|>
-     (compare <$> idxCapital c <*> idxCapital c'))
+  compareHun c c' = fromMaybe (compare c c') (compare <$> idx c <*> idx c')
     where
+      idx        x = idxSmall x <|> idxCapital x
       idxSmall   x = findIndex (x==) hunSmall
       idxCapital x = findIndex (x==) hunCapital
-      hunSmall   = "aábcdeéfghiíjklmnoóöőpqrstuúüűvwxyz"
-      hunCapital = "AÁBCDEÉFGHIÍJKLMNOÓÖŐPQRSTUÚÜŰVWXYZ"
+      hunSmall     = "aábcdeéfghiíjklmnoóöőpqrstuúüűvwxyz"
+      hunCapital   = "AÁBCDEÉFGHIÍJKLMNOÓÖŐPQRSTUÚÜŰVWXYZ"
 
 instance CompareHun c => CompareHun [c] where
   compareHun [] []    = EQ
