@@ -128,11 +128,17 @@ courseAdminContent info = do
     groupAdministratorsTable msg (assignedGroups info)
 
   where
+    courses' :: [(CourseKey, String)]
     courses' = Prelude.map (Prelude.id *** courseName) (courses info)
-    groups' = (groups info)
-    groupAdmins' = Prelude.map (u_username &&& userLongname) (groupAdmins info)
 
-    userLongname u = concat [ usernameCata Prelude.id $ u_username u, " - ", u_name u]
+    groups' :: [(GroupKey, String)]
+    groups' = (groups info)
+
+    groupAdmins' :: [(Username, String)]
+    groupAdmins' = sortBy (compareHun `on` snd) $ Prelude.map (u_username &&& userLongname) (groupAdmins info)
+
+    userLongname :: User -> String
+    userLongname u = concat [ u_name u, " - ", usernameCata Prelude.id $ u_username u ]
 
     createGroup = Pages.createGroup ()
     assignGroupAdmin = Pages.assignGroupAdmin ()
