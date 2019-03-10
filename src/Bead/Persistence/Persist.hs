@@ -56,7 +56,7 @@ module Bead.Persistence.Persist (
   , courseOfGroup
   , filterGroups
   , isUserInGroup
-  , groupOfUserForCourse
+  , userGroupKeys
   , userGroups
   , subscribe
   , unsubscribe
@@ -361,23 +361,20 @@ filterGroups = PersistImpl.filterGroups
 isUserInGroup :: Username -> GroupKey -> Persist Bool
 isUserInGroup = PersistImpl.isUserInGroup
 
--- Returns the group where user is registered for the given course
-groupOfUserForCourse :: Username -> CourseKey -> Persist GroupKey
-groupOfUserForCourse user ck = head <$> (filterM c =<< userGroups user)
-  where
-    c gk = (==) <$> courseOfGroup gk <*> pure ck
-
 -- Lists all the groups that the user is attended in
-userGroups :: Username -> Persist [GroupKey]
+userGroups :: Username -> Persist [(GroupKey, Group)]
 userGroups = PersistImpl.userGroups
 
--- Subscribe the user for the given course and group
-subscribe :: Username -> CourseKey -> GroupKey -> Persist ()
+userGroupKeys ::  Username -> Persist [GroupKey]
+userGroupKeys = PersistImpl.userGroupKeys
+
+-- Subscribe the user for the given group
+subscribe :: Username -> GroupKey -> Persist ()
 subscribe = PersistImpl.subscribe
 
--- Unsubscribe the user from the given course and group,
+-- Unsubscribe the user from the given group,
 -- if the user is not subscribed nothing happens
-unsubscribe :: Username -> CourseKey -> GroupKey -> Persist ()
+unsubscribe :: Username -> GroupKey -> Persist ()
 unsubscribe = PersistImpl.unsubscribe
 
 -- Lists all the group admins for the given course
@@ -396,7 +393,7 @@ subscribedToGroup = PersistImpl.subscribedToGroup
 unsubscribedFromGroup :: GroupKey -> Persist [Username]
 unsubscribedFromGroup = PersistImpl.unsubscribedFromGroup
 
--- Lists all the assessment defined for the given course
+-- Lists all assessments (visible or hidden) defined for the given group
 assessmentsOfGroup :: GroupKey -> Persist [AssessmentKey]
 assessmentsOfGroup = PersistImpl.assessmentsOfGroup
 

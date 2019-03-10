@@ -15,13 +15,13 @@ import qualified Bead.Domain.Relationships as Domain
 import qualified Bead.Domain.Shared.Evaluation as Domain
 import           Bead.Persistence.SQL.Class
 import           Bead.Persistence.SQL.Entities
+import           Bead.Persistence.SQL.Group
 import           Bead.Persistence.SQL.JSON
 
 #ifdef TEST
 import qualified Data.Set as Set
 
 import           Bead.Persistence.SQL.Course
-import           Bead.Persistence.SQL.Group
 import           Bead.Persistence.SQL.MySQLTestRunner
 import           Bead.Persistence.SQL.TestData
 
@@ -84,13 +84,13 @@ modifyAssignment key assignment = do
         , AssignmentEvalConfig  =. encodeEvalConfig cfg
         ]
 
--- Lists all the assignment that are created for the given course
+-- Lists all assignments that are created for the given course
 courseAssignments :: Domain.CourseKey -> Persist [Domain.AssignmentKey]
 courseAssignments courseKey = do
   assignments <- selectList [AssignmentsOfCourseCourse ==. toEntityKey courseKey] []
   return $! map (toDomainKey . assignmentsOfCourseAssignment . entityVal) assignments
 
--- Lists all the assignment that are created for the given group
+-- Lists all assignments that are created for the given group
 groupAssignments :: Domain.GroupKey -> Persist [Domain.AssignmentKey]
 groupAssignments groupKey = do
   assignments <- selectList [AssignmentsOfGroupGroup ==. toEntityKey groupKey] []

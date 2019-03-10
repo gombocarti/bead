@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP #-}
 module Bead.Persistence.Relations (
     assignmentDesc
-  , userAssignmentKeys
-  , userAssignmentKeyList
   , submissionDesc
   , submissionDetailsDesc
   , groupDescription
@@ -11,12 +9,12 @@ module Bead.Persistence.Relations (
   , submissionTables
   , courseSubmissionTableInfo
   , groupSubmissionTableInfo
-  , userSubmissionDesc
+  , userAssignmentsAssessments
   , userSubmissionInfos
   , userLastSubmission
+  , courseAndGroupOfAssignment
   , courseOrGroupOfAssignment
   , courseOrGroupOfAssessment
-  , courseNameAndAdmins
   , administratedGroupsWithCourseName
   , groupsOfUsersCourse
   , removeOpenedSubmission
@@ -29,9 +27,9 @@ module Bead.Persistence.Relations (
   , scoreBoardOfGroup
   , scoreBoards
   , scoreInfo
+  , scoreInfoOfUser
   , scoreDesc
   , assessmentDesc
-  , userAssessmentKeys
   , notificationReference
 #ifdef TEST
   , persistRelationsTests
@@ -40,7 +38,7 @@ module Bead.Persistence.Relations (
 
 {-
 This module contains higher level functionality for querying information
-useing the primitves defined in the Persist module. Mainly Relations module
+using the primitves defined in the Persist module. Mainly Relations module
 related information is computed.
 -}
 
@@ -55,12 +53,17 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (catMaybes)
 import           Data.Ord (Down(Down))
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as HashSet
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime, getCurrentTime)
+import           Data.Foldable (traverse_)
 
-import           Bead.Domain.Entities
+import           Bead.Domain.Entities hiding (fullGroupName)
+import qualified Bead.Domain.Entities as Domain
 import qualified Bead.Domain.Entity.Assignment as Assignment
+import qualified Bead.Domain.Entity.Assessment as Assessment
 import qualified Bead.Domain.Entity.Notification as Notification
 import           Bead.Domain.Relationships
 import           Bead.Domain.Shared.Evaluation
@@ -75,44 +78,22 @@ import           Test.Tasty.TestSet
 
 -- * Combined Persistence Tasks
 
--- Computes the Group key list, which should contain one element,
--- for a course key and a user, which the user attends in.
-groupsOfUsersCourse :: Username -> CourseKey -> Persist [GroupKey]
+-- Retrieves keys of groups which the user attends in.
+groupsOfUsersCourse :: Username -> CourseKey -> Persist (HashSet GroupKey)
 groupsOfUsersCourse u ck = do
-  ugs <- nub <$> userGroups u
-  cgs <- nub <$> groupKeysOfCourse ck
-  return $ intersect ugs cgs
-
--- Produces a Just Assignment list, if the user is registered for some courses,
--- otherwise Nothing.
-userAssignmentKeys :: Username -> Persist (Map CourseKey (Set AssignmentKey))
-userAssignmentKeys u = do
-  gs <- nub <$> userGroups u
-  cs <- nub <$> userCourses u
-  case (cs,gs) of
-    ([],[]) -> return Map.empty
-    _       -> do
-      gas <- foldM groupAssignment Map.empty gs
-      as  <- foldM courseAssignment gas cs
-      return $! as
-  where
-    groupAssignment m gk = do
-      ck <- courseOfGroup gk
-      (insert ck) <$> (Set.fromList <$> groupAssignments gk) <*> (pure m)
-
-    courseAssignment m ck =
-      (insert ck) <$> (Set.fromList <$> courseAssignments ck) <*> (pure m)
-
-    insert k v m =
-      maybe (Map.insert k v m) (flip (Map.insert k) m . (Set.union v)) $ Map.lookup k m
+  ugs <- HashSet.fromList <$> userGroupKeys u
+  cgs <- HashSet.fromList <$> groupKeysOfCourse ck
+  return $ HashSet.intersection ugs cgs
 
 #ifdef TEST
-
-userAssignmentKeysTest = do
+groupsOfUsersCourseTest :: TestSet ()
+groupsOfUsersCourseTest = do
   let course  = Course "name" "desc" TestScriptSimple
+      course' = Course "name'" "desc'" TestScriptSimple
       group  = Group "name" "desc"
-      asg     = Assignment "name" "desc" Assignment.emptyAspects time time binaryConfig
-      time    = read "2014-06-09 12:55:27.959203 UTC"
+      group0 = Group "name0" "desc"
+      group1 = Group "name1" "desc"
+      group' = Group "name'" "desc"
       user1name = Username "USER1"
       user1  = User Student user1name (Email "email") "name"
                     (TimeZoneName "Europe/Budapest") (Language "hu")
@@ -125,19 +106,27 @@ userAssignmentKeysTest = do
     result <- runPersist interp $ do
       saveUser user1
       c <- saveCourse course
-      g <- saveGroup c group
-      a1 <- saveCourseAssignment c asg
-      a2 <- saveCourseAssignment c asg
-      a3 <- saveGroupAssignment g asg
-      a4 <- saveGroupAssignment g asg
-      keys <- userAssignmentKeys user1name
-      equals Map.empty keys "The unsubscribed user has some assignment keys"
-      subscribe user1name c g
-      keyMap <- userAssignmentKeys user1name
-      equals
-        (Map.fromList [ (c,Set.fromList [a1,a2,a3,a4])])
-        keyMap
-        "The assignment of the users was different than the sum of the course and group assignment"
+      c' <- saveCourse course'
+      [g, g0, g1] <- mapM (saveGroup c) [group, group0, group1]
+      g' <- saveGroup c' group'
+      subscribed <- groupsOfUsersCourse user1name c
+      equals HashSet.empty subscribed "The unsubscribed user has some groups."
+      
+      subscribe user1name g
+      subscribe user1name g0
+      subscribed0 <- groupsOfUsersCourse user1name c
+      equals (HashSet.fromList [g, g0]) subscribed0
+        "User doesn't seem to be subscribed to all groups."
+
+      subscribed' <- groupsOfUsersCourse user1name c'
+      equals HashSet.empty subscribed'
+        "User seem to be subscribed to a different course."
+
+      subscribe user1name g'
+      subscribed'' <- groupsOfUsersCourse user1name c'
+      equals (HashSet.fromList [g']) subscribed''
+        "User doesn't seem to be subscribed to second course."
+
       return ()
     tearDown init
     return result
@@ -145,10 +134,20 @@ userAssignmentKeysTest = do
 
 #endif
 
--- Produces the assignment key list for the user, it the user
--- is not registered in any course the result is the empty list
-userAssignmentKeyList :: Username -> Persist [AssignmentKey]
-userAssignmentKeyList u = (nub . concat . map (Set.toList . snd) . Map.toList) <$> (userAssignmentKeys u)
+-- This function is not really used outside of Persistence but the testing code
+-- resides outside of Persistence so this function is exported.
+-- Once the testing code is moved here, this function can be made private.
+courseAndGroupOfAssignment :: AssignmentKey -> Persist (Course, Maybe Group)
+courseAndGroupOfAssignment ak = do
+  ckGk <- courseOrGroupOfAssignment ak
+  case ckGk of
+    Left ck -> do
+      c <- loadCourse ck
+      return (c, Nothing)
+    Right gk -> do
+      c <- courseOfGroup gk >>= loadCourse
+      g <- loadGroup gk
+      return (c, Just g)
 
 courseOrGroupOfAssignment :: AssignmentKey -> Persist (Either CourseKey GroupKey)
 courseOrGroupOfAssignment ak = do
@@ -166,14 +165,14 @@ assignmentDesc now user key = do
   a <- loadAssignment key
   limit <- submissionLimitOfAssignment user key
   let aspects = Assignment.aspects a
-  (name, adminNames) <- courseNameAndAdmins key
+  (c, g) <- courseAndGroupOfAssignment key
   return $! AssignmentDesc {
       aActive = Assignment.isActive a now
     , aIsolated = Assignment.isIsolated aspects
     , aLimit = limit
     , aTitle  = Assignment.name a
-    , aTeachers = adminNames
-    , aGroup  = name
+    , aCourse = c
+    , aGroup  = g
     , aEndDate = Assignment.end a
     }
 
@@ -190,7 +189,7 @@ fullGroupName gk = do
   ck <- courseOfGroup gk
   course <- loadCourse ck
   group <- loadGroup gk
-  return $ concat [(courseName course), " - ", (groupName group)]
+  return $ Domain.fullGroupName course group
 
 groupDescription :: GroupKey -> Persist (GroupKey, GroupDesc)
 groupDescription gk = do
@@ -216,7 +215,7 @@ submissionDesc sk = do
   cgk <- courseOrGroupOfAssignment ak
   cs  <- commentsOfSubmission sk >>= \cks -> forM cks $ \ck ->
             (,) ck <$> loadComment ck
-  fs  <- mapM loadFeedback =<< (feedbacksOfSubmission sk)
+  fs  <- mapM loadFeedback =<< feedbacksOfSubmission sk
   case cgk of
     Left ck  -> do
       course <- loadCourse ck
@@ -305,22 +304,6 @@ openedSubmissionInfo u = do
       assignmentAndUserOfSubmission sk =
         (,,) <$> pure sk <*> assignmentOfSubmission sk <*> usernameOfSubmission sk
 
-
-courseNameAndAdmins :: AssignmentKey -> Persist (CourseName, [UsersFullname])
-courseNameAndAdmins ak = do
-  eCkGk <- courseOrGroupOfAssignment ak
-  (name, admins) <- case eCkGk of
-    Left  ck -> do
-      name   <- courseName <$> loadCourse ck
-      admins <- courseAdmins ck
-      return (name, admins)
-    Right gk -> do
-      name   <- fullGroupName gk
-      admins <- groupAdmins gk
-      return (name, admins)
-  adminNames <- mapM (fmap ud_fullname . userDescription) admins
-  return (name, adminNames)
-
 -- |Loads information on submissions uploaded by a user to an assignment.
 -- The elements in the result list are in reverse chronological order: the first element is the most recent.
 userSubmissionInfos :: Username -> AssignmentKey -> Persist [SubmissionInfo]
@@ -341,16 +324,16 @@ submissionEvalStr sk = do
 submissionDetailsDesc :: SubmissionKey -> Persist SubmissionDetailsDesc
 submissionDetailsDesc sk = do
   ak <- assignmentOfSubmission sk
-  (name, adminNames) <- courseNameAndAdmins ak
+  (c, g) <- courseAndGroupOfAssignment ak
   asg <- loadAssignment ak
-  sol <- solution       <$> loadSubmission sk
+  sol <- solution <$> loadSubmission sk
   cs  <- commentsOfSubmission sk >>= \cks -> forM cks $ \ck ->
             (,) ck <$> loadComment ck
   fs  <- mapM loadFeedback =<< (feedbacksOfSubmission sk)
   s   <- submissionEvalStr sk
   return SubmissionDetailsDesc {
-    sdGroup   = name
-  , sdTeacher = adminNames
+    sdCourse = c
+  , sdGroup   = g
   , sdAssignment = asg
   , sdStatus     = s
   , sdSubmission = submissionValue id (const "zipped") sol
@@ -378,6 +361,50 @@ isAdminedSubmission u sk = do
 -- TODO
 canUserCommentOn :: Username -> SubmissionKey -> Persist Bool
 canUserCommentOn _u _sk = return True
+
+-- Produces assignments, information about the submissions for the
+-- assignments and assessments which are associated with subscribed
+-- groups of the user.
+userAssignmentsAssessments :: Username -> Persist [(Group, Course, [(AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
+userAssignmentsAssessments u = do
+  now <- liftIO getCurrentTime
+  groups <- userGroups u
+  forM groups $ \(gk, grp) -> do
+    ck <- courseOfGroup gk
+    course <-loadCourse ck
+    gAsgs <- groupAssignments gk
+    cAsgs <- courseAssignments ck
+    let asgs = cAsgs ++ gAsgs
+    asgDescs <- catMaybes <$> mapM (createAssignmentDesc u now) asgs
+    assmnts <- assessmentsOfGroup gk
+    assmntDescs <- catMaybes <$> mapM (createAssessmentDesc u) assmnts
+    return (grp, course, asgDescs, assmntDescs)
+
+  where
+    -- Produces the assignment description if the assignment is active
+    -- Returns Nothing if the assignment is not visible for the user
+    createAssignmentDesc :: Username -> UTCTime -> AssignmentKey -> Persist (Maybe (AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState)))
+    createAssignmentDesc u now ak = do
+      a <- loadAssignment ak
+      case (now < Assignment.start a) of
+        True -> return Nothing
+        False -> do
+          desc <- assignmentDesc now u ak
+          info <- userLastSubmission u ak
+          return $ (Just (ak, desc, submKeyAndState <$> info))
+
+    -- Produces an assessment and information about the evaluations for the
+    -- assessments.
+    createAssessmentDesc :: Username -> AssessmentKey -> Persist (Maybe (AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo))
+    createAssessmentDesc u ak = do
+      assessment <- loadAssessment ak
+      if Assessment.visible assessment
+        then do
+          mScoreInfo <- scoreInfoOfUser u ak
+          case mScoreInfo of
+            Nothing         -> return $ Just (ak, assessment, Nothing, Score_Not_Found)
+            Just (sk,sInfo) -> return $ Just (ak, assessment, sk, sInfo)
+        else return Nothing
 
 -- Returns all the submissions of the users for the groups that the
 -- user administrates
@@ -423,19 +450,6 @@ lastSubmissionAsgKey :: Username -> AssignmentKey -> Persist (AssignmentKey, May
 lastSubmissionAsgKey u ak = addKey <$> (userLastSubmission u ak)
   where
     addKey s = (ak,s)
-
--- TODO: Need to be add semantics there
-calculateResult :: [SubmissionState] -> Maybe Result
-calculateResult _ = Nothing
-
-#ifdef TEST
-calculateResultTests = do
-  eqPartitions calculateResult
-    [ Partition "Empty list" [] Nothing ""
-    , Partition "One binary submission" [Submission_Result undefined (binaryResult Passed)] Nothing ""
-    , Partition "One percentage submission" [Submission_Result undefined (percentageResult 0.1)] Nothing ""
-    ]
-#endif
 
 mkCourseSubmissionTableInfo
   :: String -> [Username] -> [AssignmentKey] -> CourseKey
@@ -510,6 +524,17 @@ submissionState sk = do
     lastTestAgentFeedback :: [Feedback] -> Maybe Feedback
     lastTestAgentFeedback = find isTestedFeedback . sortOn (Down . postDate)
 
+-- Produces the score key, score info for the specific user and assessment.
+-- Returns Nothing if there are multiple scoreinfos available.
+scoreInfoOfUser :: Username -> AssessmentKey -> Persist (Maybe (Maybe ScoreKey, ScoreInfo))
+scoreInfoOfUser u ak = do
+  scoreKeys <- scoreOfAssessmentAndUser u ak
+  case scoreKeys of
+    []   -> return . Just $ (Nothing, Score_Not_Found)
+    [sk] -> do info <- scoreInfo sk
+               return . Just $ (Just sk,info)
+    _    -> return Nothing
+
 -- Produces information for the given score
 scoreInfo :: ScoreKey -> Persist ScoreInfo
 scoreInfo sk = do
@@ -522,25 +547,6 @@ scoreInfo sk = do
 userLastSubmission :: Username -> AssignmentKey -> Persist (Maybe SubmissionInfo)
 userLastSubmission u ak =
   (maybe (return Nothing) ((Just <$>) . submissionInfo)) =<< lastSubmission ak u
-
-userSubmissionDesc :: Username -> AssignmentKey -> Persist UserSubmissionDesc
-userSubmissionDesc u ak = do
-  -- Calculate the normal fields
-  asgName       <- Assignment.name <$> loadAssignment ak
-  courseOrGroup <- courseOrGroupOfAssignment ak
-  crName <- case courseOrGroup of
-              Left  ck -> courseName <$> loadCourse ck
-              Right gk -> fullGroupName gk
-  student <- ud_fullname <$> userDescription u
-  keys    <- userSubmissions u ak
-  submissions <- mapM submissionInfo keys
-
-  return UserSubmissionDesc {
-    usCourse         = crName
-  , usAssignmentName = asgName
-  , usStudent        = student
-  , usSubmissions    = submissions
-  }
 
 -- Helper computation which removes the given submission from
 -- the opened submission directory, which is optimized by
@@ -555,18 +561,8 @@ removeOpenedSubmission sk = do
 -- otherwise do nothing
 deleteUserFromCourse :: CourseKey -> Username -> Persist ()
 deleteUserFromCourse ck u = do
-  cs <- userCourses u
-  when (ck `elem` cs) $ do
-    gs <- userGroups u
-    -- Collects all the courses for the user's group
-    cgMap <- Map.fromList <$> (forM gs $ runKleisli ((k (courseOfGroup)) &&& (k return)))
-    -- Unsubscribe the user from a given course with the found group
-    maybe
-      (return ()) -- TODO: Logging should be usefull
-      (unsubscribe u ck)
-      (Map.lookup ck cgMap)
-  where
-    k = Kleisli
+  groups <- groupsOfUsersCourse u ck
+  traverse_ (unsubscribe u) groups
 
 testScriptInfo :: TestScriptKey -> Persist TestScriptInfo
 testScriptInfo tk = do
@@ -642,19 +638,16 @@ scoreDesc sk = do
   as <- loadAssessment ak
   info <- scoreInfo sk
   courseOrGroup <- courseOrGroupOfAssessment ak
-  (course,group,teachers) <- case courseOrGroup of
+  (course, group) <- case courseOrGroup of
     Left ck -> do
       course <- loadCourse ck
-      teachers <- courseAdmins ck
-      return (courseName course, Nothing, teachers)
+      return (course, Nothing)
     Right gk -> do
         group <- loadGroup gk
         ck <- courseOfGroup gk
         course <- loadCourse ck
-        teachers <- groupAdmins gk
-        return (courseName course, Just . groupName $ group, teachers)
-  teachersName <- mapM ((ud_fullname <$>) . userDescription) teachers
-  return $ ScoreDesc course group teachersName info as
+        return (course, Just group)
+  return $ ScoreDesc course group info as
 
 assessmentDesc :: AssessmentKey -> Persist AssessmentDesc
 assessmentDesc ak = do
@@ -685,29 +678,6 @@ courseOrGroupOfAssessment ak = do
         Just ck -> return . Left $ ck
         Nothing -> error $ "Impossible: No course or groupkey was found for the assessment:" ++ show ak
 
--- Produces a map from the user's courses to set of every assessment of the course. The map is empty if the user is not subscribed to groups or courses.
--- Per group assessments are included.
-userAssessmentKeys :: Username -> Persist (Map CourseKey (Set AssessmentKey))
-userAssessmentKeys u = do
-  gs <- nub <$> userGroups u
-  cs <- nub <$> userCourses u
-  case (cs,gs) of
-    ([],[]) -> return Map.empty
-    _       -> do
-      gas <- foldM groupAssessment Map.empty gs
-      as  <- foldM courseAssessment gas cs
-      return $! as
-  where
-    groupAssessment m gk = do
-      ck <- courseOfGroup gk
-      (insert ck) <$> (Set.fromList <$> assessmentsOfGroup gk) <*> (pure m)
-
-    courseAssessment m ck =
-      (insert ck) <$> (Set.fromList <$> assessmentsOfCourse ck) <*> (pure m)
-
-    insert k v m =
-      maybe (Map.insert k v m) (flip (Map.insert k) m . (Set.union v)) $ Map.lookup k m
-
 notificationReference :: Notification.NotificationType -> Persist Notification.NotificationReference
 notificationReference = Notification.notificationType comment evaluation assignment assessment system
   where
@@ -735,9 +705,7 @@ notificationReference = Notification.notificationType comment evaluation assignm
     system = return Notification.NRefSystem
 
 #ifdef TEST
-
+persistRelationsTests :: TestSet ()
 persistRelationsTests = do
-  userAssignmentKeysTest
-  calculateResultTests
-
+  groupsOfUsersCourseTest
 #endif

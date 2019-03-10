@@ -180,9 +180,7 @@ viewScoreContent sd = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
-      (msg . msg_ViewUserScore_Course $ "Course:")   .|. scdCourse sd
-      maybe mempty (\g -> (msg . msg_ViewUserScore_Group $ "Group:") .|. g) (scdGroup sd)
-      (msg . msg_ViewUserScore_Teacher $ "Teacher:") .|. (intercalate ", " . sortHun . scdTeacher) sd
+      (msg . msg_ViewUserScore_Course $ "Course:")   .|. maybe (courseName $ scdCourse sd) (fullGroupName (scdCourse sd)) (scdGroup sd)
       (msg . msg_ViewUserScore_Assessment $ "Assessment:") .|. aTitle
       when (not . null $ aDesc) $
         (msg . msg_ViewUserScore_Description $ "Description:") .|. aDesc

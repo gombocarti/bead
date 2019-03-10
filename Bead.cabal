@@ -187,6 +187,7 @@ Library
     containers,
     deepseq,
     directory,
+    esqueleto,
     hashable,
     HUnit,
     fay,
@@ -305,7 +306,6 @@ Library
     Bead.View.Content.SeeMore
     Bead.View.Content.SubmissionState
     Bead.View.Content.SubmissionTable
-    Bead.View.Content.Utils
     Bead.View.Content.VisualConstants
     Bead.View.ContentHandler
     Bead.View.DataBridge
@@ -372,6 +372,7 @@ Executable BeadTest
     temporary,
     time,
     transformers,
+    unordered-containers,
     uuid
   if flag(SSO)
     CPP-Options: -DSSO -DTEST

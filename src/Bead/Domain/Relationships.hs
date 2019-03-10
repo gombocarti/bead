@@ -1,14 +1,17 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Bead.Domain.Relationships where
 
 import Data.Ord (Down(..))
 import Data.Data
+import Data.Hashable (Hashable)
 import Data.List as List hiding (group)
 import Data.Map (Map)
 import Data.Time (UTCTime(..))
 import Data.Tuple.Utils (fst3, snd3, thd3)
+import GHC.Generics (Generic)
 
 import Bead.Domain.Entities
 import Bead.Domain.Evaluation
@@ -85,8 +88,8 @@ data AssignmentDesc = AssignmentDesc {
   , aIsolated :: Bool
   , aLimit    :: SubmissionLimit
   , aTitle    :: String
-  , aGroup    :: String
-  , aTeachers :: [String]
+  , aCourse   :: Course
+  , aGroup    :: Maybe Group
   -- DeadLine for the assignment in UTC
   , aEndDate  :: UTCTime
   } deriving (Eq, Ord, Show)
@@ -152,8 +155,8 @@ sortSbmDescendingByTime :: [SubmissionInfo] -> [SubmissionInfo]
 sortSbmDescendingByTime = List.sortOn (Down . thd3)
 
 data SubmissionDetailsDesc = SubmissionDetailsDesc {
-    sdGroup :: String
-  , sdTeacher :: [String]
+    sdCourse :: Course
+  , sdGroup :: Maybe Group
   , sdAssignment :: Assignment
   , sdStatus :: Maybe String
   , sdSubmission :: String
@@ -257,17 +260,6 @@ submissionTableInfoPermissions = ObjectPermissions [
     (P_Open, P_Course), (P_Open, P_Assignment)
   ]
 
-data UserSubmissionDesc = UserSubmissionDesc {
-    usCourse         :: String
-  , usAssignmentName :: String
-  , usStudent        :: String
-  , usSubmissions    :: [SubmissionInfo]
-  } deriving (Show)
-
-userSubmissionDescPermissions = ObjectPermissions [
-    (P_Open, P_Course), (P_Open, P_Assignment), (P_Open, P_Submission)
-  ]
-
 data TCCreation
   = NoCreation
   | FileCreation TestScriptKey (UsersFile FilePath)
@@ -304,7 +296,9 @@ tcModificationCata
 -- * Entity keys
 
 newtype AssignmentKey = AssignmentKey String
-  deriving (Eq, Ord, Show, Read, Data, Typeable)
+  deriving (Eq, Ord, Show, Read, Data, Typeable, Generic)
+
+instance Hashable AssignmentKey
 
 assignmentKeyMap :: (String -> a) -> AssignmentKey -> a
 assignmentKeyMap f (AssignmentKey x) = f x
@@ -354,13 +348,17 @@ testJobKeyToSubmissionKey = testJobKeyCata SubmissionKey
 submissionKeyToTestJobKey = submissionKeyMap TestJobKey
 
 newtype CourseKey = CourseKey String
-  deriving (Data, Eq, Ord, Show, Typeable)
+  deriving (Generic, Data, Eq, Ord, Show, Typeable)
+
+instance Hashable CourseKey
 
 courseKeyMap :: (String -> a) -> CourseKey -> a
 courseKeyMap f (CourseKey g) = f g
 
 newtype GroupKey = GroupKey String
-  deriving (Data, Eq, Ord, Show, Typeable)
+  deriving (Generic, Data, Eq, Ord, Show, Typeable)
+
+instance Hashable GroupKey
 
 groupKeyMap :: (String -> a) -> GroupKey -> a
 groupKeyMap f (GroupKey g) = f g
@@ -446,9 +444,8 @@ data AssessmentDesc = AssessmentDesc {
   }
 
 data ScoreDesc = ScoreDesc {
-      scdCourse     :: String
-    , scdGroup      :: Maybe String
-    , scdTeacher    :: [String]
+      scdCourse     :: Course
+    , scdGroup      :: Maybe Group
     , scdScore      :: ScoreInfo
     , scdAssessment :: Assessment
     }

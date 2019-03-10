@@ -98,8 +98,7 @@ submissionDetailsContent p = do
     let info = smDetails p
     let tc   = uTime p
     Bootstrap.rowColMd12 $ Bootstrap.table $ tbody $ do
-      (msg $ msg_SubmissionDetails_Course "Course, group:")  .|. sdGroup info
-      (msg $ msg_SubmissionDetails_Admins "Teacher:")        .|. (intercalate ", " . sortHun $ sdTeacher info)
+      (msg $ msg_SubmissionDetails_Course "Course:")  .|. maybe (courseName $ sdCourse info) (fullGroupName (sdCourse info)) (sdGroup info)
       (msg $ msg_SubmissionDetails_Assignment "Assignment:") .|. (Assignment.name $ sdAssignment info)
       (msg $ msg_SubmissionDetails_Deadline "Deadline:")     .|. (showDate . tc . Assignment.end $ sdAssignment info)
       maybe (return ()) (uncurry (.|.)) (remainingTries msg (smLimit p))

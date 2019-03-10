@@ -27,6 +27,7 @@ module Bead.Domain.Entities (
   , courseAppAna
   , Group(..)
   , groupCata
+  , fullGroupName
   , Role(..)
   , roleCata
   , roles
@@ -247,6 +248,9 @@ data Group = Group {
 groupCata group (Group name desc)
   = group name desc
 
+fullGroupName :: Course -> Group -> String
+fullGroupName c g = unwords [courseName c, "-", groupName g]
+
 -- * Authorization and authentication
 
 data AuthFailure
@@ -376,7 +380,9 @@ class PermissionObj p where
 newtype ObjectPermissions = ObjectPermissions { permissions :: [(Permission, PermissionObject)] }
 
 newtype Username = Username String
-  deriving (Data, Eq, Ord, Read, Show, Typeable)
+  deriving (Data, Eq, Ord, Read, Show, Typeable, Generic)
+
+instance Hashable Username
 
 usernameCata :: (String -> a) -> Username -> a
 usernameCata f (Username u) = f u

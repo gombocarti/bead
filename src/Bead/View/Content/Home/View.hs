@@ -95,7 +95,7 @@ homeContent d = do
             when (not $ isAdmin r) $ do
               Bootstrap.row $ Bootstrap.colMd12 $ h3 $ fromString $ msg $ msg_Home_StudentTasks "Student Menu"
               i18n msg $ navigation [groupRegistration]
-              i18n msg $ availableAssignments d (timeConverter d) (assignments d)
+              i18n msg $ availableAssignmentsAssessments d (timeConverter d) (assignmentsAssessments d)
   where
       administration    = Pages.administration ()
       courseAdmin       = Pages.courseAdmin ()
@@ -191,9 +191,9 @@ navigation links = do
     $ H.div ! class_ "btn-group"
     $ mapM_ (i18n msg . linkButtonToPageBS) links
 
-availableAssignments :: HomePageData -> UserTimeConverter -> StudentAssignments -> IHtml
-availableAssignments pd timeconverter studentAssignments
-  | isNotRegistered studentAssignments = do
+availableAssignmentsAssessments :: HomePageData -> UserTimeConverter -> [(Group, Course, [ActiveAssignment], [ActiveAssessment])] -> IHtml
+availableAssignmentsAssessments pd timeconverter groups
+  | null groups = do
       msg <- getI18N
       return
         $ Bootstrap.row
@@ -201,68 +201,51 @@ availableAssignments pd timeconverter studentAssignments
         $ p
         $ fromString
         $ msg $ msg_Home_HasNoRegisteredCourses "There are no registered courses, register to some."
-
-  | null (toAllActiveAssignmentList studentAssignments) = do
-      msg <- getI18N
-      return $ do
-        Bootstrap.row
-          $ Bootstrap.colMd12
-          $ p
-          $ fromString
-          $ msg $ msg_Home_HasNoAssignments "There are no available assignments yet."
-        let as = assessments pd
-            sortedAs = sortBy (compare `on` (courseName . fst)) . Map.elems $ as
-        mapM_ (availableAssessment msg) sortedAs
-
   | otherwise = do
-      -- Sort course or groups by their name.
-      let asl = sortBy (compare `on` snd3)
-                  $ map courseName3
-                  $ toActiveAssignmentList studentAssignments
       msg <- getI18N
       return $ do
-        Bootstrap.rowColMd12
-          $ p
-          $ fromString . msg $ msg_Home_Assignments_Info $ concat
-            [ "Submissions and their evaluations may be accessed by clicking on each assignment's link. "
-            , "The table shows only the last evaluation per assignment."
-            ]
+        when (any (\g -> hasAssignments g || hasAssessments g) groups) $ do
+          Bootstrap.rowColMd12
+            $ p
+            $ fromString . msg $ msg_Home_Assignments_Info $ concat
+              [ "Submissions and their evaluations may be accessed by clicking on each assignment's link. "
+              , "The table shows only the last evaluation per assignment."
+              ]
 
-        Bootstrap.rowColMd12 $
-          Bootstrap.alert Bootstrap.Info $
-          markdownToHtml . msg $ msg_Home_EvaluationLink_Hint $
-          "**Hint**: You can go straight to your submission by clicking on a link in the Evaluation column."
+          Bootstrap.rowColMd12 $
+            Bootstrap.alert Bootstrap.Info $
+            markdownToHtml . msg $ msg_Home_EvaluationLink_Hint $
+            "**Hint**: You can go straight to your submission by clicking on a link in the Evaluation column."
 
-        forM_ asl $ \(key, coursename, as) -> do
-          let asm = Map.lookup key (assessments pd)
-          let hasAssessments = case asm of
-                                 Just (_,(_:_)) -> True
-                                 _              -> False
-          when (not (null as) || hasAssessments) (h4 $ fromString coursename)
-          when (not $ null as) $ do
-            Bootstrap.rowColMd12 $ do
-              let areIsolateds = areOpenAndIsolatedAssignments as
-              let assignments = if areIsolateds then (isolatedAssignments as) else as
-              let isLimited = isLimitedAssignments assignments
-              when areIsolateds $
-                Bootstrap.alert Bootstrap.Warning $
-                markdownToHtml . msg $ msg_Home_ThereIsIsolatedAssignment $ concat
-                [ "**Isolated mode**: There is at least one assignment which hides the normal assignments for "
-                , "this course."
-                ]
-              Bootstrap.table $ do
-                thead $ headerLine msg isLimited
-                -- Sort assignments by their end date time in reverse
-                tbody $ mapM_ (assignmentLine msg isLimited)
+        forM_ groups $ \g@(grp, course, assignments, assessments) -> do
+          h4 $ fromString $ fullGroupName course grp
+          if (not (hasAssignments g || hasAssessments g))
+            then Bootstrap.row
+                   $ Bootstrap.colMd12
+                   $ p
+                   $ fromString
+                   $ msg $ msg_Home_HasNoAssignments "There are no available assignments yet."
+            else 
+              when (hasAssignments g) $ do
+                Bootstrap.rowColMd12 $ do
+                  let areIsolateds = areOpenAndIsolatedAssignments assignments
+                  let visibleAsgs = if areIsolateds then (isolatedAssignments assignments) else assignments
+                  let isLimited = isLimitedAssignments visibleAsgs
+                  when areIsolateds $
+                    Bootstrap.alert Bootstrap.Warning $
+                      markdownToHtml . msg $ msg_Home_ThereIsIsolatedAssignment $ concat
+                        [ "**Isolated mode**: There is at least one assignment which hides the normal assignments for "
+                        , "this course."
+                        ]
+                  Bootstrap.table $ do
+                    thead $ headerLine msg isLimited
+                    -- Sort assignments by their end date time in reverse
+                    tbody $ mapM_ (assignmentLine msg isLimited)
                       $ reverse $ sortBy (compare `on` (aEndDate . activeAsgDesc))
-                      $ assignments
-          -- Assessment table
-          case asm of
-            Just cas@(_,(_:_)) -> availableAssessment msg cas
-            _                  -> mempty
+                      $ visibleAsgs
+                  -- Assessment table
+                  availableAssessments msg g
   where
-    snd3 (_,s,_) = s
-    courseName3 (ck, c, as) = (ck, courseName c, as)
     isLimitedAssignments = isJust . find limited
 
     limited = submissionLimit (const False) (\_ _ -> True) (const True) . (\(_a,ad,_si) -> aLimit ad)
@@ -278,15 +261,13 @@ availableAssignments pd timeconverter studentAssignments
     headerLine :: I18N -> Bool -> H.Html
     headerLine msg isLimited = tr $ do
       th ""
-      th (fromString $ msg $ msg_Home_Course "Course")
-      th (fromString $ msg $ msg_Home_CourseAdmin "Teacher")
       th (fromString $ msg $ msg_Home_Assignment "Assignment")
       when isLimited $ th (fromString $ msg $ msg_Home_Limit "Limit")
       th (fromString $ msg $ msg_Home_Deadline "Deadline")
       th (fromString $ msg $ msg_Home_Evaluation "Evaluation")
 
     assignmentLine :: I18N -> Bool -> ActiveAssignment -> H.Html
-    assignmentLine msg isLimited (a,aDesc,sLookup) = H.tr $ do
+    assignmentLine msg isLimited (a, aDesc, subm) = H.tr $ do
       case and [aActive aDesc, noLimitIsReached aDesc] of
         True ->
           td $ H.span
@@ -297,8 +278,6 @@ availableAssignments pd timeconverter studentAssignments
           td $ H.span
                  ! A.class_ "glyphicon glyphicon-lock"
                  $ mempty
-      td (fromString . aGroup $ aDesc)
-      td (fromString . join . intersperse ", " . sortHun . aTeachers $ aDesc)
       td $ Bootstrap.link (routeOf (Pages.submission a ())) (aTitle aDesc)
       when isLimited $ td (fromString . limit $ aLimit aDesc)
       td (fromString . showDate . timeconverter $ aEndDate aDesc)
@@ -306,7 +285,7 @@ availableAssignments pd timeconverter studentAssignments
       where
         noLimitIsReached = submissionLimit (const True) (\n _ -> n > 0) (const False) . aLimit
         limit = fromString . submissionLimit
-          (const "") (\n _ -> (msg $ msg_Home_Remains "Remains: ") ++ show n) (const $ msg $ msg_Home_Reached "Reached")
+          (const "") (\n _ -> unwords [msg $ msg_Home_Remains "Remains:", show n]) (const $ msg $ msg_Home_Reached "Reached")
 
         submissionDetails :: SubmissionKey -> Pages.Page () () () () () ()
         submissionDetails key = Pages.submissionDetails a key ()
@@ -317,20 +296,19 @@ availableAssignments pd timeconverter studentAssignments
           (Bootstrap.grayLabel $ msg $ msg_Home_SubmissionCell_NoSubmission "No submission")
           (\(key, state) ->
              Bootstrap.link (routeOf (submissionDetails key)) (SState.formatSubmissionState SState.toLabel msg state))
-          sLookup
+          subm
 
 -- assessment table for students
-availableAssessment :: I18N -> (Course, [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)]) -> Html
-availableAssessment msg (c, assessments) | null assessments = mempty
-                                         | otherwise = do
+availableAssessments :: I18N -> (Group, Course, [ActiveAssignment], [ActiveAssessment]) -> Html
+availableAssessments msg (_, _, _, assessments) | null assessments = mempty
+                                                | otherwise = do
   Bootstrap.rowColMd12 . H.p . fromString . msg $ msg_Home_AssessmentTable_Assessments "Assessments"
   Bootstrap.rowColMd12 . Bootstrap.table $ do
     H.tr (header sortedAssessments)
     H.tr $ do
-      H.td . string $ courseName c
       mapM_ evaluationViewButton (zip [(sk,si) | (_,_,sk,si) <- sortedAssessments] [1..])
   where
-      header assessments = H.th mempty >> mapM_ (H.td . assessmentLabel) (zip [assessment | (_ak,assessment,_sk,_si) <- assessments] [1..])
+      header assessments = mapM_ (H.td . assessmentLabel) (zip [assessment | (_ak,assessment,_sk,_si) <- assessments] [1..])
           where
             assessmentLabel :: (Assessment, Int) -> Html
             assessmentLabel (as,n) = Bootstrap.grayLabel (show n) ! tooltip
