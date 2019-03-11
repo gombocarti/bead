@@ -104,9 +104,14 @@ administrationContent info = do
         H.thead $ H.tr $ H.th $ fromString . msg $ msg_Administration_CreatedCourses "Courses"
         H.tbody $ forM_ coursesInfo (\(_ckey,c) -> H.tr $ H.td $ fromString $ courseName c)
 
-    userLongname u = concat [ usernameCata id $ u_username u, " - ", u_name u ]
-    courses' = map (id *** courseName) $ courses info
-    courseAdmins' = map (u_username &&& userLongname) $ courseAdmins info
+    userLongname :: User -> String
+    userLongname u = concat [ u_name u, " - ", usernameCata id $ u_username u ]
+
+    courses' :: [(CourseKey, String)]
+    courses' = sortBy (compareHun `on` snd) $ map (id *** courseName) $ courses info
+
+    courseAdmins' :: [(Username, String)]
+    courseAdmins' = sortBy (compareHun `on` snd) $ map (u_username &&& userLongname) $ courseAdmins info
 
     createCourse      = Pages.createCourse ()
     assignCourseAdmin = Pages.assignCourseAdmin ()
@@ -158,4 +163,3 @@ getCourse = Course
   <$> getParameter (stringParameter (fieldName courseNameField) "Course name")
   <*> getParameter (stringParameter (fieldName courseDescField) "Course description")
   <*> getParameter (jsonParameter (fieldName testScriptTypeField) "Script type")
-

@@ -162,8 +162,8 @@ testOpenSubmissions = testCase "Users separated correctly in open submission tab
     saveUser adminUser
     saveUser myStudentUser
     saveUser otherStudentUser
-    subscribe myStudent ck gk1
-    subscribe otherStudent ck gk2
+    subscribe myStudent gk1
+    subscribe otherStudent gk2
     createCourseAdmin admin ck
     createGroupAdmin admin gk1
     cak <- saveCourseAssignment ck cAssignment
@@ -206,10 +206,10 @@ test_create_group_user = testCase "Create Course and Group with a user" $ do
   gk <- liftE interp $ saveGroup ck (Group "gname" "gdesc")
   gks <- liftE interp $ groupKeysOfCourse ck
   assertBool "Registered group was not found in the group list" (elem gk gks)
-  liftE interp $ subscribe username ck gk
+  liftE interp $ subscribe username gk
   rCks <- liftE interp $ userCourses username
   assertBool "Course does not found in user's courses" (rCks == [ck])
-  rGks <- liftE interp $ userGroups username
+  rGks <- liftE interp $ userGroupKeys username
   assertBool "Group does not found in user's groups" (rGks == [gk])
   isInGroup <- liftE interp $ isUserInGroup username gk
   assertBool "Registered user is not found" isInGroup

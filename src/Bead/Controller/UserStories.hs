@@ -31,6 +31,8 @@ import           Control.Monad.Trans
 import           Prelude hiding (log, userError)
 import           Data.ByteString (ByteString)
 import           Data.Hashable
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as HashSet
 import           Data.Foldable (foldrM)
 import           Data.Function (on)
 import           Data.List (nub, (\\))
@@ -485,7 +487,7 @@ deleteUsersFromGroup gk sts = logAction INFO ("delets users form group: " ++ sho
     admined <- Persist.isAdministratedGroup user gk
     if admined
       then do ck <- Persist.courseOfGroup gk
-              mapM_ (\student -> Persist.unsubscribe student ck gk) sts
+              mapM_ (\student -> Persist.unsubscribe student gk) sts
               now <- liftIO getCurrentTime
               g   <- Persist.loadGroup gk
               let msg = Notification.NE_RemovedFromGroup (groupName g) (u_name u)
@@ -545,7 +547,7 @@ unsubscribeFromCourse gk = logAction INFO ("unsubscribes from group: " ++ show g
                   <*> Persist.isThereASubmissionForCourse u ck
         if s then (return . errorPage . userError $ msg_UserStoryError_AlreadyHasSubmission "You have already submitted some solution for the assignments of the course.")
              else do
-               Persist.unsubscribe u ck gk
+               Persist.unsubscribe u gk
                return . putStatusMessage $
                  msg_UserStory_SuccessfulCourseUnsubscription "Unregistration was successful."
 
@@ -625,23 +627,32 @@ subscribeToGroup gk = logAction INFO ("subscribes to the group " ++ (show gk)) $
       True -> return $ msg_UserStory_SubscribedToGroup_ChangeNotAllowed
         "It is not possible to move between groups as there are submission for the current group."
       False -> do
-        mapM_ (Persist.unsubscribe u ck) gks
-        Persist.subscribe u ck gk
+        mapM_ (Persist.unsubscribe u) gks
+        Persist.subscribe u gk
         return $ msg_UserStory_SubscribedToGroup "Successful registration."
   putStatusMessage message
   where
-    isThereASubmission u gks = do
-      aks <- concat <$> mapM Persist.groupAssignments gks
-      (not . null . catMaybes) <$> (mapM (flip Persist.lastSubmission u) aks)
+    isThereASubmission :: Username -> HashSet GroupKey -> Persist Bool
+    isThereASubmission u gks =
+      foldM
+        (\found gk ->
+          if found
+          then return found
+          else do
+            aks <- Persist.groupAssignments gk
+            (not . null . catMaybes) <$> mapM (flip Persist.lastSubmission u) aks
+        )
+        False
+        gks
 
 -- Returns a list of elements of group key, description and a boolean value indicating
 -- that the user already submitted a solution for the group or the course of the group
 attendedGroups :: UserStory [(GroupKey, GroupDesc, Bool)]
-attendedGroups = logAction INFO "selects courses attended in" $ do
+attendedGroups = logAction INFO "lists subscribed groups with info" $ do
   authorize P_Open P_Group
   uname <- username
   persistence $ do
-    ks <- Persist.userGroups uname
+    ks <- Persist.userGroupKeys uname
     ds <- mapM Persist.groupDescription ks
     mapM (isThereASubmissionDesc uname) ds
   where
@@ -750,10 +761,10 @@ createGroupAssignment gk a tc = logAction INFO msg $ do
               let msg = Notification.NE_GroupAssignmentCreated
                           (u_name u) (groupName g) (courseName c) (Assignment.name a)
               gas <- Persist.groupAdmins gk
-              let affected = nub gas \\ [user]
+              let affected = HashSet.toList $ user `HashSet.delete` HashSet.fromList gas
               Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
               sbs <- Persist.subscribedToGroup gk
-              let affected = nub (sbs \\ (gas ++ [user]))
+              let affected = HashSet.toList $ HashSet.fromList sbs `HashSet.difference` HashSet.fromList (user : gas)
               let time = Assignment.start a
               Persist.notifyUsers (Notification.Notification msg time $ Notification.Assignment ak) affected
               return $ do
@@ -1017,42 +1028,11 @@ saveScoresOfGroupAssessment gk a evaluations = do
 
         score = Score ()
 
--- Produces a map of assessments and information about the evaluations for the
--- assessments.
-userAssessments :: UserStory (Map CourseKey (Course, [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)]))
-userAssessments = logAction INFO "lists assessments" $ do
---  authorize P_Open P_Assessment
-  authorize P_Open P_Course
-  authorize P_Open P_Group
-  u <- username
-  userAssessments <- persistence $ Persist.userAssessmentKeys u
-  newMap <- forM (Map.toList userAssessments) $ \(ckey,asks) -> do
-    (course,_groups) <- loadCourse ckey
-    infos <- catMaybes <$> mapM (getInfo u) (Set.toList asks)
-    return $! (ckey, (course, infos))
-  return $! Map.fromList newMap
-      where
-        getInfo :: Username
-                -> AssessmentKey
-                -> UserStory (Maybe (AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo))
-        getInfo u ak = do
-          assessment <- loadAssessment ak
-          mScoreInfo <- scoreInfoOfUser u ak
-          case mScoreInfo of
-            Nothing         -> return Nothing
-            Just (sk,sInfo) -> return $ Just (ak, assessment, sk, sInfo)
-
 -- Produces the score key, score info for the specific user and assessment.
 -- Returns Nothing if there are multiple scoreinfo available.
 scoreInfoOfUser :: Username -> AssessmentKey -> UserStory (Maybe (Maybe ScoreKey, ScoreInfo))
 scoreInfoOfUser u ak = logAction INFO ("loads score info of user " ++ show u ++ " and assessment " ++ show ak) $
-  persistence $ do
-    scoreKeys <- Persist.scoreOfAssessmentAndUser u ak
-    case scoreKeys of
-      []   -> return . Just $ (Nothing, Score_Not_Found)
-      [sk] -> do info <- Persist.scoreInfo sk
-                 return . Just $ (Just sk,info)
-      _    -> return Nothing
+  persistence $ Persist.scoreInfoOfUser u ak
 
 scoresOfGroup :: GroupKey -> AssessmentKey -> UserStory [(UserDesc, Maybe ScoreInfo)]
 scoresOfGroup gk ak = logAction INFO ("lists scores of group " ++ show gk ++ " and assessment " ++ show ak) $ do
@@ -1169,8 +1149,8 @@ logMessage level msg = do
       testAgent
       loggedIn
   where
-    logMsg preffix =
-      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ join [preffix, " ", msg, "."]))
+    logMsg prefix =
+      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ join [prefix, " ", msg, "."]))
 
     userNotLoggedIn _  = logMsg "[USER NOT LOGGED IN]"
     registration       = logMsg "[REGISTRATION]"
@@ -1246,16 +1226,6 @@ availableGroups = logAction INFO "lists available groups" $ do
   where
     each _ _ = True
     thereIsNoSubmission u gk = not <$> Persist.isThereASubmissionForGroup u gk
-
--- Produces a list that contains the assignments for the actual user,
--- if the user is not subscribed to a course or group the list
--- will be empty. The map consist of all the assignment key groupped by the
--- course key, through group keys if necessary.
-userAssignmentKeys :: UserStory (Map CourseKey (Set AssignmentKey))
-userAssignmentKeys = logAction INFO "lists its assignments" $ do
-  authorize P_Open P_Assignment
-  uname <- username
-  persistence $ Persist.userAssignmentKeys uname
 
 userSubmissionKeys :: AssignmentKey -> UserStory [SubmissionKey]
 userSubmissionKeys ak = logAction INFO msg $ do
@@ -1343,35 +1313,13 @@ userAssignmentForSubmission key = logAction INFO "check user assignment for subm
   withUserAndPersist $ \u ->
     (,) <$> (Persist.assignmentDesc now (u_username u) key) <*> (Persist.loadAssignment key)
 
--- Produces a map of assignments and information about the submissions for the
--- described assignment, which is associated with the course or group
-userAssignments :: UserStory (Map CourseKey (Course, [(AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))]))
-userAssignments = logAction INFO "lists assignments" $ do
+userAssignmentsAssessments :: UserStory [(Group, Course, [(AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
+userAssignmentsAssessments = logAction INFO "lists assignments and assessments" $ do
   authorize P_Open P_Assignment
+  authorize P_Open P_Assessment
   authorize P_Open P_Course
   authorize P_Open P_Group
-  now <- liftIO getCurrentTime
-  withUserAndPersist $ \u -> do
-    let user = u_username u
-    asgMap <- Persist.userAssignmentKeys user
-    Map.traverseWithKey (\key aks -> do
-                            course <- Persist.loadCourse key
-                            asgLine <- foldrM (\ak descs -> maybe descs (: descs) <$> createDesc user now ak) [] aks
-                            return $! (course, asgLine)
-                        )
-      asgMap
-  where
-    -- Produces the assignment description if the assignment is active
-    -- Returns Nothing if the assignment is not visible for the user
-    createDesc :: Username -> UTCTime -> AssignmentKey -> Persist (Maybe (AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState)))
-    createDesc u now ak = do
-      a <- Persist.loadAssignment ak
-      case (now < Assignment.start a) of
-        True -> return Nothing
-        False -> do
-          desc <- Persist.assignmentDesc now u ak
-          info <- Persist.userLastSubmission u ak
-          return $ (Just (ak, desc, submKeyAndState <$> info))
+  withUserAndPersist (Persist.userAssignmentsAssessments . u_username)
 
 submissionDescription :: SubmissionKey -> UserStory SubmissionDesc
 submissionDescription sk = logAction INFO msg $ do
@@ -1549,8 +1497,8 @@ createComment sk c = logAction INFO ("comments on " ++ show sk) $ do
               affected <- case (mck, mgk) of
                 (Just ck, _) -> do
                   cas <- Persist.courseAdmins ck
-                  gk  <- Persist.groupOfUserForCourse submitter ck
-                  gas <- Persist.groupAdmins gk
+                  gks <- Persist.groupsOfUsersCourse submitter ck
+                  gas <- foldM (\admins gk -> (++ admins) <$> Persist.groupAdmins gk) [] gks
                   return $ nub ([submitter] ++ cas ++ gas) \\ [user]
                 (_, Just gk) -> do
                   gas <- Persist.groupAdmins gk
@@ -1651,10 +1599,10 @@ modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ 
                     cas <- Persist.courseAdmins ck
                     gks <- Persist.groupKeysOfCourse ck
                     gas <- concat <$> mapM Persist.groupAdmins gks
-                    return $ nub (cas ++ gas) \\ [user]
+                    return $ HashSet.toList $ user `HashSet.delete` HashSet.fromList cas `HashSet.union` HashSet.fromList gas
                   (_, Just gk) -> do
                     gas <- Persist.groupAdmins gk
-                    return $ nub gas \\ [user]
+                    return $ HashSet.toList $ user `HashSet.delete` HashSet.fromList gas
                   _            -> return []
     Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
     if (Assignment.start a <= now)
@@ -1665,11 +1613,11 @@ modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ 
                         gks <- Persist.groupKeysOfCourse ck
                         gas <- concat <$> mapM Persist.groupAdmins gks
                         sbs <- Persist.subscribedToCourse ck
-                        return $ nub (sbs \\ (cas ++ gas ++ [user]))
+                        return $ HashSet.toList $ HashSet.fromList sbs `HashSet.difference` HashSet.fromList (user : cas ++ gas)
                       (_, Just gk) -> do
                         gas <- Persist.groupAdmins gk
                         sbs <- Persist.subscribedToGroup gk
-                        return $ nub (sbs \\ (gas ++ [user]))
+                        return $ HashSet.toList $ HashSet.fromList sbs `HashSet.difference` HashSet.fromList (user : gas)
                       _            -> return []
         Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
       else do

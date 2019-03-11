@@ -117,10 +117,10 @@ courseAndGroupAssignmentTest = testCase "Course and group assignments" $ do
       a1 <- createGroupAssignment gk1 ga NoCreation
       subscribeToGroup gk1
       subscribeToGroup gk2
-      as <- fmap (toList . Map.map snd) userAssignments
+      as <- userAssignmentsAssessments
       return (a1,as)
-    let as' = map trd as
-    lift $ assertBool "Assignment does not found in the assignment list" ([a1,a2] == as' || [a2,a1] == as')
+    let as1 = [ ak | (_, _, asgs, _) <- as, (ak, _, _) <- asgs ]
+    lift $ assertBool "Assignment cannot be not found in the assignment list" ([a1,a2] == as1 || [a2,a1] == as1)
 
     (uc,ug) <- userStory student2Username $ do
       subscribeToGroup  gk2

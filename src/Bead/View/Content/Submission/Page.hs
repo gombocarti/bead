@@ -167,12 +167,12 @@ submissionContent p = do
     -- Informational table on the page
     Bootstrap.rowColMd12 $ Bootstrap.table $
       H.tbody $ do
-        (msg $ msg_Submission_Course "Course: ")         .|. (aGroup $ asDesc p)
-        (msg $ msg_Submission_Admin "Teacher: ")         .|. (concat . intersperse ", " . sortHun . aTeachers $ asDesc p)
-        (msg $ msg_Submission_Assignment "Assignment: ") .|. (Assignment.name $ asValue p)
-        (msg $ msg_Submission_Deadline "Deadline: ")     .|.
+        let a = asDesc p
+          in (msg $ msg_Submission_Course "Course:") .|. maybe (courseName $ aCourse a) (fullGroupName (aCourse a)) (aGroup a)
+        (msg $ msg_Submission_Assignment "Assignment:") .|. (Assignment.name $ asValue p)
+        (msg $ msg_Submission_Deadline "Deadline:")     .|.
           (showDate . (asTimeConv p) . Assignment.end $ asValue p)
-        (msg $ msg_Submission_TimeLeft "Time left: ")    .|. (startEndCountdownDiv
+        (msg $ msg_Submission_TimeLeft "Time left:")    .|. (startEndCountdownDiv
                 "ctd"
                 (msg $ msg_Submission_Days "day(s)")
                 (msg $ msg_Submission_DeadlineReached "Deadline is reached")

@@ -2,6 +2,7 @@
 module Bead.Controller.ServiceContext (
     UserState(..)
   , StatusMessage(..)
+  , fullNameInState
   , statusMessage
   , userStateCata
   , userStateKindCata
@@ -82,7 +83,7 @@ userRole = userStateCata
              (const (Left EmptyRole)) -- UserNotLoggedIn
              (Left RegRole)           -- Registration
              (Left TestAgentRole)     -- TestAgent
-             (\_u _ui _n _lang role _t _tz _s -> Right role) -- UserLoggedIn
+             (\_ _ _ _ role _ _ _ -> Right role) -- UserLoggedIn
 
 -- Produces a new user state from the old one, setting
 -- the status message to the given one
@@ -97,7 +98,7 @@ getStatus = userStateCata
               (const Nothing)  -- UserNotLoggedIn
               Nothing          -- Registration
               Nothing          -- TestAgent
-              (\_u _ui _n _l _r _t _tz s -> s) -- UserLoggedIn
+              (\_ _ _ _ _ _ _ s -> s) -- UserLoggedIn
 
 -- Produces a new status expect that the status message is cleared.
 clearStatus :: UserState -> UserState
@@ -123,13 +124,13 @@ usernameInState =
     (const (Username "NotLoggedIn"))
     (Username "Registration")
     (Username "TestAgent")
-    (\user _ui _p _n _r _t _tz _s -> user)
+    (\user _ _ _ _ _ _ _ -> user)
 
 instance InRole UserState where
-  isAdmin = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> isAdmin role)
-  isCourseAdmin = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> Entities.isCourseAdmin role)
-  isGroupAdmin = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> isGroupAdmin role)
-  isStudent = userStateCata (const False) False False (\_u _ui _n _lang role _uuid _tz _s -> isStudent role)
+  isAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> isAdmin role)
+  isCourseAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> Entities.isCourseAdmin role)
+  isGroupAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> isGroupAdmin role)
+  isStudent = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> isStudent role)
 
 uidInState :: UserState -> Uid
 uidInState =
@@ -137,7 +138,15 @@ uidInState =
     (const (Uid "NotLoggedIn"))
     (Uid "Registration")
     (Uid "TestAgent")
-    (\_user uid _p _n _r _t _tz _s -> uid)
+    (\_ uid _ _ _ _ _ _ -> uid)
+
+fullNameInState :: UserState -> String
+fullNameInState =
+  userStateCata
+    (const "Not logged in")
+    "Registration"
+    "Test Agent"
+    (\_ _ name _ _ _ _ _ -> name)
 
 data ServiceContext = ServiceContext {
     logger             :: Logger

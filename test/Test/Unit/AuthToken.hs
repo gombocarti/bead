@@ -17,7 +17,7 @@ import           Test.QuickCheck.Monadic (monadicIO, pick, assert, PropertyM)
 import           Test.QuickCheck.Test (isSuccess)
 
 encryptioDecryptionIsomorphism :: TestSet ()
-encryptioDecryptionIsomorphism = test $ testCase "Encryption and decryption does not change cookie contents" $ do
+encryptioDecryptionIsomorphism = test $ testCase "Encryption and decryption do not change cookie contents" $ do
   auth <- Auth.createAuthTokenManager
   result <- quickCheckResult $ monadicIO $ do
     c <- pick cookies

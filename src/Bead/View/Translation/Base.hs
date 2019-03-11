@@ -198,7 +198,6 @@ labels =
  , "msg_UserDetails_NonExistingUser"
 
  , "msg_Submission_Course"
- , "msg_Submission_Admin"
  , "msg_Submission_Assignment"
  , "msg_Submission_Deadline"
  , "msg_Submission_Description"
@@ -451,7 +450,6 @@ labels =
  , "msg_NewUserScore_UserName"
  , "msg_NewUserScore_Submit"
  , "msg_ViewUserScore_Course"
- , "msg_ViewUserScore_Group"
  , "msg_ViewUserScore_Teacher"
  , "msg_ViewUserScore_Assessment"
  , "msg_ViewUserScore_Description"
@@ -505,7 +503,6 @@ labels =
 
  , "msg_UserStoryError_UnknownError"
  , "msg_UserStoryError_Message"
- , "msg_UserStoryError_SameUserIsLoggedIn"
  , "msg_UserStoryError_InvalidUsernameOrPassword"
  , "msg_UserStoryError_NoCourseAdminOfCourse"
  , "msg_UserStoryError_NoAssociatedTestScript"

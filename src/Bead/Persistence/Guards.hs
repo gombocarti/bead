@@ -185,7 +185,7 @@ adminCourseOfGroup u = do
 isStudentOf :: Username -> Username -> Persist Bool
 isStudentOf student admin = do
   scourses  <- userCourses student
-  sgroups   <- userGroups  student
+  sgroups   <- userGroupKeys student
   sgcourses <- mapM courseOfGroup sgroups
 
   acourses <- map fst <$> administratedCourses admin

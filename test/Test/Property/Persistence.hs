@@ -10,8 +10,9 @@ import Control.Monad.IO.Class
 import Control.Concurrent (forkIO)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Set as Set
+import qualified Data.HashSet as HashSet
 
-import Data.List ((\\), intersperse, nub)
+import Data.List ((\\), intersperse, nub, find)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.IORef
@@ -30,6 +31,7 @@ import qualified Test.Property.EntityGen as Gen
 
 import Bead.Domain.Entities
 import qualified Bead.Domain.Entity.Assignment as Assignment
+import qualified Bead.Domain.Entity.Assessment as Assessment
 import Bead.Domain.Entity.Comment
 import Bead.Domain.Relationships
 import Bead.Domain.Shared.Evaluation
@@ -37,7 +39,7 @@ import Test.QuickCheck as QuickCheck
 import Test.QuickCheck.Monadic
 import Test.Tasty
 import Test.Tasty.HUnit (testCase)
-import Test.Tasty.TestSet (add, group, test, ioTest)
+import Test.Tasty.TestSet (add, group, test, ioTest, TestSet)
 import Test.Tasty.QuickCheck (testProperty)
 
 import System.IO.Unsafe
@@ -200,6 +202,7 @@ uploadTempFiles tmpDir n = do
 
 -- Generate and store the given number of courses and returns the
 -- course keys stored in the
+courses :: Int -> IO [CourseKey]
 courses n = do
   list <- createListRef
   quick n $ do
@@ -209,6 +212,7 @@ courses n = do
 
 -- Generate and store the given number of groups and assigns them to random courses,
 -- from the given list, returns all the created group keys
+groups :: Int -> [CourseKey] -> IO [GroupKey]
 groups n cs = do
   list <- createListRef
   quick n $ do
@@ -219,6 +223,7 @@ groups n cs = do
 
 -- Generate and store the given numner of assignment and assign them to random groups,
 -- from the given list, returns all the created assignment keys
+groupAssignmentGen :: Int -> [GroupKey] -> IO [AssignmentKey]
 groupAssignmentGen n gs = do
   list <- createListRef
   quick n $ do
@@ -230,11 +235,12 @@ groupAssignmentGen n gs = do
 
 -- Generate and store the given numner of assignment and assign them to random courses,
 -- from the given list, returns all the created assignment keys
-courseAssignmentGen n gs = do
+courseAssignmentGen :: Int -> [CourseKey] -> IO [AssignmentKey]
+courseAssignmentGen n cs = do
   list <- createListRef
   quick n $ do
-    gk <- pick $ elements gs
-    ak <- saveAndLoadIdenpotent "Group assignment"
+    gk <- pick $ elements cs
+    ak <- saveAndLoadIdenpotent "Course assignment"
       (saveCourseAssignment gk) (loadAssignment) (Gen.assignments startDate endDate)
     run $ insertListRef list ak
   listInRef list
@@ -259,6 +265,7 @@ courseAssessmentGen n cs = do
 
 -- Generate and store the given number of users, and returns the usernames found in the
 -- persistence layer
+users :: Int -> IO [Username]
 users n = do
   list <- createListRef
   quick n $ do
@@ -269,6 +276,7 @@ users n = do
 
 -- Generate and store the given numner of admin users, and returns the usernames saved to
 -- the persistence layer, if no admin was generated an error would be thrown
+admins :: Int -> IO [Username]
 admins n = do
   list <- createListRef
   quick n $ do
@@ -285,6 +293,7 @@ admins n = do
     setAdmin u = u { u_role = Admin }
 
 -- Select an admin and a course and set the admin as a course admin
+setCourseAdmins :: [Username] -> [CourseKey] -> Int -> IO ()
 setCourseAdmins as cs n =
   quick n $ do
     a <- pick $ elements as
@@ -292,6 +301,7 @@ setCourseAdmins as cs n =
     runPersistCmd $ createCourseAdmin a c
 
 -- Select an admin and a course and set the admin as a course admin
+setGroupAdmins :: [Username] -> [GroupKey] -> Int -> IO ()
 setGroupAdmins as gs n = do
   quick n $ do
     a <- pick $ elements as
@@ -464,21 +474,24 @@ initPersistence = do
   init <- createPersistInit defaultConfig
   initPersist init
 
+courseAndGroupAssignments :: Int -> Int -> [CourseKey] -> [GroupKey] -> IO [AssignmentKey]
 courseAndGroupAssignments cn gn cs gs = do
   cas <- courseAssignmentGen cn cs
   gas <- groupAssignmentGen gn gs
   return (cas ++ gas)
 
+courseAndGroupAssessments :: Int -> Int -> [CourseKey] -> [GroupKey] -> IO [AssessmentKey]
 courseAndGroupAssessments cn gn cs gs = do
   cas <- courseAssessmentGen cn cs
   gas <- groupAssessmentGen gn gs
   return (cas ++ gas)
 
 -- User can register course and groups and these groups and courses can have assignments.
--- The user can subscribe to groups and course, and it is necessary to him to
--- see the assignment of the groups and courses, and only the assignment of the
--- courses that the user registered, others no
-userAssignmentKeyTests = test $ testCase "User assignment tests" $ do
+-- The user can subscribe to groups and course, and it is necessary for him to
+-- see the assignments of the groups and courses, and only the assignments of the
+-- courses that the user registered, not others
+userAssignmentKeyTest :: TestSet ()
+userAssignmentKeyTest = test $ testCase "User assignment tests" $ do
   reinitPersistence
   cs <- courses 100
   gs <- groups 300 cs
@@ -488,42 +501,127 @@ userAssignmentKeyTests = test $ testCase "User assignment tests" $ do
     u <- pick $ elements us
     gk <- pick $ elements gs
     ck <- runPersistCmd $ courseOfGroup gk
-    runPersistCmd $ subscribe u ck gk
+    grp <- runPersistCmd $ loadGroup gk
+    crs <- runPersistCmd $ loadCourse ck
+    runPersistCmd $ subscribe u gk
     gas <- runPersistCmd $ groupAssignments gk
     cas <- runPersistCmd $ courseAssignments ck
     let uas = gas ++ cas
-    as <- runPersistCmd $ fmap toList $ userAssignmentKeys u
-    when (null as) $ assertTrue (null gas)
-      "Group has assignment, but user does not see it"
-    unless (or [null uas, null as]) $ assertTrue
-      (not . Set.null $ Set.intersection (Set.fromList uas) (Set.fromList as))
-      (join [
-          "User assignment for a given course and group was not found. User:", show u
-        , " Group and course assignments: ", show uas, " User assignments:", show as
-        , " Group: ", show gk
-        , " Course: ", show ck
-        , " Group assignments: ", show gas
-        , " Course assignment: ", show cas
-        ])
-  where
-    toList = nub . join . map (Set.toList . snd) . Map.toList
+    groups <- runPersistCmd $ userAssignmentsAssessments u
+    case find (\(g, c, _, _) -> g == grp && c == crs) groups of
+      Nothing -> fail "User is subscribed to a group and she does not see it."
+      Just (g, c, as, _assessments) -> do
+        assertTrue
+          (HashSet.fromList uas == HashSet.fromList [ ak | (ak, _, _) <- as])
+          (unlines [
+              "User assignment for a given course and group does not match the expected. User:", show u
+            , " Group and course assignments: ", show uas, " User assignments:", show as
+            , " Group: ", show gk
+            , " Course: ", show ck
+            , " Group assignments: ", show gas
+            , " Course assignments: ", show cas
+            ])
 
--- Every assignment has a group or a course
-courseOrGroupAssignmentTest = test $ testCase "Course or group assignment tests" $ do
+-- User can register course and groups and these groups and courses can have assessments.
+-- The user can subscribe to groups and courses, and it is necessary for him to
+-- see the assessments of the groups and courses, and only the assessments of the
+-- courses that the user registered, not others
+userAssessmentKeyTest :: TestSet ()
+userAssessmentKeyTest = test $ testCase "User assessment tests" $ do
   reinitPersistence
   cs <- courses 100
   gs <- groups 300 cs
-  as <- courseAndGroupAssignments 150 150 cs gs
-  gas <- groupAssignmentGen 150 gs
-  cas <- courseAssignmentGen 150 cs
-  let as = cas ++ gas
+  as <- courseAndGroupAssessments 150 150 cs gs
+  us <- users 300
+  quick 300 $ do
+    u <- pick $ elements us
+    gk <- pick $ elements gs
+    ck <- runPersistCmd $ courseOfGroup gk
+    grp <- runPersistCmd $ loadGroup gk
+    crs <- runPersistCmd $ loadCourse ck
+    runPersistCmd $ subscribe u gk
+    gas <- runPersistCmd $ do
+      aks <- assessmentsOfGroup gk
+      assessments <- mapM loadAssessment aks
+      return [ ak | (ak, assessment) <- zip aks assessments, Assessment.visible assessment]
+    let uas = gas
+    groups <- runPersistCmd $ userAssignmentsAssessments u
+    case find (\(g, c, _, _) -> g == grp && c == crs) groups of
+      Nothing -> fail "User is subscribed to a group and she does not see it."
+      Just (g, c, _as, assessments) -> do
+        assertSetEquals uas [ ak | (ak, _, _, _) <- assessments]
+          (unlines [
+              "User assessment for a given course and group does not match the expected. User:", show u
+            , " Group and course assessments: ", show uas, " User assessments:", show as
+            , " Group: ", show gk
+            , " Course: ", show ck
+            , " Group assessments (visible and hidden): ", show gas
+            ])
+
+-- courseOrGroupOfAssignment returns the correct group or course
+courseOrGroupAssignmentTest = test $ testCase "Course or group assignment tests" $ do
+  reinitPersistence
+  cs <- courses 100
+  cs' <- generate $ vectorOf 70 $ elements cs
+  cgs <- forM cs' $ \c -> do
+    gs <- groups 30 [c]
+    return (c, gs)
+  groupAssignmentGen 150 (concatMap snd cgs)
+  courseAssignmentGen 150 cs
   quick 500 $ do
-    ak <- pick $ elements as
-    k <- runPersistCmd $ courseOrGroupOfAssignment ak
-    either
-      (\c -> assertTrue (elem c cs) "Course is not in the courses")
-      (\g -> assertTrue (elem g gs) "Group is not in the groups")
-      k
+    (c, gs) <- pick $ elements cgs
+    g <- pick $ elements gs
+    a <- pick (Gen.assignments startDate endDate)
+    courseAssignment <- pick $ elements [True, False]
+    if courseAssignment
+      then do
+        ak <- runPersistCmd $ saveCourseAssignment c a
+        k <- runPersistCmd $ courseOrGroupOfAssignment ak
+        either
+          (\c' -> assertEquals c c' "Assignment course changed")
+          (\_g -> fail "Course assignment has group")
+          k
+      else do
+        ak <- runPersistCmd $ saveGroupAssignment g a
+        k <- runPersistCmd $ courseOrGroupOfAssignment ak
+        either
+          (\_c -> fail "Group assignment has no group")
+          (\g' -> assertEquals g g' "Assignment group changed")
+          k
+
+-- courseAndGroupOfAssignment returns the correct group and course
+courseAndGroupAssignmentTest = test $ testCase "Course and group assignment tests" $ do
+  reinitPersistence
+  cs <- courses 100
+  cs' <- generate $ vectorOf 70 $ elements cs
+  cgs <- forM cs' $ \c -> do
+    gs <- groups 30 [c]
+    return (c, gs)
+  groupAssignmentGen 150 (concatMap snd cgs)
+  courseAssignmentGen 150 cs
+  quick 500 $ do
+    (c, gs) <- pick $ elements cgs
+    g <- pick $ elements gs
+    a <- pick (Gen.assignments startDate endDate)
+    courseAssignment <- pick $ elements [True, False]
+    if courseAssignment
+      then do
+        course <- runPersistCmd $ loadCourse c
+        ak <- runPersistCmd $ saveCourseAssignment c a
+        k <- runPersistCmd $ courseAndGroupOfAssignment ak
+        case k of
+          (course', Nothing) -> assertEquals course course' "Assignment course changed"
+          _ -> fail "Course assignment has group"
+      else do
+        course <- runPersistCmd $ loadCourse c
+        grp <- runPersistCmd $ loadGroup g
+        ak <- runPersistCmd $ saveGroupAssignment g a
+        k <- runPersistCmd $ courseAndGroupOfAssignment ak
+        case k of
+          (course', Just grp') -> do
+            assertEquals course course' "Assignment course changed"
+            assertEquals grp grp' "Assignment group changed"
+          _ -> fail "Group assignment has no group"
 
 -- Group description can be created from any group
 groupDescriptionTest = test $ testCase "Group description tests" $ do
@@ -563,30 +661,8 @@ submissionDescTest = test $ testCase "Every submission has some kind of descript
     assertNonEmpty (Assignment.name . eAssignment $ desc) "Assignment title was empty"
     assertEmpty (Map.toList $ eComments desc) "The comment list was not empty"
 
--- Every assignment must have a course name and the
--- dedicated users must be returned as admins
--- for the given course
-courseNameAndAdminsTest = test $ testCase "Every assignment has to have a name and admin" $ do
-  reinitPersistence
-  cs <- courses 100
-  us <- users 150
-  gs <- groups 100 cs
-  as <- courseAndGroupAssignments 200 200 cs gs
-  quick 400 $ do
-    u <- pick $ elements us
-    c <- pick $ elements cs
-    a <- pick $ elements as
-    (name, admins) <- runPersistCmd $ courseNameAndAdmins a
-    ek <- runPersistCmd $ courseOrGroupOfAssignment a
-    admins' <- either
-      (runPersistCmd . courseAdmins)
-      (runPersistCmd . groupAdmins)
-      ek
-    assertNonEmpty name "Course name was empty"
-    assertTrue (length admins' == length admins) "Admin numbers are different"
-
 -- Allways the last evaluation is valid for the submission.
-lastEvaluationTest = test $ testCase "Allways the last evaluation is valid for the submission" $ do
+lastEvaluationTest = test $ testCase "Always the last evaluation is valid for the submission" $ do
   reinitPersistence
   cs <- courses 100
   gs <- groups 200 cs
@@ -628,8 +704,18 @@ submissionDetailsDescTest = test $ testCase "Every submission has a description"
   quick 1000 $ do
     sk <- pick $ elements ss
     desc <- runPersistCmd $ submissionDetailsDesc sk
-    assertNonEmpty (sdGroup desc) "Group name was empty"
-    forM (sdTeacher desc) $ \t -> assertNonEmpty t "Admin name was empty"
+    ak <- runPersistCmd $ assignmentOfSubmission sk
+    ckGk <- runPersistCmd $ courseOrGroupOfAssignment ak
+    case ckGk of
+      Left ck -> do
+        course <- runPersistCmd $ loadCourse ck
+        assertEquals course (sdCourse desc) "Course was different"
+        assertTrue (isNothing (sdGroup desc)) "Course assignment has a group"
+      Right gk -> do
+        grp <- runPersistCmd $ loadGroup gk
+        course <- runPersistCmd $ courseOfGroup gk >>= loadCourse
+        assertTrue (isJust (sdGroup desc)) "Group assignment has no group"
+        assertEquals (Just grp) (sdGroup desc) "Group was different"
     assertNonEmpty (Assignment.desc $ sdAssignment desc) "Description was empty"
     when (isJust (sdStatus desc)) $ assertNonEmpty (fromJust $ sdStatus desc) "Status was empty"
     assertNonEmpty (sdSubmission desc) "Submission text was empty"
@@ -651,7 +737,7 @@ submissionTablesTest = test $ testCase "Submission tables" $ do
     u <- pick $ elements us
     g <- pick $ elements gs
     c <- runPersistCmd $ courseOfGroup g
-    runPersistCmd $ subscribe u c g
+    runPersistCmd $ subscribe u g
 
   quick 1000 $ do
     u <- pick $ elements us
@@ -664,32 +750,9 @@ submissionTablesTest = test $ testCase "Submission tables" $ do
       forM (stiUsers t) $ usernameCata (\u -> assertNonEmpty u "Username was empty")
       assertTrue (length (stiUserLines t) >= 0) "Invalid user line number"
 
--- The user can have submissions for the given assignment, and information can be
--- calculated about these submissions
-userSubmissionDescTest = test $ testCase "The user can have submissions and information" $ do
-  reinitPersistence
-  cs <- courses 100
-  gs <- groups 250 cs
-  as <- courseAndGroupAssignments 150 150 cs gs
-  us <- users 300
-  asgMap <- Map.fromList <$> submissions 750 us as
-  quick 1000 $ do
-    u <- pick $ elements us
-    a <- pick $ elements as
-    desc <- runPersistCmd $ userSubmissionDesc u a
-    assertNonEmpty (usCourse desc) "Course was empty"
-    assertNonEmpty (usAssignmentName desc) "Assignment name was empty"
-    assertNonEmpty (usStudent desc) "Student name was empty"
-    ss <- runPersistCmd $ userSubmissions u a
-    assertEquals
-      (Set.fromList ss) (Set.fromList (map fst3 (usSubmissions desc)))
-      "Submission numbers were different"
-  where
-    fst3 (a,_,_) = a
-
 -- All the saved course must have a key and these
 -- course keys must be listed
-courseKeysTest = test $ testCase "All the saved courses must have a key" $ do
+courseKeysTest = test $ testCase "All saved courses must have a key" $ do
   reinitPersistence
   savedKeys  <- Set.fromList <$> courses 100
   loadedKeys <- Set.fromList <$> (runPersistIOCmd $ courseKeys)
@@ -698,6 +761,28 @@ courseKeysTest = test $ testCase "All the saved courses must have a key" $ do
   loadedKeys2 <- Set.fromList <$> (runPersistIOCmd $ courseKeys)
   assertTrue (Set.isSubsetOf loadedKeys loadedKeys2) "Not all old course keys were in the loaded set"
   assertTrue (Set.isSubsetOf savedKeys2 loadedKeys2) "New course keys were not in the loaded set"
+
+userGroupsTest :: TestSet ()
+userGroupsTest = test $ testCase "userGroups and userGroupKeys have to return all subscribed groups" $ do
+  reinitPersistence
+  cs <- courses 100
+  gs <- groups 100 cs
+  us <- users 100
+  forM us $ \u -> do
+    ugs <- runPersistIOCmd $ userGroups u
+    ugks <- runPersistIOCmd $ userGroupKeys u
+    assertTrue (null ugs) "User subscribed groups list is not empty initially"
+    assertTrue (null ugks) "User subscribed group keys list is not empty initially"
+  quick 100 $ do
+    u <- pick $ elements us
+    ugs <- runPersistCmd $ userGroups u
+    ugks <- runPersistCmd $ userGroupKeys u
+    gk <- pick $ elements gs
+    g <- runPersistCmd $ subscribe u gk >> loadGroup gk
+    ugs' <- runPersistCmd $ userGroups u
+    ugks' <- runPersistCmd $ userGroupKeys u
+    assertSetEquals ugs' ((gk, g) : ugs) "A group is not listed by userGroups or there is a Group-GroupKey mismatch."
+    assertSetEquals ugks' (gk : ugks) "A group is not listed by userGroupsKeys."
 
 -- All the saved assignment must have a key and these keys must be listed
 assignmentKeyTest = test $ testCase "All the saved assignments must have a key" $ do
@@ -773,7 +858,7 @@ subscribeUsers n us gs =
     g <- pick $ elements gs
     runPersistCmd $ do
       c <- courseOfGroup g
-      subscribe u c g
+      subscribe u g
 
 -- Test if the users make unsubscribe from the courses by the admin
 deleteUsersFromCourseTest = test $ testCase "Delete user form course" $ do
@@ -832,20 +917,20 @@ unsubscribeFromSubscribedGroupsTest = test $ testCase "User unsubscribes from a 
   subscribeUsers 500 us gs
   quick 1000 $ do
     u <- pick $ elements us
-    ugs <- runPersistCmd $ userGroups u
+    ugs <- runPersistCmd $ userGroupKeys u
     when (not $ null ugs) $ do
     g <- pick $ elements ugs
     join $ runPersistCmd $ do
       ucsb <- userCourses u
-      ugsb <- userGroups  u
+      ugsb <- userGroupKeys u
       c <- courseOfGroup  g
       unregscb <- unsubscribedFromCourse c
-      unregsgb <- unsubscribedFromGroup  g
-      unsubscribe u c g
+      unregsgb <- unsubscribedFromGroup g
+      unsubscribe u g
       ucsa <- userCourses u
-      ugsa <- userGroups  u
+      ugsa <- userGroupKeys u
       unregsca <- unsubscribedFromCourse c
-      unregsga <- unsubscribedFromGroup  g
+      unregsga <- unsubscribedFromGroup g
       return $ case g `elem` ugsb of
         True -> do
           assertEquals (length ugsa) (length ugsb - 1) $ concat
@@ -1529,19 +1614,20 @@ massTests = group "Persistence Layer Mass tests" $ do
   test massTestParallel
   test cleanUpPersistence
 
-
+complexTests :: TestSet ()
 complexTests = group "Persistence Layer Complex tests" $ do
   test initPersistenceLayer
-  userAssignmentKeyTests
+  userAssignmentKeyTest
+  userAssessmentKeyTest
   courseOrGroupAssignmentTest
+  courseAndGroupAssignmentTest
   groupDescriptionTest
   submissionDescTest
-  courseNameAndAdminsTest
   lastEvaluationTest
   submissionDetailsDescTest
   submissionTablesTest
-  userSubmissionDescTest
   courseKeysTest
+  userGroupsTest
   assignmentKeyTest
   filterSubmissionsTest
   modifyAssignmentsTest
@@ -1647,7 +1733,7 @@ createTestData n = do
     gk <- pick $ elements gs
     ck <- runPersistCmd $ courseOfGroup gk
     u  <- pick $ elements us
-    runPersistCmd $ subscribe u ck gk
+    runPersistCmd $ subscribe u gk
 
   as <- courseAndGroupAssignments (8 * noOfCourses) (8 * noOfGroups) cs gs
   let noOfSubmissions = 15000 * n
@@ -1687,3 +1773,10 @@ createTestData n = do
         e <- pick $ Gen.evaluations cfg
         runPersistCmd $ saveSubmissionEvaluation sk e
         return ()
+
+  where
+    userAssignmentKeyList :: Username -> Persist [AssignmentKey]
+    userAssignmentKeyList u =
+      (\asgsOfGroups -> [ ak | (_, _, asgs, _) <- asgsOfGroups, (ak, _, _) <- asgs]) <$>
+        userAssignmentsAssessments u
+

@@ -4,6 +4,7 @@ module Test.Regression.UserStory where
 import           Control.Concurrent (threadDelay)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans (lift)
+import           Data.List (find)
 import           Data.Time.Clock
 import qualified Data.Map as Map
 import           Bead.Controller.UserStories as U
@@ -74,8 +75,12 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
       testAgentFeedbacks    
     
     si <- userStory studentUsername $ do
-      ua <- userAssignments
-      return . trd . head . value . head . Map.toList $ Map.map snd ua
+      ua <- userAssignmentsAssessments
+      return $ case find (\(grp, _, _, _) -> grp == g1) ua of
+                 Nothing -> fail "Group cannot be found"
+                 Just (grp, _, asgs, _) -> do
+                   (_, _, submState) <- find (\(ak, _, _) -> ak == ak1) asgs
+                   submState
 
     -- TODO: Write assert typeclass
     lift $ assertBool "Submission test information is not changed" (si == Just (sk1, Submission_Tested True))

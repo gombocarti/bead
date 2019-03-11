@@ -12,7 +12,7 @@ import           Data.List (intersperse, sortBy)
 import           Data.String (fromString)
 
 import qualified Bead.Controller.Pages as Pages
-import           Bead.Controller.UserStories hiding (createGroup)
+import qualified Bead.Controller.UserStories as S
 import           Bead.View.Content hiding (table, option)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import qualified Bead.View.UserActions as UA (UserAction(..))
@@ -32,15 +32,14 @@ data PageData = PageData {
 courseAdminPage :: GETContentHandler
 courseAdminPage = do
   pageData <- userStory $ do
-    theCourses <- administratedCourses
-    courseAndGroupKeys <- forM theCourses $ \(ck,_) -> loadCourse ck
+    theCourses <- S.administratedCourses
+    courseAndGroupKeys <- forM theCourses $ \(ck,_) -> S.loadCourse ck
     theGroups <- forM courseAndGroupKeys $ \(c,gkeys) -> do
-      grps <- forM gkeys loadGroup
+      grps <- forM gkeys S.loadGroup
       let courseWithGroups = repeat c `zip` grps
-      let expandName x y = courseName x ++ " - " ++ groupName y
-      return (gkeys `zip` (Prelude.map (uncurry expandName) courseWithGroups))
-    ps <- selectUsers group_admin
-    gs <- groupAdministrators
+      return (gkeys `zip` (Prelude.map (uncurry fullGroupName) courseWithGroups))
+    ps <- S.selectUsers group_admin
+    gs <- S.groupAdministrators
     return PageData {
         courses     = theCourses
       , groups      = concat theGroups
@@ -128,11 +127,17 @@ courseAdminContent info = do
     groupAdministratorsTable msg (assignedGroups info)
 
   where
+    courses' :: [(CourseKey, String)]
     courses' = Prelude.map (Prelude.id *** courseName) (courses info)
-    groups' = (groups info)
-    groupAdmins' = Prelude.map (u_username &&& userLongname) (groupAdmins info)
 
-    userLongname u = concat [ usernameCata Prelude.id $ u_username u, " - ", u_name u]
+    groups' :: [(GroupKey, String)]
+    groups' = (groups info)
+
+    groupAdmins' :: [(Username, String)]
+    groupAdmins' = sortBy (compareHun `on` snd) $ Prelude.map (u_username &&& userLongname) (groupAdmins info)
+
+    userLongname :: User -> String
+    userLongname u = concat [ u_name u, " - ", usernameCata Prelude.id $ u_username u ]
 
     createGroup = Pages.createGroup ()
     assignGroupAdmin = Pages.assignGroupAdmin ()

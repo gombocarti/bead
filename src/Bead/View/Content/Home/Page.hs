@@ -48,10 +48,9 @@ homePage = withUserState $ \s -> do
   now <- liftIO getCurrentTime
   home <- fmap homeContent $ do
     (userStory $ do
-       ua <- S.userAssignments
+       ua <- S.userAssignmentsAssessments
        sbmTables <- (map sortUserLines <$> S.submissionTables)
        scoreBoards <- S.scoreBoards
-       assessments <- S.userAssessments
        stc <- ST.submissionTableContext
        return $
          HomePageData
@@ -61,7 +60,6 @@ homePage = withUserState $ \s -> do
            ua
            sbmTables
            scoreBoards
-           assessments
            converter
            stc
            now)

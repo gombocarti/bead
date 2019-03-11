@@ -2,7 +2,10 @@
 module Bead.Persistence.SQL.Group where
 
 import           Control.Applicative
+import           Control.Arrow ((&&&))
 import           Control.Monad (when)
+import           Database.Esqueleto (select, from, on, where_, InnerJoin(InnerJoin), val, (^.), Value(unValue))
+import qualified Database.Esqueleto as Esq
 import           Data.Maybe
 import qualified Data.Text as Text
 
@@ -61,23 +64,36 @@ isUserInGroup :: Domain.Username -> Domain.GroupKey -> Persist Bool
 isUserInGroup username groupKey = withUser username (return False) $ \userEnt ->
   isJust <$> getBy (UniqueUsersOfGroupPair (toEntityKey groupKey) (entityKey userEnt))
 
+userGroupKeys :: Domain.Username -> Persist [Domain.GroupKey]
+userGroupKeys username = do
+  groups <- select $ from $ \(u `InnerJoin` ug) -> do
+    on (u ^. UserId Esq.==. ug ^. UsersOfGroupUser)
+    where_ (u ^. UserUsername Esq.==. val (Domain.usernameCata Text.pack username))
+    return (ug ^. UsersOfGroupGroup)
+  return $ map (toDomainKey . unValue) groups
+
 -- Lists all the groups that the user is attended in
-userGroups :: Domain.Username -> Persist [Domain.GroupKey]
-userGroups username = withUser username (return []) $ \userEnt ->
-  map (toDomainKey . usersOfGroupGroup . entityVal)
-    <$> selectList [UsersOfGroupUser ==. entityKey userEnt] []
+userGroups :: Domain.Username -> Persist [(Domain.GroupKey, Domain.Group)]
+userGroups username = do
+  groups <- select $ from $ \(u `InnerJoin` ug `InnerJoin` g) -> do
+    on (u ^. UserId Esq.==. ug ^. UsersOfGroupUser Esq.&&. ug ^. UsersOfGroupGroup Esq.==. g ^. GroupId)
+    where_ (u ^. UserUsername Esq.==. val (Domain.usernameCata Text.pack username))
+    return g
+  return $ map (toDomainKey . entityKey &&& toDomainValue . entityVal) groups
 
 -- Subscribe the user for the given course and group
-subscribe :: Domain.Username -> Domain.CourseKey -> Domain.GroupKey -> Persist ()
-subscribe username courseKey groupKey = withUser username (return ()) $ \userEnt -> void $ do
+subscribe :: Domain.Username -> Domain.GroupKey -> Persist ()
+subscribe username groupKey = withUser username (return ()) $ \userEnt -> void $ do
+  courseKey <- courseOfGroup groupKey
   let userKey = entityKey userEnt
   insertUnique (UsersOfGroup  (toEntityKey groupKey)  userKey)
   insertUnique (UsersOfCourse (toEntityKey courseKey) userKey)
 
 -- Unsubscribe the user from the given course and group,
 -- if the user is not subscribed nothing happens
-unsubscribe :: Domain.Username -> Domain.CourseKey -> Domain.GroupKey -> Persist ()
-unsubscribe username courseDomKey groupDomKey = withUser username (return ()) $ \userEnt -> void $ do
+unsubscribe :: Domain.Username -> Domain.GroupKey -> Persist ()
+unsubscribe username groupDomKey = withUser username (return ()) $ \userEnt -> void $ do
+  courseDomKey <- courseOfGroup groupDomKey
   let groupKey = toEntityKey groupDomKey
       courseKey = toEntityKey courseDomKey
       userKey = entityKey userEnt
@@ -114,7 +130,7 @@ groupTests = do
     ingr <- isUserInGroup user1name g
     equals False ingr "User was in the group"
 
-    subscribe user1name c g
+    subscribe user1name g
     ingr <- isUserInGroup user1name g
     equals True ingr "User was not in the subscribed group"
 
@@ -144,8 +160,8 @@ groupTests = do
     saveUser user2
     c <- saveCourse course
     g <- saveGroup c group
-    subscribe user1name c g
-    unsubscribe user1name c g
+    subscribe user1name g
+    unsubscribe user1name g
     us <- unsubscribedFromGroup g
     equals [user1name] us "User was not unsubscribed from the group"
 
