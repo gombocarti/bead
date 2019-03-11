@@ -503,7 +503,6 @@ labels =
 
  , "msg_UserStoryError_UnknownError"
  , "msg_UserStoryError_Message"
- , "msg_UserStoryError_SameUserIsLoggedIn"
  , "msg_UserStoryError_InvalidUsernameOrPassword"
  , "msg_UserStoryError_NoCourseAdminOfCourse"
  , "msg_UserStoryError_NoAssociatedTestScript"
