@@ -20,8 +20,8 @@ import qualified Text.Blaze.Html5.Attributes as A
 import           Text.Blaze.Html5.Attributes hiding (id, span)
 
 import qualified Bead.Controller.Pages as P
-import           Bead.Controller.ServiceContext as ServiceContext (UserState, getStatus, uid, usernameInState)
-import           Bead.Domain.Entities as Entity (statusMessage, usernameCata, uid, PageSettings(needsLatex))
+import           Bead.Controller.ServiceContext as ServiceContext (UserState, getStatus, uid, fullNameInState)
+import           Bead.Domain.Entities as Entity (statusMessage, uid, PageSettings(needsLatex))
 import           Bead.View.Fay.Hooks
 import           Bead.View.Fay.JSON.ServerSide
 import qualified Bead.View.I18N as I18N
@@ -81,17 +81,6 @@ bootStrapDocument settings body' = do
 
 runBootstrapPage :: Entity.PageSettings -> IHtml -> I18N -> Html
 runBootstrapPage settings p i = translate i $ bootStrapDocument settings p
-
-titleAndHead :: (Html -> IHtml -> IHtml) -> Translation String -> IHtml -> IHtml
-titleAndHead doc title content = doc
-  (css "screen.css")
-  (do msg <- getI18N
-      content <- content
-      return $ do
-        H.div ! A.id "header" $ do
-          H.div ! A.id "logo" $ "E-AD"
-          H.div ! A.id "title" $ fromString $ msg title
-        H.div ! A.id "content" $ content)
 
 bootstrapUserFrame :: UserState -> P.Page' IHtml -> Int -> IHtml
 bootstrapUserFrame s page newNotifs = withUserFrame' (P.pageValue page)
@@ -481,7 +470,7 @@ bootstrapHeader s newNotifs = do
     logout = P.logout ()
     profile = P.profile ()
     home = P.home ()
-    userId = fromString $ concat [usernameCata id . ServiceContext.usernameInState $ s, " / ", Entity.uid id . ServiceContext.uid $ s]
+    userId = fromString $ concat [ServiceContext.fullNameInState s, " / ", Entity.uid id . ServiceContext.uid $ s]
     notifications = P.notifications ()
 
 bootstrapStatus :: UserState -> IHtml

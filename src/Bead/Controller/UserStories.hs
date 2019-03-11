@@ -1149,8 +1149,8 @@ logMessage level msg = do
       testAgent
       loggedIn
   where
-    logMsg preffix =
-      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ join [preffix, " ", msg, "."]))
+    logMsg prefix =
+      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ join [prefix, " ", msg, "."]))
 
     userNotLoggedIn _  = logMsg "[USER NOT LOGGED IN]"
     registration       = logMsg "[REGISTRATION]"
