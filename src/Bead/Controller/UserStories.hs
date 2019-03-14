@@ -305,7 +305,7 @@ createCourseAdmin user ck = logAction INFO "sets user to course admin" $ do
   authorize P_Create P_CourseAdmin
   authorize P_Open   P_User
   persistence $ do
-    cas <- Persist.courseAdmins ck
+    cas <- Persist.courseAdminKeys ck
     Persist.createCourseAdmin user ck
     c <- Persist.loadCourse ck
     now <- liftIO getCurrentTime
@@ -325,8 +325,8 @@ courseAdministrators = logAction INFO "lists the course and admins" $ do
   authorize P_Open P_User
   persistence $ do
     Persist.filterCourses (\_ _ -> True) >>= (mapM $ \(ck,c) -> do
-      admins <- mapM Persist.loadUser =<< Persist.courseAdmins ck
-      return (c,admins))
+      admins <- Persist.courseAdmins ck
+      return (c, admins))
 
 -- Produces a list of courses that the user administrates and for all the courses
 -- the list of groups and users who are groups admins for the given group
@@ -338,14 +338,14 @@ groupAdministrators = logAction INFO "lists the groups and admins" $ do
   u <- username
   persistence $ do
     courses <- Persist.administratedCourses u
-    forM courses $ \(ck,course) -> do
+    forM courses $ \(ck, course) -> do
       gks <- Persist.groupKeysOfCourse ck
       groups <- mapM groupAndAdmins gks
       return (course, groups)
   where
     groupAndAdmins gk = do
       g <- Persist.loadGroup gk
-      as <- mapM Persist.loadUser =<< Persist.groupAdmins gk
+      as <- Persist.groupAdmins gk
       return (g,as)
 
 -- Deletes the given users from the given course if the current user is a course
@@ -381,9 +381,9 @@ saveTestScript ck ts = logAction INFO ("creates new test script for course: " ++
         now <- liftIO getCurrentTime
         c   <- Persist.loadCourse ck
         let msg = Notification.NE_TestScriptCreated (u_name u) (courseName c)
-        cas <- Persist.courseAdmins ck
+        cas <- Persist.courseAdminKeys ck
         gks <- Persist.groupKeysOfCourse ck
-        gas <- concat <$> mapM Persist.groupAdmins gks
+        gas <- concat <$> mapM Persist.groupAdminKeys gks
         let affected = nub (cas ++ gas) \\ [user]
         Persist.notifyUsers (Notification.Notification msg now Notification.System) affected
         return . putStatusMessage $
@@ -405,9 +405,9 @@ modifyTestScript tsk ts = logAction INFO ("modifies the existing test script: " 
         now <- liftIO getCurrentTime
         c   <- Persist.loadCourse ck
         let msg = Notification.NE_TestScriptUpdated (u_name u) (tsName ts) (courseName c)
-        cas <- Persist.courseAdmins ck
+        cas <- Persist.courseAdminKeys ck
         gks <- Persist.groupKeysOfCourse ck
-        gas <- concat <$> mapM Persist.groupAdmins gks
+        gas <- concat <$> mapM Persist.groupAdminKeys gks
         let affected = nub (cas ++ gas) \\ [user]
         Persist.notifyUsers (Notification.Notification msg now Notification.System) affected
         return . putStatusMessage $
@@ -525,7 +525,7 @@ createGroupAdmin user gk = logAction INFO "sets user as a group admin of a group
                 Persist.notifyUsers (Notification.Notification msg now Notification.System) affected
                 let username = usernameCata id user
                 let msg = Notification.NE_GroupAssigned (groupName g) (courseName c) adminName userName
-                cas <- Persist.courseAdmins ck
+                cas <- Persist.courseAdminKeys ck
                 let affected = cas \\ [admin]
                 Persist.notifyUsers (Notification.Notification msg now Notification.System) affected
                 return $ putStatusMessage $ msg_UserStory_SetGroupAdmin "The user has become a teacher."
@@ -563,7 +563,7 @@ createGroup ck g = logAction INFO ("creats group " ++ show (groupName g)) $ do
               now <- liftIO getCurrentTime
               c   <- Persist.loadCourse ck
               let msg = Notification.NE_GroupCreated (courseName c) (u_name u) (groupName g)
-              cas <- Persist.courseAdmins ck
+              cas <- Persist.courseAdminKeys ck
               let affected = cas \\ [user]
               Persist.notifyUsers (Notification.Notification msg now Notification.System) affected
               return $ do
@@ -645,22 +645,23 @@ subscribeToGroup gk = logAction INFO ("subscribes to the group " ++ (show gk)) $
         False
         gks
 
--- Returns a list of elements of group key, description and a boolean value indicating
--- that the user already submitted a solution for the group or the course of the group
-attendedGroups :: UserStory [(GroupKey, GroupDesc, Bool)]
+-- Returns for each subscribed group the group key, the group itself, admins and
+-- a boolean value indicating that the user already submitted a
+-- solution for the group or the course of the group
+attendedGroups :: UserStory [(Course, GroupKey, Group, [User], Bool)]
 attendedGroups = logAction INFO "lists subscribed groups with info" $ do
   authorize P_Open P_Group
   uname <- username
   persistence $ do
-    ks <- Persist.userGroupKeys uname
-    ds <- mapM Persist.groupDescription ks
-    mapM (isThereASubmissionDesc uname) ds
+    gs <- Persist.userGroups uname
+    forM gs $ \(ck, course, gk, g) -> do
+      admins <- Persist.groupAdmins gk
+      hasSubmitted <- isThereASubmission uname ck gk 
+      return (course, gk, g, admins, hasSubmitted)
   where
-    isThereASubmissionDesc u (gk, desc) = do
-      ck <- Persist.courseOfGroup gk
-      s <- (||) <$> Persist.isThereASubmissionForGroup u gk
-                <*> Persist.isThereASubmissionForCourse u ck
-      return (gk,desc,s)
+    isThereASubmission u ck gk = do
+      (||) <$> Persist.isThereASubmissionForGroup u gk
+           <*> Persist.isThereASubmissionForCourse u ck
 
 testCaseModificationForAssignment :: Username -> AssignmentKey -> TCModification -> Persist ()
 testCaseModificationForAssignment u ak = tcModificationCata noModification fileOverwrite textOverwrite tcDelete where
@@ -760,7 +761,7 @@ createGroupAssignment gk a tc = logAction INFO msg $ do
               c  <- Persist.loadCourse ck
               let msg = Notification.NE_GroupAssignmentCreated
                           (u_name u) (groupName g) (courseName c) (Assignment.name a)
-              gas <- Persist.groupAdmins gk
+              gas <- Persist.groupAdminKeys gk
               let affected = HashSet.toList $ user `HashSet.delete` HashSet.fromList gas
               Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
               sbs <- Persist.subscribedToGroup gk
@@ -801,9 +802,9 @@ createCourseAssignment ck a tc = logAction INFO msg $ do
               c <- Persist.loadCourse ck
               let msg = Notification.NE_CourseAssignmentCreated
                           (u_name u) (courseName c) (Assignment.name a)
-              cas <- Persist.courseAdmins ck
+              cas <- Persist.courseAdminKeys ck
               gks <- Persist.groupKeysOfCourse ck
-              gas <- concat <$> mapM Persist.groupAdmins gks
+              gas <- concat <$> mapM Persist.groupAdminKeys gks
               sbs <- Persist.subscribedToCourse ck
               let affected = nub (gas ++ cas) \\ [user]
               Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
@@ -847,7 +848,7 @@ createGroupAssessment gk a = logAction INFO ("creates assessment for group " ++ 
     c  <- Persist.loadCourse ck
     let msg = Notification.NE_GroupAssessmentCreated
                 (u_name u) (groupName g) (courseName c) (Assessment.title a)
-    gas <- Persist.groupAdmins gk
+    gas <- Persist.groupAdminKeys gk
     sbs <- Persist.subscribedToGroup gk
     let affected = nub (gas ++ sbs) \\ [user]
     Persist.notifyUsers (Notification.Notification msg now $ Notification.Assessment ak) affected
@@ -865,7 +866,7 @@ createCourseAssessment ck a = logAction INFO ("creates assessment for course " +
     c <- Persist.loadCourse ck
     let msg = Notification.NE_CourseAssessmentCreated
                 (u_name u) (courseName c) (Assessment.title a)
-    cas <- Persist.courseAdmins ck
+    cas <- Persist.courseAdminKeys ck
     sbs <- Persist.subscribedToCourse ck
     let affected = nub (cas ++ sbs) \\ [user]
     Persist.notifyUsers (Notification.Notification msg now $ Notification.Assessment ak) affected
@@ -893,11 +894,11 @@ modifyAssessment ak a = logAction INFO ("modifies assessment " ++ show ak) $ do
     mgk <- Persist.groupOfAssessment ak
     affected <- case (mck, mgk) of
                   (Just ck, _) -> do
-                    cas <- Persist.courseAdmins ck
+                    cas <- Persist.courseAdminKeys ck
                     sbs <- Persist.subscribedToCourse ck
                     return $ nub (cas ++ sbs) \\ [user]
                   (_, Just gk) -> do
-                    gas <- Persist.groupAdmins gk
+                    gas <- Persist.groupAdminKeys gk
                     sbs <- Persist.subscribedToGroup gk
                     return $ nub (gas ++ sbs) \\ [user]
                   _            -> return []
@@ -1214,18 +1215,21 @@ submitSolution ak s = logAction INFO ("submits solution for assignment " ++ show
         msg_UserStoryError_SubmissionDeadlineIsReached "The submission deadline is reached."
       return ()
 
--- Returns all the group for that the user does not submitted a soultion already
-availableGroups :: UserStory [(GroupKey, GroupDesc)]
+-- Returns all groups with admins for which the user have not submitted
+-- a solution already
+availableGroups :: UserStory [(Course, GroupKey, Group, [User])]
 availableGroups = logAction INFO "lists available groups" $ do
   authorize P_Open P_Group
   u <- username
   persistence $ do
-    allGroups <- map fst <$> Persist.filterGroups each
+    allGroups <- Persist.groups
     available <- filterM (thereIsNoSubmission u) allGroups
-    mapM Persist.groupDescription available
+    forM available $ \(c, gk, g) -> do
+      admins <- Persist.groupAdmins gk
+      return (c, gk, g, admins)
   where
-    each _ _ = True
-    thereIsNoSubmission u gk = not <$> Persist.isThereASubmissionForGroup u gk
+    thereIsNoSubmission :: Username -> (Course, GroupKey, Group) -> Persist Bool
+    thereIsNoSubmission u (_, gk, _) = not <$> Persist.isThereASubmissionForGroup u gk
 
 userSubmissionKeys :: AssignmentKey -> UserStory [SubmissionKey]
 userSubmissionKeys ak = logAction INFO msg $ do
@@ -1391,10 +1395,10 @@ newEvaluation sk e = logAction INFO ("saves new evaluation for " ++ show sk) $ d
                   submitter <- Persist.usernameOfSubmission sk
                   affected <- case (mck, mgk) of
                                 (Just ck, _) -> do
-                                  cas <- Persist.courseAdmins ck
+                                  cas <- Persist.courseAdminKeys ck
                                   return $ nub ([submitter] ++ cas) \\ [user]
                                 (_, Just gk) -> do
-                                  gas <- Persist.groupAdmins gk
+                                  gas <- Persist.groupAdminKeys gk
                                   return $ nub ([submitter] ++ gas) \\ [user]
                                 _            -> return []
                   Persist.notifyUsers (Notification.Notification msg now $ Notification.Evaluation ek) affected
@@ -1431,11 +1435,11 @@ modifyEvaluation ek e = logAction INFO ("modifies evaluation " ++ show ek) $ do
                     recipient <- Persist.usernameOfScore sk
                     case (mck, mgk) of
                       (Just ck, _) -> do
-                        cas <- Persist.courseAdmins ck
+                        cas <- Persist.courseAdminKeys ck
                         sbs <- Persist.subscribedToCourse ck
                         return $ nub ([recipient] ++ cas) \\ [user]
                       (_, Just gk) -> do
-                        gas <- Persist.groupAdmins gk
+                        gas <- Persist.groupAdminKeys gk
                         sbs <- Persist.subscribedToGroup gk
                         return $ nub ([recipient] ++ gas) \\ [user]
                       _            -> return []
@@ -1459,10 +1463,10 @@ modifyEvaluation ek e = logAction INFO ("modifies evaluation " ++ show ek) $ do
                     submitter <- Persist.usernameOfSubmission sk
                     case (mck, mgk) of
                       (Just ck, _) -> do
-                        cas <- Persist.courseAdmins ck
+                        cas <- Persist.courseAdminKeys ck
                         return $ nub ([submitter] ++ cas) \\ [user]
                       (_, Just gk) -> do
-                        gas <- Persist.groupAdmins gk
+                        gas <- Persist.groupAdminKeys gk
                         return $ nub ([submitter] ++ gas) \\ [user]
                       _            -> return []
                   Persist.notifyUsers (Notification.Notification msg now $ Notification.Evaluation ek) affected
@@ -1496,12 +1500,12 @@ createComment sk c = logAction INFO ("comments on " ++ show sk) $ do
               submitter <- Persist.usernameOfSubmission sk
               affected <- case (mck, mgk) of
                 (Just ck, _) -> do
-                  cas <- Persist.courseAdmins ck
+                  cas <- Persist.courseAdminKeys ck
                   gks <- Persist.groupsOfUsersCourse submitter ck
-                  gas <- foldM (\admins gk -> (++ admins) <$> Persist.groupAdmins gk) [] gks
+                  gas <- foldM (\admins gk -> (++ admins) <$> Persist.groupAdminKeys gk) [] gks
                   return $ nub ([submitter] ++ cas ++ gas) \\ [user]
                 (_, Just gk) -> do
-                  gas <- Persist.groupAdmins gk
+                  gas <- Persist.groupAdminKeys gk
                   return $ nub ([submitter] ++ gas) \\ [user]
                 _            -> return []
               Persist.notifyUsers (Notification.Notification msg now $ Notification.Comment ck) affected
@@ -1596,12 +1600,12 @@ modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ 
     mgk <- Persist.groupOfAssignment ak
     affected <- case (mck, mgk) of
                   (Just ck, _) -> do
-                    cas <- Persist.courseAdmins ck
+                    cas <- Persist.courseAdminKeys ck
                     gks <- Persist.groupKeysOfCourse ck
-                    gas <- concat <$> mapM Persist.groupAdmins gks
+                    gas <- concat <$> mapM Persist.groupAdminKeys gks
                     return $ HashSet.toList $ user `HashSet.delete` HashSet.fromList cas `HashSet.union` HashSet.fromList gas
                   (_, Just gk) -> do
-                    gas <- Persist.groupAdmins gk
+                    gas <- Persist.groupAdminKeys gk
                     return $ HashSet.toList $ user `HashSet.delete` HashSet.fromList gas
                   _            -> return []
     Persist.notifyUsers (Notification.Notification msg now $ Notification.Assignment ak) affected
@@ -1609,13 +1613,13 @@ modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ 
       then do
         affected <- case (mck, mgk) of
                       (Just ck, _) -> do
-                        cas <- Persist.courseAdmins ck
+                        cas <- Persist.courseAdminKeys ck
                         gks <- Persist.groupKeysOfCourse ck
-                        gas <- concat <$> mapM Persist.groupAdmins gks
+                        gas <- concat <$> mapM Persist.groupAdminKeys gks
                         sbs <- Persist.subscribedToCourse ck
                         return $ HashSet.toList $ HashSet.fromList sbs `HashSet.difference` HashSet.fromList (user : cas ++ gas)
                       (_, Just gk) -> do
-                        gas <- Persist.groupAdmins gk
+                        gas <- Persist.groupAdminKeys gk
                         sbs <- Persist.subscribedToGroup gk
                         return $ HashSet.toList $ HashSet.fromList sbs `HashSet.difference` HashSet.fromList (user : gas)
                       _            -> return []

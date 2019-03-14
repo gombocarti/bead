@@ -232,7 +232,7 @@ test_create_group_user = testCase "Create Course and Group with a user" $ do
   gak <- liftE interp $ saveGroupAssignment gk gAssignment
   gask <- liftE interp $ groupAssignments gk
   assertBool "Group does not have the assignment" (elem gak gask)
-  us <- liftE interp $ groupAdmins gk
+  us <- liftE interp $ groupAdminKeys gk
   assertBool "Admin is not in the group" ([admin] == us)
   gs <- liftE interp $ filterGroups (\_ _ -> True)
   assertBool "Group list was different" ([gk] == map fst gs)
