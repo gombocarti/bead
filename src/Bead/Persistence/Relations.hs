@@ -3,7 +3,6 @@ module Bead.Persistence.Relations (
     assignmentDesc
   , submissionDesc
   , submissionDetailsDesc
-  , groupDescription
   , isAdminedSubmission
   , canUserCommentOn
   , submissionTables
@@ -191,16 +190,6 @@ fullGroupName gk = do
   group <- loadGroup gk
   return $ Domain.fullGroupName course group
 
-groupDescription :: GroupKey -> Persist (GroupKey, GroupDesc)
-groupDescription gk = do
-  name <- fullGroupName gk
-  admins <- mapM (userDescription) =<< (groupAdmins gk)
-  let gd = GroupDesc {
-    gName   = name
-  , gAdmins = map ud_fullname admins
-  }
-  return (gk,gd)
-
 submissionDesc :: SubmissionKey -> Persist SubmissionDesc
 submissionDesc sk = do
   submission <- loadSubmission sk
@@ -369,9 +358,7 @@ userAssignmentsAssessments :: Username -> Persist [(Group, Course, [(AssignmentK
 userAssignmentsAssessments u = do
   now <- liftIO getCurrentTime
   groups <- userGroups u
-  forM groups $ \(gk, grp) -> do
-    ck <- courseOfGroup gk
-    course <-loadCourse ck
+  forM groups $ \(ck, course, gk, grp) -> do
     gAsgs <- groupAssignments gk
     cAsgs <- courseAssignments ck
     let asgs = cAsgs ++ gAsgs
@@ -664,8 +651,7 @@ assessmentDesc ak = do
       teachers <- groupAdmins gk
       return (courseName course, Just . groupName $ group, teachers)
   assessment <- loadAssessment ak
-  teachersName <- mapM ((ud_fullname <$>) . userDescription) teachers
-  return $ AssessmentDesc course group teachersName ak assessment
+  return $ AssessmentDesc course group (map u_name teachers) ak assessment
 
 courseOrGroupOfAssessment :: AssessmentKey -> Persist (Either CourseKey GroupKey)
 courseOrGroupOfAssessment ak = do

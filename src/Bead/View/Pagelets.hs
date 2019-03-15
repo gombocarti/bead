@@ -70,13 +70,8 @@ bootStrapDocument settings body' = do
           js  "/katex/katex.min.js"
           css "/katex/contrib/copy-tex.min.css"
           js  "/katex/contrib/copy-tex.min.js"
-          H.script $ fromString $ unwords
-            [ "window.onload = function(){ var mathElements = document.getElementsByClassName(\"math\");"
-            , "for (var i=0; i < mathElements.length; i++) {"
-            , "var texText = mathElements[i].firstChild;"
-            , "katex.render(texText.data, mathElements[i]);"
-            , "}}"
-            ]
+          H.script $ fromString 
+            "document.addEventListener(\"DOMContentLoaded\", function () {\n  var mathElements = document.getElementsByClassName(\"math\");\n  for (var i = 0; i < mathElements.length; i++) {\n    var texText = mathElements[i].firstChild;\n    if (mathElements[i].tagName == \"SPAN\") { katex.render(texText.data, mathElements[i], { displayMode: mathElements[i].classList.contains(\"display\"), throwOnError: false } );\n  }}});"
     H.body $ body
 
 runBootstrapPage :: Entity.PageSettings -> IHtml -> I18N -> Html

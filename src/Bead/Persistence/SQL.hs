@@ -55,7 +55,7 @@ import Test.Tasty.TestSet (TestSet)
 #ifdef TEST
 tests = do
   persistJSONConvertTests
-  courseAdminTests
+  administratedCourseTest
   groupTests
   testScriptTests
   assignmentTests

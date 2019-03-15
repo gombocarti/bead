@@ -129,14 +129,14 @@ courseAndGroupAssignmentTest = testCase "Course and group assignments" $ do
       return (uc,ug)
 
     lift $ assertBool "User is not registered in course" (uc == True)
-    lift $ assertBool "User is not registered in group" (elem gk2 (map trd ug))
+    lift $ assertBool "User is not registered in group" (elem gk2 (map snd5 ug))
   where
     toList = concat . map snd . Map.toList
 
 -- * Helpers
 
-trd :: (a,b,c) -> a
-trd (a,_,_) = a
+snd5 :: (a,b,c,d,e) -> b
+snd5 (_,b,_,_,_) = b
 
 utcTimeConstant :: UTCTime
 utcTimeConstant = read "2015-08-27 17:08:58 UTC"

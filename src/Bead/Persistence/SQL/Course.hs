@@ -5,6 +5,8 @@ import           Control.Applicative
 import           Data.Maybe
 import qualified Data.Text as Text
 
+import           Database.Esqueleto (select, from, on, where_, InnerJoin(InnerJoin), val, (^.), Value(unValue))
+import qualified Database.Esqueleto as Esq
 import           Database.Persist.Sql
 
 import qualified Bead.Domain.Entities as Domain
@@ -88,54 +90,35 @@ createCourseAdmin :: Domain.Username -> Domain.CourseKey -> Persist ()
 createCourseAdmin username courseKey = withUser username (return ()) $ \userEnt -> void $ do
   insertUnique (AdminsOfCourse (toEntityKey courseKey) (entityKey userEnt))
 
+courseAdminKeys :: Domain.CourseKey -> Persist [Domain.Username]
+courseAdminKeys courseKey = do
+  courseAdmins <- select $ from $ \(ac `InnerJoin` u) -> do
+    on (ac ^. AdminsOfCourseAdmin Esq.==. u ^. UserId)
+    where_ (ac ^. AdminsOfCourseCourse Esq.==. val (fromDomainKey courseKey))
+    return (u ^. UserUsername)
+  return $ map (Domain.Username . Text.unpack . unValue) courseAdmins
+
 -- Lists all the users which are administrators of the given course
-courseAdmins :: Domain.CourseKey -> Persist [Domain.Username]
-courseAdmins key = do
-  let courseKey = fromDomainKey key
-  userIds <- map (adminsOfCourseAdmin . entityVal) <$> selectList [AdminsOfCourseCourse ==. courseKey] []
-  usernames userIds
+courseAdmins :: Domain.CourseKey -> Persist [Domain.User]
+courseAdmins courseKey = do
+  courseAdmins <- select $ from $ \(ac `InnerJoin` u) -> do
+    on (ac ^. AdminsOfCourseAdmin Esq.==. u ^. UserId)
+    where_ (ac ^. AdminsOfCourseCourse Esq.==. val (fromDomainKey courseKey))
+    return u
+  return $ map (toDomainValue . entityVal) courseAdmins
 
 #ifdef TEST
-
-courseAdminTests = do
-  ioTest "Create Course Admin for the course" $ runSql $ do
+administratedCourseTest = ioTest "Administrated course test" $ runSql $ do
     saveUser user1
     c <- saveCourse course
     acs <- administratedCourses user1name
     equals [] (map fst acs) "There were courses that the user should not administrate."
     let u1 = Domain.u_username user1
     createCourseAdmin u1 c
-    us <- courseAdmins c
+    us <- courseAdminKeys c
     equals [u1] us "Admins of course were different."
     acs <- administratedCourses user1name
     equals [c] (map fst acs) "The administrated course list was wrong."
-
-  ioTest "No Course Admin for the course" $ runSql $ do
-    c <- saveCourse course
-    us <- courseAdmins c
-    equals [] us "Some admin was found for the course."
-
-  ioTest "Same user is created as admin twice" $ runSql $ do
-    saveUser user1
-    c <- saveCourse course
-    let u1 = Domain.u_username user1
-    createCourseAdmin u1 c
-    createCourseAdmin u1 c
-    us <- courseAdmins c
-    equals [u1] us "Admins of course were different."
-
-  ioTest "Two different users administrates the same course" $ runSql $ do
-    saveUser user1
-    saveUser user2
-    c <- saveCourse course
-    let u1 = Domain.u_username user1
-        u2 = Domain.u_username user2
-        users us = and [elem u1 us, elem u2 us]
-    createCourseAdmin u1 c
-    createCourseAdmin u2 c
-    us <- courseAdmins c
-    satisfies us users "Admins of course were different."
-
 #endif
 
 -- Lists all the users that are attends as a student on the given course

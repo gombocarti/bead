@@ -81,7 +81,41 @@ dictionaryHu = DF.DictionaryFile {
     , msg_NewAssignment_StartDate <| "Nyitás"
     , msg_NewAssignment_EndDate <| "Zárás"
     , msg_NewAssignment_Description <| "Szöveges leírás"
-    , msg_NewAssignment_Description_Default <| "Ennek a szövegnek markdown formátumban kell lennie.  Íme erre néhány egyszerű példa:\n\n  - Ez egy lista egyik eleme, *dőlt betűvel*.\n  - Ez pedig egy másik elem, **félkövérrel**.  Ügyeljünk\n    arra, hogy a szöveg többi része igazítva maradjon.\n\nNéha egyszerűen csak formázatlan szöveget akarunk írni.  Lentebb látható egy példa, miként lehet ezt megcsinálni.  Habár a `formázatlan` szavakat bármikor írhatunk a backtick (`` ` ``) szimbólum segítségével.\n\n~~~~~\nformázatlan szöveg\n~~~~~\n\nEmellett még linkek is [illeszthetők](http://haskell.org/) a szövegbe.  És ha végképp semmi sem jut az eszünkbe, akkor akár <a>sima</a> <b>HTML kódot</b> <i>is be lehet ágyazni</i>."
+    , msg_NewAssignment_Description_Default <| unlines
+        [ "Ennek a szövegnek markdown formátumban kell lennie.  Íme erre néhány egyszerű példa:"
+        , ""
+        , "  - Ez egy lista egyik eleme, *dőlt betűvel*."
+        , "  - Ez pedig egy másik elem, **félkövérrel**. Ügyeljünk"
+        , "    arra, hogy a szöveg többi része igazítva maradjon."
+        , ""
+        , unwords
+          [ "Képletek és egyenletek pont úgy működnek, mint $\\LaTeX$-ben."
+          , "Használható szövegközi és kiemelt mód a matematikai tartalom szép szedésére."
+          , "A szövegközi módnál, például $\\sum_{j=0}^n (a + bj)$ esetében, két dollár szimbólum (\\$) közé írjuk a képletet vagy egyenletet."
+          , "A nyitó dollár szimbólum után és a záró előtt nincs szóköz. A kiemelt mód nagyobb hangsúlyt ad:"
+          ]
+        , unlines
+          [ "\\["
+          , "\\sum_{j=0}^n (a + bj) = a + (a + b) + \\ldots + (a + nb)"
+          , "\\]"
+          ]
+        , "A támogatott $\\LaTeX$ makrók [ezen az oldalon](https://katex.org/docs/supported.html) vannak felsorolva."
+        , ""
+        , unwords
+          [ "Néha egyszerűen csak formázatlan szöveget akarunk írni."
+          , "Lentebb látható egy példa, miként lehet ezt elérni."
+          , "Habár `formázatlan` szavakat bármikor írhatunk a backtick (`` ` ``) szimbólum segítségével."
+          ]
+        , ""
+        , "~~~~~"
+        , "formázatlan szöveg"
+        , "~~~~~"
+        , ""
+        , unwords
+          [ "Emellett még linkek is [illeszthetők](http://haskell.org/) a szövegbe."
+          , "És ha más nem, akkor akár <a>sima</a> <b>HTML kódot</b> <i>is be lehet ágyazni</i>."
+          ]
+        ]
     , msg_NewAssignment_Markdown <| "A markdown formázás"
     , msg_NewAssignment_CanBeUsed <| " tanulmányozása javasolt a további lehetőségek megismeréséhez."
     , msg_NewAssignment_Properties <| "Tulajdonságok"

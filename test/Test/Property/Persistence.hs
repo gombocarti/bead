@@ -23,7 +23,8 @@ import System.IO.Temp (createTempDirectory)
 import System.FilePath ((</>))
 
 import Bead.Persistence.Initialization
-import Bead.Persistence.Persist
+import Bead.Persistence.Persist hiding (groups)
+import qualified Bead.Persistence.Persist as Persist
 import Bead.Persistence.Relations
 import Bead.Persistence.SQL.FileSystem (dirName)
 
@@ -474,6 +475,110 @@ initPersistence = do
   init <- createPersistInit defaultConfig
   initPersist init
 
+groupsTests :: TestSet ()
+groupsTests = test $ testCase "Groups tests" $ do
+  reinitPersistence
+  cs <- courses 20
+  gs <- runPersistIOCmd $ Persist.groups
+  assertTrue (null gs) "Group list is not empty initially."
+  cgs <- fmap concat $ forM cs $ \ck -> do
+    gks <- groups 20 [ck]
+    gs <- runPersistIOCmd $ mapM Persist.loadGroup gks
+    c <- runPersistIOCmd $ Persist.loadCourse ck
+    return [(c, gk, g) | (gk, g) <- zip gks gs]
+  cgs' <- runPersistIOCmd $ Persist.groups
+  assertSetEquals cgs cgs' "A group is missing or there is a course-groupkey-group mismatch."
+  assertEquals (length cgs) (length cgs') "A group is missing or a group is listed multiple times."
+
+courseAdminsTests :: TestSet ()
+courseAdminsTests = test $ testCase "Course admin [key] tests" $ do
+  reinitPersistence
+  cs <- courses 20
+  u <- users 50
+  testCourseAdmins cs u
+  putStr "Second round, now with groups and group admins "
+  reinitPersistence
+  cs <- courses 20
+  u <- users 50
+  gs <- groups 200 cs
+  setGroupAdmins u gs 150
+  testCourseAdmins cs u
+
+  where
+    testCourseAdmins :: [CourseKey] -> [Username] -> IO ()
+    testCourseAdmins cs u = do
+      forM cs $ \c -> do
+        ak <- runPersistIOCmd $ courseAdminKeys c
+        a <- runPersistIOCmd $ courseAdmins c
+        assertTrue (null ak && null a) "There are course admins for new courses."
+      quick 100 $ do
+        c <- pick $ elements cs
+        u <- pick $ elements u
+        user <- runPersistCmd $ loadUser u
+        (ak, a, _, ak', a', _, ak'', a'') <- runPersistCmd $
+                                               (,,,,,,,)
+                                                 <$> courseAdminKeys c
+                                                 <*> courseAdmins c
+                                                 <*> createCourseAdmin u c
+                                                 <*> courseAdminKeys c
+                                                 <*> courseAdmins c
+                                                 <*> createCourseAdmin u c
+                                                 <*> courseAdminKeys c
+                                                 <*> courseAdmins c
+        assertSetEquals (u : ak) ak' "User wasn't set as course admin according to keys."
+        assertSetEquals (user : a) a' "User wasn't set as course admin."
+        assertTrue (length ak' - length ak <= 1) "A course admin is returned multiple times."
+        assertTrue (length a' - length a <= 1) "A course admin is returned multiple times."
+        assertSetEquals (u : ak) ak'' "User wasn't set as course admin according to keys second time"
+        assertSetEquals (user : a) a'' "User wasn't set as course admin second time."
+        assertTrue (length ak'' - length ak <= 1) "A course admin is listed multiple times second time."
+        assertTrue (length a'' - length a <= 1) "A course admin is listed multiple times second time."
+
+groupAdminsTests :: TestSet ()
+groupAdminsTests = test $ testCase "Group admin [key] tests" $ do
+  reinitPersistence
+  cs <- courses 20
+  gs <- groups 200 cs
+  u <- users 50
+  testGroupAdmins gs u
+  putStr "Second round, now with course admins "
+  reinitPersistence
+  cs <- courses 20
+  gs <- groups 200 cs
+  u <- users 50
+  setCourseAdmins u cs 100
+  testGroupAdmins gs u
+
+  where
+    testGroupAdmins :: [GroupKey] -> [Username] -> IO ()
+    testGroupAdmins gs u = do
+      forM gs $ \g -> do
+        ak <- runPersistIOCmd $ groupAdminKeys g
+        a <- runPersistIOCmd $ groupAdmins g
+        assertTrue (null ak && null a) "There are group admins for new groups."
+      quick 100 $ do
+        g <- pick $ elements gs
+        u <- pick $ elements u
+        user <- runPersistCmd $ loadUser u
+        (ak, a, _, ak', a', _, ak'', a'') <- runPersistCmd $
+                                               (,,,,,,,)
+                                                 <$> groupAdminKeys g
+                                                 <*> groupAdmins g
+                                                 <*> createGroupAdmin u g
+                                                 <*> groupAdminKeys g
+                                                 <*> groupAdmins g
+                                                 <*> createGroupAdmin u g
+                                                 <*> groupAdminKeys g
+                                                 <*> groupAdmins g
+        assertSetEquals (u : ak) ak' "User wasn't set as group admin according to keys."
+        assertSetEquals (user : a) a' "User wasn't set as group admin."
+        assertTrue (length ak' - length ak <= 1) "A group admin is returned multiple times."
+        assertTrue (length a' - length a <= 1) "A group admin is returned multiple times."
+        assertSetEquals (u : ak) ak'' "User wasn't set as group admin according to keys second time"
+        assertSetEquals (user : a) a'' "User wasn't set as group admin second time."
+        assertTrue (length ak'' - length ak <= 1) "A group admin is listed multiple times second time."
+        assertTrue (length a'' - length a <= 1) "A group admin is listed multiple times second time."
+
 courseAndGroupAssignments :: Int -> Int -> [CourseKey] -> [GroupKey] -> IO [AssignmentKey]
 courseAndGroupAssignments cn gn cs gs = do
   cas <- courseAssignmentGen cn cs
@@ -623,26 +728,6 @@ courseAndGroupAssignmentTest = test $ testCase "Course and group assignment test
             assertEquals grp grp' "Assignment group changed"
           _ -> fail "Group assignment has no group"
 
--- Group description can be created from any group
-groupDescriptionTest = test $ testCase "Group description tests" $ do
-  reinitPersistence
-  cs <- courses 100
-  gs <- groups 300 cs
-  us <- users 300
-  quick 300 $ do
-    groupAdmin <- pick $ elements us
-    gk         <- pick $ elements gs
-    runPersistCmd $ createGroupAdmin groupAdmin gk
-    groupAdmins <- runPersistCmd $ groupAdmins gk
-    assertTrue (elem groupAdmin groupAdmins) "Group admin was not in the group admins"
-  quick 500 $ do
-    gk <- pick $ elements gs
-    (gk', desc) <- runPersistCmd $ groupDescription gk
-    assertEquals gk gk' "Group keys are different"
-    assertTrue (not . null . gName $ desc) "Name was empty"
-    admins <- runPersistCmd $ groupAdmins gk
-    assertTrue (length (gAdmins desc) == length admins) "Group admin numbers was different"
-
 -- Every submission has some kind of description
 submissionDescTest = test $ testCase "Every submission has some kind of description" $ do
   reinitPersistence
@@ -781,8 +866,12 @@ userGroupsTest = test $ testCase "userGroups and userGroupKeys have to return al
     g <- runPersistCmd $ subscribe u gk >> loadGroup gk
     ugs' <- runPersistCmd $ userGroups u
     ugks' <- runPersistCmd $ userGroupKeys u
-    assertSetEquals ugs' ((gk, g) : ugs) "A group is not listed by userGroups or there is a Group-GroupKey mismatch."
+    ck <- runPersistCmd $ courseOfGroup gk
+    c <- runPersistCmd $ loadCourse ck
+    assertSetEquals ugs' ((ck, c, gk, g) : ugs) "A group is not listed by userGroups or there is a CourseKey-Course-GroupKey-Group mismatch."
     assertSetEquals ugks' (gk : ugks) "A group is not listed by userGroupsKeys."
+    assertTrue (length ugs' - length ugs <= 1) "A subscribed group is listed multiple times."
+    assertTrue (length ugks' - length ugks <= 1) "A subscribed group key is listed multiple times."
 
 -- All the saved assignment must have a key and these keys must be listed
 assignmentKeyTest = test $ testCase "All the saved assignments must have a key" $ do
@@ -1567,7 +1656,7 @@ runPersistCmd m = do
   interp <- run getPersistInterpreter
   x <- run $ runPersist interp m
   case x of
-    Left msg -> fail msg >> return undefined
+    Left msg -> fail msg
     Right x  -> return x
 
 runPersistIOCmd :: Persist a -> IO a
@@ -1575,7 +1664,7 @@ runPersistIOCmd m = do
   interp <- getPersistInterpreter
   x <- runPersist interp m
   case x of
-    Left msg -> fail msg >> return undefined
+    Left msg -> fail msg
     Right x  -> return x
 
 startDate :: UTCTime
@@ -1621,12 +1710,14 @@ complexTests = group "Persistence Layer Complex tests" $ do
   userAssessmentKeyTest
   courseOrGroupAssignmentTest
   courseAndGroupAssignmentTest
-  groupDescriptionTest
   submissionDescTest
   lastEvaluationTest
   submissionDetailsDescTest
   submissionTablesTest
   courseKeysTest
+  courseAdminsTests
+  groupAdminsTests
+  groupsTests
   userGroupsTest
   assignmentKeyTest
   filterSubmissionsTest

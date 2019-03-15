@@ -37,7 +37,7 @@ markdownToHtml = either (fromString . show) id . runPure .
                    (writeHtml5 writerOpts <=< readMarkdown readerOpts) . T.pack . replaceCrlf
   where
     readerOpts :: ReaderOptions
-    readerOpts = def { readerExtensions = pandocExtensions }
+    readerOpts = def { readerExtensions = enableExtension Ext_tex_math_single_backslash pandocExtensions }
 
     writerOpts :: WriterOptions
     writerOpts = def { writerHTMLMathMethod = KaTeX "/katex" }

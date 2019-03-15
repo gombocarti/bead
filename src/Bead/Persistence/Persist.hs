@@ -44,6 +44,7 @@ module Bead.Persistence.Persist (
   , isUserInCourse
   , userCourses
   , createCourseAdmin
+  , courseAdminKeys
   , courseAdmins
   , subscribedToCourse
   , unsubscribedFromCourse
@@ -53,6 +54,7 @@ module Bead.Persistence.Persist (
   -- Group
   , saveGroup
   , loadGroup
+  , groups
   , courseOfGroup
   , filterGroups
   , isUserInGroup
@@ -60,6 +62,7 @@ module Bead.Persistence.Persist (
   , userGroups
   , subscribe
   , unsubscribe
+  , groupAdminKeys
   , groupAdmins
   , createGroupAdmin
   , subscribedToGroup
@@ -319,8 +322,12 @@ userCourses = PersistImpl.userCourses
 createCourseAdmin :: Username -> CourseKey -> Persist ()
 createCourseAdmin = PersistImpl.createCourseAdmin
 
+-- List of all course admins by username
+courseAdminKeys :: CourseKey -> Persist [Username]
+courseAdminKeys = PersistImpl.courseAdminKeys
+
 -- Lists all the users which are administrators of the given course
-courseAdmins :: CourseKey -> Persist [Username]
+courseAdmins :: CourseKey -> Persist [User]
 courseAdmins = PersistImpl.courseAdmins
 
 -- Lists all the users that are attends as a student on the given course
@@ -349,6 +356,10 @@ saveGroup = PersistImpl.saveGroup
 loadGroup :: GroupKey -> Persist Group
 loadGroup = PersistImpl.loadGroup
 
+-- Lists all groups from the database
+groups :: Persist [(Course, GroupKey, Group)]
+groups = PersistImpl.groups
+
 -- Returns the course of the given group
 courseOfGroup :: GroupKey -> Persist CourseKey
 courseOfGroup = PersistImpl.courseOfGroup
@@ -362,7 +373,7 @@ isUserInGroup :: Username -> GroupKey -> Persist Bool
 isUserInGroup = PersistImpl.isUserInGroup
 
 -- Lists all the groups that the user is attended in
-userGroups :: Username -> Persist [(GroupKey, Group)]
+userGroups :: Username -> Persist [(CourseKey, Course, GroupKey, Group)]
 userGroups = PersistImpl.userGroups
 
 userGroupKeys ::  Username -> Persist [GroupKey]
@@ -377,8 +388,11 @@ subscribe = PersistImpl.subscribe
 unsubscribe :: Username -> GroupKey -> Persist ()
 unsubscribe = PersistImpl.unsubscribe
 
+groupAdminKeys :: GroupKey -> Persist [Username]
+groupAdminKeys = PersistImpl.groupAdminKeys
+
 -- Lists all the group admins for the given course
-groupAdmins :: GroupKey -> Persist [Username]
+groupAdmins :: GroupKey -> Persist [User]
 groupAdmins = PersistImpl.groupAdmins
 
 -- Set the given user for the given group

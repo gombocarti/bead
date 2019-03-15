@@ -53,6 +53,15 @@ courseOfGroup key = do
     Nothing  -> persistError "courseOfGroup" $ "no group is found:" ++ show key
     Just ent -> toDomainKey . groupsOfCourseCourse $ entityVal ent
 
+-- Lists all groups from the database
+groups :: Persist [(Domain.Course, Domain.GroupKey, Domain.Group)]
+groups = do
+  grps <- select $ from $ \(c `InnerJoin` cg `InnerJoin` g) -> do
+    on (c ^. CourseId Esq.==. cg ^. GroupsOfCourseCourse Esq.&&.
+        cg ^. GroupsOfCourseGroup Esq.==. g ^. GroupId)
+    return (c, g ^. GroupId, g)
+  return $ map (\(c, gk, g) -> (toDomainValue (entityVal c), toDomainKey (unValue gk), toDomainValue (entityVal g))) grps
+
 -- Lists all the groups from the database that satisfies the given predicate
 filterGroups :: (Domain.GroupKey -> Domain.Group -> Bool) -> Persist [(Domain.GroupKey, Domain.Group)]
 filterGroups pred = (filter (uncurry pred) . map toDomainGroupPair) <$> selectList [] ([] :: [SelectOpt Group])
@@ -73,13 +82,17 @@ userGroupKeys username = do
   return $ map (toDomainKey . unValue) groups
 
 -- Lists all the groups that the user is attended in
-userGroups :: Domain.Username -> Persist [(Domain.GroupKey, Domain.Group)]
+userGroups :: Domain.Username -> Persist [(Domain.CourseKey, Domain.Course, Domain.GroupKey, Domain.Group)]
 userGroups username = do
-  groups <- select $ from $ \(u `InnerJoin` ug `InnerJoin` g) -> do
-    on (u ^. UserId Esq.==. ug ^. UsersOfGroupUser Esq.&&. ug ^. UsersOfGroupGroup Esq.==. g ^. GroupId)
+  groups <- select $ from $ \(u `InnerJoin` ug `InnerJoin` g `InnerJoin` gc `InnerJoin` c) -> do
+    on (u ^. UserId Esq.==. ug ^. UsersOfGroupUser Esq.&&.
+        ug ^. UsersOfGroupGroup Esq.==. g ^. GroupId Esq.&&.
+        g ^. GroupId Esq.==. gc ^. GroupsOfCourseGroup Esq.&&.
+        gc ^. GroupsOfCourseCourse Esq.==. c ^. CourseId
+       )
     where_ (u ^. UserUsername Esq.==. val (Domain.usernameCata Text.pack username))
-    return g
-  return $ map (toDomainKey . entityKey &&& toDomainValue . entityVal) groups
+    return (c, g)
+  return $ map (\(c, g) -> (toDomainKey . entityKey $ c, toDomainValue . entityVal $ c, toDomainKey . entityKey $ g, toDomainValue . entityVal $ g)) groups
 
 -- Subscribe the user for the given course and group
 subscribe :: Domain.Username -> Domain.GroupKey -> Persist ()
@@ -141,15 +154,15 @@ groupTests = do
     g <- saveGroup c group
     ags <- administratedGroups user1name
     equals [] (map fst ags) "There was group administrated with the user"
-    admins <- groupAdmins g
+    admins <- groupAdminKeys g
     equals [] admins "There were group admins, without creation"
     createGroupAdmin user1name g
-    admins <- groupAdmins g
+    admins <- groupAdminKeys g
     equals [user1name] admins "The first admin was not assigned to the group"
     ags <- administratedGroups user1name
     equals [g] (map fst ags) "There was no group administrated with the user"
     createGroupAdmin user2name g
-    admins <- groupAdmins g
+    admins <- groupAdminKeys g
     equals
       (Set.fromList [user1name, user2name])
       (Set.fromList admins)
@@ -170,11 +183,22 @@ groupTests = do
 -- Calculates the domain username from the user entity
 usernameFromEntity = Domain.Username . Text.unpack . userUsername
 
--- Lists all the group admins for the given course
-groupAdmins :: Domain.GroupKey -> Persist [Domain.Username]
+groupAdminKeys :: Domain.GroupKey -> Persist [Domain.Username]
+groupAdminKeys groupKey = do
+  groupAdmins <- select $ from $ \(ag `InnerJoin` u) -> do
+    on (ag ^. AdminsOfGroupAdmin Esq.==. u ^. UserId)
+    where_ (ag ^. AdminsOfGroupGroup Esq.==. val (fromDomainKey groupKey))
+    return (u ^. UserUsername)
+  return $ map (Domain.Username . Text.unpack . unValue) groupAdmins
+
+-- Lists all the group admins for the given group
+groupAdmins :: Domain.GroupKey -> Persist [Domain.User]
 groupAdmins groupKey = do
-  groupAdmins <- selectList [AdminsOfGroupGroup ==. (toEntityKey groupKey)] []
-  (map usernameFromEntity . catMaybes) <$> mapM (get . adminsOfGroupAdmin . entityVal) groupAdmins
+  groupAdmins <- select $ from $ \(ag `InnerJoin` u) -> do
+    on (ag ^. AdminsOfGroupAdmin Esq.==. u ^. UserId)
+    where_ (ag ^. AdminsOfGroupGroup Esq.==. val (fromDomainKey groupKey))
+    return u
+  return $ map (toDomainValue . entityVal) groupAdmins
 
 -- Set the given user for the given group
 createGroupAdmin :: Domain.Username -> Domain.GroupKey -> Persist ()

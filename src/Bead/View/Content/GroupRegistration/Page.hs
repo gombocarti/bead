@@ -5,8 +5,9 @@ module Bead.View.Content.GroupRegistration.Page (
   ) where
 
 import           Control.Monad
-import           Control.Arrow ((***))
-import           Data.List (intercalate)
+import           Data.Function (on)
+import qualified Data.HashSet as HashSet
+import           Data.List (intercalate, sortBy)
 import           Data.String (fromString)
 
 import           Text.Blaze.Html5 as H hiding (map)
@@ -22,8 +23,8 @@ unsubscribeFromCourse =
   ModifyHandler (UnsubscribeFromCourse <$> getParameter unsubscribeUserGroupKeyPrm)
 
 data GroupRegData = GroupRegData {
-    groups :: [(GroupKey, GroupDesc)]
-  , groupsRegistered :: [(GroupKey, GroupDesc, Bool)]
+    groups :: [(Course, GroupKey, Group, [User])]
+  , groupsRegistered :: [(Course, GroupKey, Group, [User], Bool)]
   }
 
 postGroupReg :: POSTContentHandler
@@ -34,8 +35,8 @@ groupRegistrationPage :: GETContentHandler
 groupRegistrationPage = do
   desc <- userStory $ do
     as <- attendedGroups
-    let attendedGroupKeys = map fst3 as
-        newGroupForUser (gk,_) = not (elem gk attendedGroupKeys)
+    let attendedGroupKeys = HashSet.fromList $ map snd5 as
+        newGroupForUser (_, gk, _, _) = not (HashSet.member gk attendedGroupKeys)
     gs <- (filter newGroupForUser) <$> availableGroups
     return GroupRegData {
         groups = gs
@@ -43,7 +44,7 @@ groupRegistrationPage = do
       }
   setPageContents $ groupRegistrationContent desc
   where
-    fst3 (f,_,_) = f
+    snd5 (_,b,_,_,_) = b
 
 groupRegistrationContent :: GroupRegData -> IHtml
 groupRegistrationContent desc = do
@@ -63,7 +64,7 @@ groupRegistrationContent desc = do
       H.h3 $ (fromString . msg $ msg_GroupRegistration_NewGroup "New group")
     i18n msg $ groupsForTheUser (groups desc)
 
-groupsAlreadyRegistered :: [(GroupKey, GroupDesc, Bool)] -> IHtml
+groupsAlreadyRegistered :: [(Course, GroupKey, Group, [User], Bool)] -> IHtml
 groupsAlreadyRegistered ds = do
   msg <- getI18N
   return $ nonEmpty ds
@@ -78,10 +79,10 @@ groupsAlreadyRegistered ds = do
   where
     unsubscribeFromCourse k = Pages.unsubscribeFromCourse k ()
 
-    groupLine msg (key, desc, hasSubmission) = flip groupDescFold desc $ \n as -> do
+    groupLine msg (course, key, grp, admins, hasSubmission) = do
       H.tr $ do
-        H.td $ fromString n
-        H.td $ fromString $ intercalate ", " as
+        H.td $ fromString (fullGroupName course grp)
+        H.td $ fromString $ intercalate ", " (map u_name . sortUsersByName $ admins)
         H.td $
           if hasSubmission
             then (fromString . msg $ msg_GroupRegistration_NoUnsubscriptionAvailable
@@ -91,18 +92,29 @@ groupsAlreadyRegistered ds = do
                      (fieldName unsubscribeFromCourseSubmitBtn)
                      (msg $ msg_GroupRegistration_Unsubscribe "Unregister")
 
-groupsForTheUser :: [(GroupKey, GroupDesc)] -> IHtml
+groupsForTheUser :: [(Course, GroupKey, Group, [User])] -> IHtml
 groupsForTheUser gs = do
   msg <- getI18N
   return $
     nonEmpty gs
       (Bootstrap.rowColMd12 $ p $ fromString . msg $ msg_GroupRegistration_NoAvailableCourses "There are no available groups yet.") $
       postForm (routeOf groupRegistration) $ do
-        Bootstrap.selectionWithPlaceholder (fieldName groupRegistrationField) (msg $ msg_GroupRegistration_SelectGroup "Select course and group") (map (id *** descriptive) gs)
+        Bootstrap.selectionWithPlaceholder
+          (fieldName groupRegistrationField)
+          (msg $ msg_GroupRegistration_SelectGroup "Select course and group")
+          (map (\(c, gk, g, admins) -> (gk, descriptive c g admins)) . sortCoursesAndAdmins $ gs)
         Bootstrap.submitButton (fieldName regGroupSubmitBtn) (msg $ msg_GroupRegistration_Register "Register")
   where
     groupRegistration = Pages.groupRegistration ()
 
-    descriptive :: GroupDesc -> String
-    descriptive g = join [gName g, " / ", intercalate ", " (gAdmins g)]
+    descriptive :: Course -> Group -> [User] -> String
+    descriptive c g admins = unwords [fullGroupName c g, "/", intercalate ", " (map u_name admins)]
 
+    sortCoursesAndAdmins :: [(Course, GroupKey, Group, [User])] -> [(Course, GroupKey, Group, [User])]
+    sortCoursesAndAdmins = sortBy (compareHun `on` (courseName . fst4)) . map (\(c, gk, g, admins) -> (c, gk, g, sortUsersByName admins))
+      where
+        fst4 :: (a, b, c, d) -> a
+        fst4 (a, _, _, _) = a
+
+sortUsersByName :: [User] -> [User]
+sortUsersByName = sortBy (compareHun `on` u_name)
