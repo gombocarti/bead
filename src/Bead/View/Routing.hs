@@ -73,7 +73,6 @@ routes config = join
     , (changeLanguagePath, changeLanguage)
     ]
   , registrationRoutes config
-  , [ (markdownPath, serveMarkdown) ]
     -- Add static handlers
   , [ (staticPath,         serveDirectory "static") ]
   ]

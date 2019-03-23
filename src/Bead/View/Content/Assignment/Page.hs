@@ -71,7 +71,7 @@ newCourseAssignmentPreviewPage = do
     return ((ck, course), nonEmptyList tss', ufs)
   now <- liftIO $ getCurrentTime
   tz <- userTimeZoneToLocalTimeConverter
-  modifyPageSettings (\settings -> settings { needsLatex = True })
+  modifyPageSettings enableFullMarkdownRendering
   setPageContents $ newAssignmentContent $
     PD_Course_Preview tz now c tss ufs assignment tc
 
@@ -155,7 +155,7 @@ newGroupAssignmentPreviewPage = do
     return ((gk, group), nonEmptyList tss', ufs)
   tz <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ getCurrentTime
-  modifyPageSettings (\settings -> settings { needsLatex = True })
+  modifyPageSettings enableFullMarkdownRendering
   setPageContents $ newAssignmentContent $
     PD_Group_Preview tz now g tss ufs assignment tc
 
@@ -196,7 +196,7 @@ modifyAssignmentPreviewPage = do
     ev   <- not <$> S.isThereASubmission ak
     return (nonEmptyList tss', ufs, tc, ev)
   tz <- userTimeZoneToLocalTimeConverter
-  modifyPageSettings (\settings -> settings { needsLatex = True })
+  modifyPageSettings enableFullMarkdownRendering
   setPageContents $ newAssignmentContent $
     PD_Assignment_Preview tz ak as tss ufs tc tm ev
 

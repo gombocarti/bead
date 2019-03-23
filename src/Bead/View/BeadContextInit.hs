@@ -34,6 +34,7 @@ import qualified Bead.View.AuthToken as Auth
 import           Bead.View.BeadContext hiding (ldapDaemon)
 import           Bead.View.DataDir
 import           Bead.View.Dictionary (dictionaries, Language(..))
+import           Bead.View.Markdown (syntaxHighlightCss)
 import           Bead.View.Registration (createAdminUser)
 import           Bead.View.Routing
 
@@ -68,6 +69,8 @@ data Daemons = Daemons {
 beadContextInit :: Config -> ServiceContext -> Daemons -> FilePath -> SnapletInit BeadContext BeadContext
 beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDir $ do
   copyDataContext
+
+  generateSyntaxHighlightCss
 
   authTokenManager <- liftIO $ Auth.createAuthTokenManager
   auth <- nestSnaplet "authentication" authContext $ createAuthTokenContext authTokenManager
@@ -161,3 +164,11 @@ copyFiles skips src dst = do
               return $ dstDate < srcDate
             else return True
           when doCopy $ copyFile srcPath dstPath
+
+generateSyntaxHighlightCss :: Initializer b v ()
+generateSyntaxHighlightCss = do
+  staticDir <- (</> "static") <$> getSnapletFilePath
+  let (css, path) = syntaxHighlightCss
+  liftIO $ do
+    createDirectoryIfMissing False staticDir
+    writeFile (staticDir </> path) css
