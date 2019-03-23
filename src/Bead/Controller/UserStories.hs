@@ -1747,13 +1747,13 @@ isAccessibleBallotBoxSubmission = guard
 
 doesBlockSubmissionView :: SubmissionKey -> UserStory ()
 doesBlockSubmissionView = guard
-  (const Persist.doesBlockSubmissionView)
+  Persist.doesBlockSubmissionView
   "The user tries to access a blocked submission (%s)."
   (userError blockedSubmission)
 
 doesBlockAssignmentView :: AssignmentKey -> UserStory ()
 doesBlockAssignmentView = guard
-  (const Persist.doesBlockAssignmentView)
+  Persist.doesBlockAssignmentView
   "The user tries to access a blocked assignment (%s)."
   (userError blockedAssignment)
 
