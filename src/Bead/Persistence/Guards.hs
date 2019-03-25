@@ -23,7 +23,7 @@ that check if the user is created or have access to the given objects
 -}
 
 import           Control.Applicative ((<$>))
-import           Control.Monad ((>=>))
+import           Control.Monad ((>=>), foldM)
 import           Control.Monad.IO.Class (liftIO)
 import           Data.List (find, nub)
 import           Data.Maybe (isNothing)
@@ -198,26 +198,29 @@ isStudentOf student admin = do
 
 -- Return False if the submissions can not be seen for the student,
 -- because there is an other isolated related assignment for the course or group
-doesBlockSubmissionView :: SubmissionKey -> Persist Bool
-doesBlockSubmissionView = assignmentOfSubmission >=> doesBlockAssignmentView
+doesBlockSubmissionView :: Username -> SubmissionKey -> Persist Bool
+doesBlockSubmissionView u = assignmentOfSubmission >=> doesBlockAssignmentView u
 
--- Return False if the submissions for the assignment can not be seen for the student,
+-- Return False if the submissions for the assignment is hidden for the student,
 -- because there is an other isolated related assignment for the course or group
-doesBlockAssignmentView :: AssignmentKey -> Persist Bool
-doesBlockAssignmentView ak = do
-  key <- courseOrGroupOfAssignment ak
+doesBlockAssignmentView :: Username -> AssignmentKey -> Persist Bool
+doesBlockAssignmentView u ak = do
+  now <- liftIO getCurrentTime
   asg <- loadAssignment ak
-  case (isIsolated $ aspects asg) of
-    True  -> return True
-    False -> do
-      now <- liftIO getCurrentTime
+  if isActive asg now && isIsolated (aspects asg)
+    then return True
+    else  do
+      key <- courseOrGroupOfAssignment ak
       others <- filter (/= ak) <$> case key of
-        Left  ck -> courseAssignments ck
+        Left  ck -> do
+          aks <- courseAssignments ck
+          gks <- groupsOfUsersCourse u ck
+          foldM (\acc gk -> (++ acc) <$> groupAssignments gk) aks gks
         Right gk -> do
           ck <- courseOfGroup gk
           aks  <- courseAssignments ck
           aks' <- groupAssignments gk
-          return (nub $ (aks ++ aks'))
+          return (aks ++ aks')
       asgs <- mapM loadAssignment others
       let otherOpenIsolated = isNothing $ find (\a -> and [isActive a now, isIsolated $ aspects a]) asgs
       return $! otherOpenIsolated

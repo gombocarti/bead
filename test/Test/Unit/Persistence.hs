@@ -6,10 +6,13 @@ module Test.Unit.Persistence (
 -- Test imports
 
 import Test.HUnit hiding (test)
+import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (testCase)
 import Test.Tasty.TestSet
 
 -- Bead imports
+import Control.Monad.IO.Class (liftIO)
+
 
 import Bead.Domain.Entities
 import Bead.Domain.TimeZone (utcZoneInfo)
@@ -17,12 +20,14 @@ import Bead.Domain.Shared.Evaluation
 import Bead.Domain.Relationships
 import Bead.Persistence.Initialization
 import Bead.Persistence.Persist
+import qualified Bead.Persistence.Guards as G
 import Bead.Persistence.Relations
 
 -- Utils
 
 import Control.Monad (join, when)
 import Data.Maybe
+import Data.List ((\\))
 import Data.Time.Clock
 import System.Directory
 import System.FilePath
@@ -37,6 +42,7 @@ tests = group "Persistence tests" $ do
 #endif
   test testOpenSubmissions
   test test_feedbacks
+  test testIsolatedAssignmentBlocksView
   test clean_up
 
 -- Normal assignment is represented as empty aspects set
@@ -296,6 +302,82 @@ testHasLastSubmission ak u sk = do
   assertBool "Submission was not found" (isJust mKey)
   assertBool "Submission was different" (sk == fromJust mKey)
 
+-- Guard tests
+
+testIsolatedAssignmentBlocksView :: TestTree
+testIsolatedAssignmentBlocksView = testCase "Isolated assignment blocks viewing other assignments" $ do
+  reinitpersistence
+  interp <- createPersistInterpreter defaultConfig
+  now <- getCurrentTime
+  let std1 = Username "student1"
+      student1 = User {
+          u_role = Student
+        , u_username = std1
+        , u_email = Email "student@gmail.com"
+        , u_name = "Student"
+        , u_timezone = utcZoneInfo
+        , u_language = Language "hu"
+        , u_uid = usernameCata Uid std1
+        }
+      isolated = aspectsFromList [Isolated]
+      start = now
+      end = addUTCTime 600 start -- 10 minutes
+      startInactive = addUTCTime (-600) now
+      endInactive = startInactive
+      asgC1 = Assignment "CourseAssignment1" "Assignment" normal start end binaryConfig
+      asgC2 = Assignment "CourseAssignment2" "Assignment" normal start end binaryConfig
+      asgC3 = Assignment "CourseAssignment3" "Assignment" normal startInactive endInactive binaryConfig
+      asgG1 = Assignment "GroupAssignment1" "Assignment" normal start end binaryConfig
+      asgG2 = Assignment "GroupAssignment2" "Assignment" normal start end binaryConfig
+      asgG3 = Assignment "GroupAssignment3" "Assignment" normal startInactive endInactive binaryConfig
+      isolate a = a { aspects = isolated }
+      locally ak asg m = do
+        modifyAssignment ak (isolate asg)
+        m
+        modifyAssignment ak asg
+  liftE interp $ do
+    ck  <- saveCourse (Course "name" "desc" TestScriptSimple)
+    gk <- saveGroup ck (Group "gname1" "gdesc1")
+    _ <- saveUser student1
+    subscribe std1 gk
+    [aC1, aC2, aC3] <- mapM (saveCourseAssignment ck) [asgC1, asgC2, asgC3]
+    [aG1, aG2, aG3] <- mapM (saveGroupAssignment gk) [asgG1, asgG2, asgG3]
+    let aks = [aC1, aC2, aC3, aG1, aG2, aG3]
+    allAccessible <- and <$> mapM (G.doesBlockAssignmentView std1) aks
+    liftIO $ assertBool "User cannot access one of the assignments initially." allAccessible
+    locally aC1 asgC1 $ do
+      isAccessible <- G.doesBlockAssignmentView std1 aC1
+      liftIO $ assertBool "User cannot access the isolated course assignment" isAccessible
+      othersAccessible <- or <$> mapM (G.doesBlockAssignmentView std1) (aks \\ [aC1])
+      liftIO $ assertBool "User can access one of the assignments when a course assignment is isolated." (not othersAccessible)
+      locally aC3 asgC3 $ do
+        isInactiveAccessible <- G.doesBlockAssignmentView std1 aC3
+        liftIO $ assertBool "User can access an inactive isolated course assignment when a course assignment is isolated." (not isInactiveAccessible)
+      locally aG3 asgG3 $ do
+        isInactiveAccessible <- G.doesBlockAssignmentView std1 aG3
+        liftIO $ assertBool "User can access an inactive isolated group assignment when a course assignment is isolated." (not isInactiveAccessible)
+    locally aG1 asgG1 $ do
+      isAccessible <- G.doesBlockAssignmentView std1 aG1
+      liftIO $ assertBool "User cannot access the isolated group assignment" isAccessible
+      othersAccessible <- or <$> mapM (G.doesBlockAssignmentView std1) (aks \\ [aG1])
+      liftIO $ assertBool "User can access one of the assignments when a group assignment is isolated." (not othersAccessible)
+      locally aC3 asgC3 $ do
+        isInactiveAccessible <- G.doesBlockAssignmentView std1 aC3
+        liftIO $ assertBool "User can access an inactive isolated course assignment when a group assignment is isolated." (not isInactiveAccessible)
+      locally aG3 asgG3 $ do
+        isInactiveAccessible <- G.doesBlockAssignmentView std1 aG3
+        liftIO $ assertBool "User can access an inactive isolated group assignment when a group assignment is isolated." (not isInactiveAccessible)
+    locally aC3 asgC3 $ do
+      isAccessible <- G.doesBlockAssignmentView std1 aC3
+      liftIO $ assertBool "User cannot access the isolated inactive course assignment" isAccessible
+      othersAccessible <- and <$> mapM (G.doesBlockAssignmentView std1) (aks \\ [aC3])
+      liftIO $ assertBool "User cannot access one of the assignments when an inactive course assignment is isolated." othersAccessible
+    locally aG3 asgG3 $ do
+      isAccessible <- G.doesBlockAssignmentView std1 aG3
+      liftIO $ assertBool "User cannot access the isolated inactive group assignment" isAccessible
+      othersAccessible <- and <$> mapM (G.doesBlockAssignmentView std1) (aks \\ [aG3])
+      liftIO $ assertBool "User cannot access one of the assignments when an inactive group assignment is isolated." othersAccessible
+
 reinitpersistence = do
   init <- createPersistInit defaultConfig
   setUp <- isSetUp init
@@ -309,6 +391,7 @@ clean_up = testCase "Cleaning up" $ do
 
 -- * Tools
 
+liftE :: Interpreter -> Persist a -> IO a
 liftE interp m = do
   x <- runPersist interp m
   case x of

@@ -235,12 +235,29 @@ newAssignmentContent pd = do
                     editOrReadOnly pd $ Bootstrap.textAreaField assignmentDesc Bootstrap.Large $ do
                       fromString $ fromAssignment Assignment.desc (fromString . msg $
                         msg_NewAssignment_Description_Default $ unlines
-                          [ "This text shall be in markdown format. Here are some quick examples:"
+                          [ "This text shall be in markdown format. Here is a brief overview:"
                           , ""
                           , "  - This is a bullet list item with *emphasis* (italic)."
                           , "  - And this is another item in the list with "
                           , "    **strong** (bold). Note that the rest of the item"
                           , "    shall be aligned."
+                          , ""
+                          , "Sometimes you may want to write verbatim text:"
+                          , ""
+                          , "~~~~"
+                          , "verbatim text"
+                          , "~~~~"
+                          , ""
+                          , "However, `verbatim` words may be inlined any time by using the `` ` `` backtick symbol."
+                          , ""
+                          , "Chances are you would like to present code snippets, such as:"
+                          , ""
+                          , "~~~~{.haskell}"
+                          , "main :: IO ()"
+                          , "main = putStrLn \"I'm highlighted\""
+                          , "~~~~"
+                          , ""
+                          , "Many more languages are supported, including `ada`, `agda`, `c`, `cpp`, `erlang`, `java`, `lex`, `python` and `yacc`."
                           , ""
                           , unwords
                             [ "Formulas and equations work just like in $\\LaTeX$."
@@ -254,16 +271,6 @@ newAssignmentContent pd = do
                             , "\\]"
                             ]
                           , "Complete list of supported $\\LaTeX$ macros is available [here](https://katex.org/docs/supported.html)."
-                          , ""
-                          , unwords
-                            [ "Sometimes you may want to write verbatim text, this how it can"
-                            , "be done.  However, `verbatim` words may be inlined any time by"
-                            , "using the backtick (`` ` ``) symbol."
-                            ]
-                          , ""
-                          , "~~~~~"
-                          , "verbatim text"
-                          , "~~~~~"
                           , ""
                           , unwords
                             [ "Note that links may be also [inserted](http://haskell.org/)."

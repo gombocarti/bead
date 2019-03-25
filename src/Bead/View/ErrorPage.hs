@@ -13,7 +13,7 @@ import qualified Text.Blaze.Html5 as H
 
 import           Snap
 
-import           Bead.Domain.Entities (PageSettings(PageSettings), needsLatex)
+import           Bead.Domain.Entities (defaultPageSettings)
 import           Bead.View.BeadContext (BeadHandler')
 import qualified Bead.View.Content.Public.ErrorPage as View
 import           Bead.View.ContentHandler
@@ -60,4 +60,4 @@ publicErrorPage :: Translation String -> String -> BeadHandler' b H.Html
 publicErrorPage title msg = publicPage $ page title (Just msg)
 
 publicPage :: IHtml -> BeadHandler' b H.Html
-publicPage = bootstrapPublicPage (PageSettings { needsLatex = False })
+publicPage = bootstrapPublicPage defaultPageSettings

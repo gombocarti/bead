@@ -21,11 +21,12 @@ import           Text.Blaze.Html5.Attributes hiding (id, span)
 
 import qualified Bead.Controller.Pages as P
 import           Bead.Controller.ServiceContext as ServiceContext (UserState, getStatus, uid, fullNameInState)
-import           Bead.Domain.Entities as Entity (statusMessage, uid, PageSettings(needsLatex))
+import           Bead.Domain.Entities as Entity (statusMessage, uid, PageSettings(needsLatex, needsSyntaxHighlight))
 import           Bead.View.Fay.Hooks
 import           Bead.View.Fay.JSON.ServerSide
 import qualified Bead.View.I18N as I18N
 import           Bead.View.I18N (IHtml, translate, getI18N)
+import           Bead.View.Markdown (syntaxHighlightCss)
 import           Bead.View.RouteOf
 import           Bead.View.Style
 import           Bead.View.TemplateAndComponentNames
@@ -65,6 +66,8 @@ bootStrapDocument settings body' = do
         js "/bootstrap.min.js"
         css "/bootstrap-datetimepicker.min.css"
         js "/bootstrap-datetimepicker.min.js"
+        when (needsSyntaxHighlight settings) $
+          css ('/' : snd syntaxHighlightCss)
         when (needsLatex settings) $ do
           css "/katex/katex.min.css"
           js  "/katex/katex.min.js"

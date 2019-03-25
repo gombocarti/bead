@@ -69,7 +69,7 @@ submissionPage = do
   if (now < Assignment.start asg)
     then setPageContents assignmentNotAvailableYetContent
     else do
-      modifyPageSettings (\settings -> settings { needsLatex = True })
+      modifyPageSettings E.enableFullMarkdownRendering
       setPageContents $ submissionContent $
         PageData {
             asKey = ak

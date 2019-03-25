@@ -97,6 +97,7 @@ module Bead.Domain.Entities (
   , score
   , PageSettings(..)
   , defaultPageSettings
+  , enableFullMarkdownRendering
   , CompareHun(..)
   , sortHun
   , StatusMessage(..)
@@ -683,10 +684,19 @@ statusMessage
     SmError x -> err x
 
 -- | PageSettings controls how a HTML page is rendered.
-newtype PageSettings = PageSettings { needsLatex :: Bool }
+data PageSettings = PageSettings { needsLatex :: Bool
+                                 , needsSyntaxHighlight :: Bool
+                                 }
 
 defaultPageSettings :: PageSettings
-defaultPageSettings = PageSettings { needsLatex = False }
+defaultPageSettings = PageSettings { needsLatex = False
+                                   , needsSyntaxHighlight = False
+                                   }
+
+enableFullMarkdownRendering :: PageSettings -> PageSettings
+enableFullMarkdownRendering s = s { needsLatex = True
+                                  , needsSyntaxHighlight = True
+                                  }
 
 #ifdef TEST
 
