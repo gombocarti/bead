@@ -18,7 +18,6 @@ import           Bead.Domain.Types (readMaybe)
 import           Bead.View.BeadContext
 import           Bead.View.Content hiding (BlazeTemplate, template, getDictionaryInfos)
 import           Bead.View.ContentHandler (setUserLanguage)
-import           Bead.View.Headers (getHeaders)
 
 #ifdef TEST
 import           Test.Tasty.TestSet

@@ -21,7 +21,6 @@ import Bead.View.Dictionary (patchDictionariesTests)
 #ifdef EmailEnabled
 import Bead.View.EmailTemplate (runEmailTemplateTests)
 #endif
-import Bead.View.Headers (getHeadersTest)
 import Bead.View.Headers.AcceptLanguage (acceptLanguageTests)
 import Bead.View.Pagelets (linkTextTest)
 import Bead.View.RouteOf (routeOfTest)
@@ -53,7 +52,6 @@ tests = do
   group "Data bridge" dataBridgeTests
   group "Feedback" feedbackTests
   group "Parse" parseTests
-  group "Get headers" getHeadersTest
   group "Accept language" acceptLanguageTests
   group "Patch dictionaries" patchDictionariesTests
 

@@ -311,7 +311,6 @@ Library
     Bead.View.DataBridge
     Bead.View.DataDir
     Bead.View.ErrorPage
-    Bead.View.Headers
     Bead.View.Headers.AcceptLanguage
     Bead.View.Fay.Hooks
     Bead.View.Fay.HookIds
