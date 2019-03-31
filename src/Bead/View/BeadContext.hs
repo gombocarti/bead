@@ -20,9 +20,6 @@ import           Data.Maybe (maybe)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String (fromString)
-import           Data.Time (UTCTime)
-import qualified Data.Time as Time
-import qualified Data.Time.Calendar as Cal
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import           Network.Mail.Mime
@@ -344,18 +341,21 @@ getServiceContext :: BeadHandler' b ServiceContext
 getServiceContext = withTop serviceContext $ snapContextCata id
 
 -- Calculates the default language which comes from the configuration
-configuredDefaultDictionaryLanguage :: BeadHandler' b Language
-configuredDefaultDictionaryLanguage = withTop dictionaryContext $ snapContextCata snd
+configuredDefaultDictionaryLanguage :: Handler b DictionaryContext Language
+configuredDefaultDictionaryLanguage = snapContextCata snd
+
+withDictionary :: BeadHandler'  DictionaryContext a -> BeadHandler' v a
+withDictionary = withTop dictionaryContext
 
 -- | getDictionary returns a (Just dictionary) for the given language
 --   if the dictionary is registered for the given language,
 --   otherwise returns Nothing
-getDictionary :: Language -> BeadHandler' b (Maybe Dictionary)
-getDictionary l = withTop dictionaryContext $ snapContextCata (fmap fst . Map.lookup l . fst)
+getDictionary :: Language -> Handler b DictionaryContext (Maybe Dictionary)
+getDictionary l = snapContextCata (fmap fst . Map.lookup l . fst)
 
 -- Computes a list with the defined languages and dictionary info
-getDictionaryInfos :: BeadHandler' b DictionaryInfos
-getDictionaryInfos = withTop dictionaryContext $ snapContextCata (Map.toList . Map.map snd . fst)
+getDictionaryInfos :: Handler b DictionaryContext DictionaryInfos
+getDictionaryInfos = snapContextCata (Map.toList . Map.map snd . fst)
 
 #ifdef EmailEnabled
 -- Send email with a subject to the given address, using the right
@@ -394,51 +394,7 @@ encryptCookie c = withTop authContext $ do
   authMgr <- snapContextCata id
   liftIO $ Auth.encryptCookie authMgr c
 
-setCookie :: Auth.Cookie -> BeadHandler' a (Either T.Text ())
-setCookie c = do
-  eEncrypted <- encryptCookie c
-  case eEncrypted of
-    Left encryptionError ->
-      return $ Left encryptionError
-    Right encrypted -> do
-      now <- liftIO Time.getCurrentTime
-      let sixMonths = now { Time.utctDay = Cal.addGregorianMonthsRollOver 6 (Time.utctDay now) }
-      Right <$> modifyResponse (addResponseCookie (cookie encrypted sixMonths))
-    where
-      cookie :: B.ByteString -> UTCTime -> Snap.Cookie
-      cookie contents expiration = Snap.Cookie {
-          Snap.cookieName = BC.pack "token"
-        , Snap.cookieValue = contents
-        , Snap.cookieExpires = Just expiration
-        , Snap.cookieDomain = Nothing
-        , Snap.cookiePath = Nothing
-        , Snap.cookieSecure = False
-        , Snap.cookieHttpOnly = True
-        }
-
-decryptCookie :: B.ByteString -> BeadHandler' a (Either T.Text Auth.Cookie)
+decryptCookie :: B.ByteString -> BeadHandler' v (Either T.Text Auth.Cookie)
 decryptCookie contents = withTop authContext $ do
   authMgr <- snapContextCata id
   liftIO $ Auth.decryptCookie authMgr contents
-
-getCookie :: BeadHandler' v (Either T.Text Auth.Cookie)
-getCookie = do
-  mCookie <- Snap.getCookie (BC.pack "token")
-  maybe (Right <$> defaultCookie) (decryptCookie . Snap.cookieValue) mCookie
-
-defaultCookie :: BeadHandler' v Auth.Cookie
-defaultCookie =
-  Auth.NotLoggedInCookie <$> configuredDefaultDictionaryLanguage
-
-getOrDefaultLanguage :: BeadHandler' v Language
-getOrDefaultLanguage = do
-  eCookie <- getCookie
-  either
-    (const configuredDefaultDictionaryLanguage)
-    (return . Auth.cookieLanguage)
-    eCookie
-
-defaultUserState :: BeadHandler' v UserState
-defaultUserState = do
-  defaultLanguage <- configuredDefaultDictionaryLanguage
-  return $ SC.userNotLoggedIn defaultLanguage

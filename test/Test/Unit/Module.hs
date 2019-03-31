@@ -21,7 +21,7 @@ import Bead.View.Dictionary (patchDictionariesTests)
 #ifdef EmailEnabled
 import Bead.View.EmailTemplate (runEmailTemplateTests)
 #endif
-import Bead.View.Headers.AcceptLanguage (acceptLanguageTests)
+import Bead.View.Header (acceptLanguageTests)
 import Bead.View.Pagelets (linkTextTest)
 import Bead.View.RouteOf (routeOfTest)
 import Bead.View.Routing (routingTest)

@@ -9,7 +9,7 @@ import           Data.String (fromString)
 
 import qualified Bead.Controller.Pages as P
 import           Bead.Domain.Entities (Language, AuthFailure(..))
-import qualified Bead.View.BeadContext as BeadContext (getDictionaryInfos)
+import qualified Bead.View.BeadContext as BeadContext (getDictionaryInfos, withDictionary)
 import           Bead.View.Common
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
@@ -27,7 +27,7 @@ fromMarkdown = markdownToHtml
 
 index :: Maybe AuthFailure -> BeadHandler IHtml
 index authError = do
-  languages <- BeadContext.getDictionaryInfos
+  languages <- BeadContext.withDictionary BeadContext.getDictionaryInfos
   return $ do
     msg <- getI18N
     return $

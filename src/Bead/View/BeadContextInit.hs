@@ -35,7 +35,6 @@ import           Bead.View.BeadContext hiding (ldapDaemon)
 import           Bead.View.DataDir
 import           Bead.View.Dictionary (dictionaries, Language(..))
 import           Bead.View.Markdown (syntaxHighlightCss)
-import           Bead.View.Registration (createAdminUser)
 import           Bead.View.Routing
 
 
@@ -79,7 +78,7 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
 
   liftIO $ putStrLn $ "Available languages: " ++ (show $ Map.keys dictionaries)
   ds <- nestSnaplet "dictionary" dictionaryContext $
-          dictionarySnaplet dictionaries (Language $ defaultLoginLanguage config)
+    dictionarySnaplet dictionaries (Language $ defaultLoginLanguage config)
 
 #ifdef EmailEnabled
   se <- nestSnaplet "sendemail" sendEmailContext (emailSenderSnaplet config (emailDaemon daemons))
