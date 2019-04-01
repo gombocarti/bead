@@ -7,7 +7,6 @@ import Test.Unit.AuthToken (encryptioDecryptionIsomorphism)
 
 import Test.Tasty.TestSet (group)
 
-import Bead.Config (initTaskAssertions)
 import Bead.Config.Parser (parseTests)
 import Bead.Controller.Pages (pageDescTest)
 import Bead.Domain.Entities (asgTests, entityTests, feedbackTests)
@@ -42,7 +41,6 @@ tests = do
   group "Entity" entityTests
   group "Relationships" relationshipTests
   group "Assignment" asgTests
-  group "Command line and configuration" initTaskAssertions
   group "Persist" persistTests
 #ifdef EmailEnabled
   group "Email address" emailAddressTests

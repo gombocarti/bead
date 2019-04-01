@@ -4,7 +4,6 @@
 module Bead.View.BeadContextInit (
     beadContextInit
   , beadConfigFileName
-  , InitTasks
   , Daemons(..)
   ) where
 
@@ -43,11 +42,6 @@ beadConfigFileName = "bead.config"
 
 iconFileName :: String
 iconFileName = "icon.ico"
-
--- During the initialization what other tasks need to be done.
--- Just userRegInfo means that a new admin user should be craeted
--- Nothing means there is no additional init task to be done.
-type InitTasks = Maybe UserRegInfo
 
 -- The collection of the daemons that are neccesary to create the
 -- application

@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Bead.Config.Configuration (
-    InitTask(..)
-  , Config(..)
+    Config(..)
+  , configCata
 #ifdef SSO
   , SSOLoginConfig(..)
   , sSOLoginConfig
@@ -10,13 +10,8 @@ module Bead.Config.Configuration (
   , standaloneLoginConfig
 #endif
   , defaultConfiguration
-  , configCata
-  , Usage(..)
-  , substProgName
 #ifdef MYSQL
   , MySQLConfig(..)
-#else
-  , FilePersistConfig(..)
 #endif
   ) where
 
@@ -24,10 +19,6 @@ import System.FilePath (joinPath)
 import System.Directory (doesFileExist)
 
 import Bead.Domain.Types (readMaybe)
-
--- Represents initalizer tasks to do before launch the service
-data InitTask = CreateAdmin
-  deriving (Show, Eq)
 
 -- * Configuration
 
@@ -64,8 +55,6 @@ data Config = Config {
 #endif
 #ifdef MYSQL
   , persistConfig :: MySQLConfig
-#else
-  , persistConfig :: FilePersistConfig
 #endif
   } deriving (Eq, Show, Read)
 
@@ -86,9 +75,6 @@ data MySQLConfig = MySQLConfig {
   , mySQLPass     :: String
   , mySQLPoolSize :: Int
   } deriving (Eq, Read, Show)
-#else
-data FilePersistConfig = FilePersistConfig
-  deriving (Eq, Read, Show)
 #endif
 
 #ifdef SSO
@@ -171,8 +157,6 @@ defaultPersistConfig = MySQLConfig {
   , mySQLPass     = "password"
   , mySQLPoolSize = 30
   }
-#else
-defaultPersistConfig = FilePersistConfig
 #endif
 
 readConfiguration :: FilePath -> IO Config
@@ -191,19 +175,3 @@ readConfiguration path = do
           putStrLn "!!! DEFAULT CONFIGURATION IS USED !!!"
           return defaultConfiguration
         Just c -> return c
-
--- Represents a template for the usage message
-newtype Usage = Usage (String -> String)
-
-instance Show Usage where
-  show _ = "Usage (...)"
-
-instance Eq Usage where
-  _ == _ = False
-
-usageFold :: ((String -> String) -> a) -> Usage -> a
-usageFold g (Usage f) = g f
-
--- Produces an usage string, substituting the given progname into the template
-substProgName :: String -> Usage -> String
-substProgName name = usageFold ($ name)

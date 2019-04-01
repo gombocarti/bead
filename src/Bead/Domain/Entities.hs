@@ -84,9 +84,6 @@ module Bead.Domain.Entities (
   , withTestScript
   , testScriptAppAna
   , TestCase(..)
-  , testCaseCata
-  , withTestCase
-  , testCaseAppAna
   , UsersFile(..)
   , usersFile
   , FileInfo(..)
