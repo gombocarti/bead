@@ -39,8 +39,7 @@ createContext logger cfg = do
   interpreter <- Persist.createPersistInterpreter cfg
   return $ S.serviceContext logger interpreter
 
--- Reads the command line arguments, interprets the init tasks and start
--- the service with the given config
+-- Starts the service.
 main :: IO ()
 main = do
   hSetEcho stdin True

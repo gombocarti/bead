@@ -8,7 +8,6 @@ import           Data.Monoid (mempty)
 import           Bead.View.Dictionary (dictionaryInfoCata)
 import           Bead.View.BeadContext (DictionaryInfos)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
-import           Bead.View.Headers.AcceptLanguage
 import           Bead.View.RouteOf
 import           Bead.View.Translation
 

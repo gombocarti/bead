@@ -74,6 +74,7 @@ import           Bead.View.BeadContext hiding (getDictionaryInfos)
 import qualified Bead.View.BeadContext as BeadContext
 import           Bead.View.DataBridge
 import           Bead.View.Dictionary hiding (defaultLanguage)
+import           Bead.View.Header (acceptLanguageOrDefault)
 import           Bead.View.I18N (IHtml, translate)
 import           Bead.View.Pagelets (runBootstrapPage, bootstrapUserFrame, publicFrame)
 import qualified Bead.Controller.Pages as P
@@ -150,7 +151,7 @@ setUserLanguage :: Language -> ContentHandler ()
 setUserLanguage lang = changeUserState (SC.setLanguage lang)
 
 defaultLanguage :: ContentHandler Language
-defaultLanguage = beadHandler $ configuredDefaultDictionaryLanguage
+defaultLanguage = beadHandler . withDictionary $ configuredDefaultDictionaryLanguage
 
 setUserTimezone :: TimeZoneName -> ContentHandler ()
 setUserTimezone timezone = changeUserState (SC.setTimeZone timezone)
@@ -200,13 +201,14 @@ i18nE = do
   -- If the dictionary is not found for the language stored in session
   -- the identical dictionary is returned. The fromString is necessary
   -- for the Attribute names and values used in html templating engines
-  d <- beadHandler . getDictionary $ lang
+  d <- beadHandler . withDictionary . getDictionary $ lang
   return (fromString . (unDictionary $ maybe idDictionary id d)) -- TODO: I18N
 
-i18nH :: BeadHandler' a (Translation String -> String)
+i18nH :: BeadHandler' v (Translation String -> String)
 i18nH = do
-  language <- getOrDefaultLanguage
-  dict <- getDictionary language
+  dict <- withDictionary $ do
+    language <- acceptLanguageOrDefault
+    getDictionary language
   return $ maybe trans unDictionary dict
 
 -- | Renders a Page with the given IHtml contents.
@@ -222,10 +224,11 @@ bootstrapPage page = do
 -- | Translates a public page selecting the I18N translation based on the
 --   language stored in the session, if there is no such value, the
 --   default translator function is used.
-bootstrapPublicPage :: PageSettings -> IHtml -> BeadHandler' b Html
+bootstrapPublicPage :: PageSettings -> IHtml -> BeadHandler' v Html
 bootstrapPublicPage settings p = do
-  language <- getOrDefaultLanguage
-  t <- getDictionary language
+  t <- withDictionary $ do
+    language <- acceptLanguageOrDefault
+    getDictionary language
   let translator = maybe trans unDictionary t
   return $ runBootstrapPage settings (publicFrame p) translator
 
@@ -329,7 +332,7 @@ getJSONParameters param msg = do
 
 -- Computes a list that contains language and dictionary info pairs
 getDictionaryInfos :: ContentHandler DictionaryInfos
-getDictionaryInfos = beadHandler $ BeadContext.getDictionaryInfos
+getDictionaryInfos = beadHandler . BeadContext.withDictionary $ BeadContext.getDictionaryInfos
 
 data Mime
   = MimeZip

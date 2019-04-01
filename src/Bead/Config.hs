@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 module Bead.Config (
-    InitTask(..)
-  , Config(..)
+    Config(..)
 #ifdef SSO
   , SSOLoginConfig(..)
   , sSOLoginConfig
@@ -11,13 +10,7 @@ module Bead.Config (
 #endif
   , defaultConfiguration
   , configCata
-  , initTasks
-  , Usage
-  , substProgName
   , readConfiguration
-#ifdef TEST
-  , initTaskAssertions
-#endif
   , module Bead.Config.Configuration
   ) where
 
@@ -53,24 +46,3 @@ readConfiguration path = do
           putStrLn $ "Reason: " ++ err
           return defaultConfiguration
         Right c -> return c
-
--- Consumes the argument list and produces a task list
--- Produces Left "usage function" if invalid options or extra arguments is given
--- otherwise Right "tasklist"
-initTasks :: [String] -> Either Usage [InitTask]
-initTasks arguments = case filter ((/='-') . head) arguments of
-  []        -> Right []
-  ["admin"] -> Right [CreateAdmin]
-  _         -> Left $ Usage (\p -> join [p, " [OPTION...] [admin]"])
-
-#ifdef TEST
-initTaskAssertions = do
-  eqPartitions initTasks
-    [ Partition "Empty config list"   []     (Right []) ""
-    , Partition "Create admin option" ["admin"] (Right [CreateAdmin]) ""
-    ]
-  assertSatisfy "Two options" isLeft (initTasks ["admin","b"]) ""
-  where
-      isLeft (Left _) = True
-      isLeft _        = False
-#endif

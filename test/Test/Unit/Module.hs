@@ -7,7 +7,6 @@ import Test.Unit.AuthToken (encryptioDecryptionIsomorphism)
 
 import Test.Tasty.TestSet (group)
 
-import Bead.Config (initTaskAssertions)
 import Bead.Config.Parser (parseTests)
 import Bead.Controller.Pages (pageDescTest)
 import Bead.Domain.Entities (asgTests, entityTests, feedbackTests)
@@ -21,8 +20,7 @@ import Bead.View.Dictionary (patchDictionariesTests)
 #ifdef EmailEnabled
 import Bead.View.EmailTemplate (runEmailTemplateTests)
 #endif
-import Bead.View.Headers (getHeadersTest)
-import Bead.View.Headers.AcceptLanguage (acceptLanguageTests)
+import Bead.View.Header (acceptLanguageTests)
 import Bead.View.Pagelets (linkTextTest)
 import Bead.View.RouteOf (routeOfTest)
 import Bead.View.Routing (routingTest)
@@ -43,7 +41,6 @@ tests = do
   group "Entity" entityTests
   group "Relationships" relationshipTests
   group "Assignment" asgTests
-  group "Command line and configuration" initTaskAssertions
   group "Persist" persistTests
 #ifdef EmailEnabled
   group "Email address" emailAddressTests
@@ -53,7 +50,6 @@ tests = do
   group "Data bridge" dataBridgeTests
   group "Feedback" feedbackTests
   group "Parse" parseTests
-  group "Get headers" getHeadersTest
   group "Accept language" acceptLanguageTests
   group "Patch dictionaries" patchDictionariesTests
 

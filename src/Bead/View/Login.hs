@@ -35,8 +35,6 @@ import           Bead.View.RouteOf (homePath)
 import           Bead.View.Content hiding (BlazeTemplate, template)
 import qualified Bead.View.Content.Public.Index as I
 import           Bead.View.ContentHandler
-import           Bead.View.Headers (getHeaders)
-import           Bead.View.Headers.AcceptLanguage
 import           Bead.View.ErrorPage
 
 -- * Login handler

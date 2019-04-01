@@ -311,8 +311,7 @@ Library
     Bead.View.DataBridge
     Bead.View.DataDir
     Bead.View.ErrorPage
-    Bead.View.Headers
-    Bead.View.Headers.AcceptLanguage
+    Bead.View.Header
     Bead.View.Fay.Hooks
     Bead.View.Fay.HookIds
     Bead.View.Fay.JSON.ServerSide
@@ -366,10 +365,13 @@ Executable BeadTest
     HUnit,
     mtl,
     QuickCheck,
+    snap,
+    snap-core,
     tasty,
     tasty-hunit,
     tasty-quickcheck,
     temporary,
+    text,
     time,
     transformers,
     unordered-containers,
@@ -391,6 +393,7 @@ Executable BeadTest
     Test.Property.Persistence
     Test.Regression.UserStory
     Test.Unit.AuthToken
+    Test.Unit.Header
     Test.Unit.Module
     Test.Unit.Persistence
     Test.Unit.UserStory

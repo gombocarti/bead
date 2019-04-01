@@ -43,11 +43,12 @@ import           Bead.View.Content hiding (Response, BlazeTemplate, template, wi
 import           Bead.View.ContentHandler hiding (withUserState, getDictionaryInfos)
 import qualified Bead.View.ContentHandler as ContentHandler
 import           Bead.View.Content.All
+import           Bead.View.Header
+import qualified Bead.View.Content.Public.Index as I
 import           Bead.View.ErrorPage
 import           Bead.View.Login as L
 import           Bead.View.Markdown
 import           Bead.View.Pagelets
-import qualified Bead.View.Content.Public.Index as I
 #ifndef SSO
 import           Bead.View.Registration
 import           Bead.View.ResetPassword
@@ -106,7 +107,7 @@ pages = do
     -- but keeps the language information (if any).
     handleLogin :: BeadHandler ()
     handleLogin = do
-      lang <- configuredDefaultDictionaryLanguage
+      lang <- withDictionary configuredDefaultDictionaryLanguage
       response <- withUserState $ \state ->
         evalHandlerError
         (\err -> do
@@ -388,12 +389,12 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
 withUserState :: (UserState -> BeadHandler (a, UserState)) -> BeadHandler a
 withUserState f = do
   eCookieData <- getCookie
-  state <- case eCookieData of
+  state <- cookieToState <$> case eCookieData of
              Left err -> do
                logMessage ERROR ("Cookie reading error: " ++ T.unpack err)
-               defaultUserState
+               loggedOutCookie
              Right cookie ->
-               return $ cookieToState cookie
+               return cookie
   (a, state') <- f state
   when (state' /= state) $ saveState state'
   return a
@@ -407,8 +408,8 @@ withUserState f = do
     saveState new = do
       cookie <- SC.userStateCata
                   (return . Auth.NotLoggedInCookie)
-                  defaultCookie
-                  defaultCookie
+                  loggedOutCookie
+                  loggedOutCookie
                   (\u ui n l r uuid tz s -> return $ Auth.LoggedInCookie u ui n l r uuid tz s)
                   new
       result <- setCookie cookie
