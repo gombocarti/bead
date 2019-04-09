@@ -115,6 +115,7 @@ module Bead.Persistence.Persist (
   , usernameOfSubmission
   , submissionKeys
   , evaluationOfSubmission
+  , stateOfSubmission
   , commentsOfSubmission
   , feedbacksOfSubmission
   , lastSubmission
@@ -569,6 +570,10 @@ submissionKeys = PersistImpl.submissionKeys
 -- Returns the evaluation for the submission if the evalution exist, otherwise Nothing
 evaluationOfSubmission :: SubmissionKey -> Persist (Maybe EvaluationKey)
 evaluationOfSubmission = PersistImpl.evaluationOfSubmission
+
+-- Returns the state of a submission (unevaluated, tested or evaluated).
+stateOfSubmission :: SubmissionKey -> Persist SubmissionState
+stateOfSubmission = PersistImpl.stateOfSubmission
 
 -- Returns all the comments for the given submission
 commentsOfSubmission :: SubmissionKey -> Persist [CommentKey]

@@ -20,6 +20,7 @@ import Bead.Domain.Shared.Evaluation
 import Bead.Domain.Relationships
 import Bead.Persistence.Initialization
 import Bead.Persistence.Persist
+import qualified Bead.Persistence.SQL.TestData as TestData
 import qualified Bead.Persistence.Guards as G
 import Bead.Persistence.Relations
 
@@ -42,6 +43,7 @@ tests = group "Persistence tests" $ do
 #endif
   test testOpenSubmissions
   test test_feedbacks
+  test testStateOfSubmission
   test testIsolatedAssignmentBlocksView
   test clean_up
 
@@ -80,6 +82,78 @@ test_feedbacks = testCase "Create and delete test feedbacks" $ do
     , (skey', TestResult True)
     ]
 
+testStateOfSubmission :: TestTree
+testStateOfSubmission = testCase "stateOfSubmission tests" $ do
+  interp <- createPersistInterpreter defaultConfig
+  reinitpersistence
+  liftE interp $ do
+    c <- saveCourse TestData.course
+    g <- saveGroup c TestData.group
+    saveUser TestData.user1
+    subscribe TestData.user1name g
+    a <- saveGroupAssignment g TestData.asg
+    s <- saveSubmission a TestData.user1name TestData.sbm
+    st <- stateOfSubmission s
+    equals Submission_Unevaluated st "Submission state is not unevaluated initially."
+    saveFeedback s TestData.fbMsgStudent
+    st <- stateOfSubmission s
+    equals Submission_Unevaluated st "Submission state is not unevaluated after message for a student."
+    saveFeedback s TestData.fbMsgForAdmin
+    st <- stateOfSubmission s
+    equals Submission_Unevaluated st "Submission state is not unevaluated after message for an admin."
+    saveComment s TestData.cmt
+    st <- stateOfSubmission s
+    equals Submission_Unevaluated st "Submission state is not unevaluated after a comment."
+
+    saveFeedback s (Feedback (TestResult False) TestData.time)
+    st <- stateOfSubmission s
+    equals (Submission_Tested False) st "Submission state is not tested after test result False."
+
+    saveFeedback s (Feedback (TestResult True) TestData.time2)
+    st <- stateOfSubmission s
+    equals (Submission_Tested True) st "Submission state didn't change after a new test result."
+
+    saveFeedback s TestData.fbMsgStudent
+    st <- stateOfSubmission s
+    equals (Submission_Tested True) st "Submission state changed after a message for a student."
+
+    saveFeedback s (Feedback (TestResult False) TestData.time3)
+    st <- stateOfSubmission s
+    equals (Submission_Tested False) st "Submission state didn't change after second test result False."
+
+    saveComment s TestData.cmt
+    st <- stateOfSubmission s
+    equals (Submission_Tested False) st "Submission state changed after a comment."
+
+    saveSubmission a TestData.user1name TestData.sbm2
+    st <- stateOfSubmission s
+    equals (Submission_Tested False) st "Submission state changed after a new submission."
+
+    e <- saveSubmissionEvaluation s TestData.acceptEvaluation
+    st <- stateOfSubmission s
+    equals (Submission_Result e (evaluationResult TestData.acceptEvaluation)) st "Submission state is not evaluated after evaluation."
+
+    let rejected = Submission_Result e (evaluationResult TestData.rejectEvaluation)
+    modifyEvaluation e TestData.rejectEvaluation
+    st <- stateOfSubmission s
+    equals rejected st "Submission state didn't change after new evaluation."
+
+    saveFeedback s (Feedback (TestResult True) TestData.time4)
+    st <- stateOfSubmission s
+    equals rejected st "Evaluated state of submission changed after second test result True."
+
+    saveFeedback s TestData.fbMsgStudent
+    st <- stateOfSubmission s
+    equals rejected st "Evaluated state of submission changed after a message for a student."
+
+    saveComment s TestData.cmt
+    st <- stateOfSubmission s
+    equals rejected st "Evaluated state of submission changed after a comment."
+
+    saveSubmission a TestData.user1name TestData.sbm2
+    st <- stateOfSubmission s
+    equals rejected st "Evaluated state of submission changed after a new submission."
+  
 test_create_load_exercise = testCase "Create and load exercise" $ do
   interp <- createPersistInterpreter defaultConfig
   let str = utcTimeConstant
