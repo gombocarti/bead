@@ -5,14 +5,20 @@ import Bead.Domain.Entities
 import Bead.Domain.Relationships
 import Bead.Domain.Shared.Evaluation
 
+import Data.Time.Clock (UTCTime)
+
 course  = Course "name" "desc" TestScriptSimple
 
 group   = Group "name" "desc"
 
+time, time2, time3, time4 :: UTCTime
 time    = read "2014-06-09 12:55:27 UTC"
+time2   = read "2014-06-09 12:55:28 UTC"
+time3   = read "2014-06-09 12:55:29 UTC"
+time4   = read "2014-06-09 12:55:30 UTC"
 
 sbm     = Submission (SimpleSubmission "submission") time
-sbm2    = Submission (ZippedSubmission "submission2") time
+sbm2    = Submission (ZippedSubmission "submission2") time2
 
 ballot  = aspectsFromList [BallotBox]
 normal  = aspectsFromList []
@@ -29,6 +35,8 @@ user2name = Username "USER2"
 user1 = User Student user1name (Email "email2") "name2" (TimeZoneName "UTC") (Language "hu") (Uid "USR01")
 user2  = User Student user2name (Email "email2") "name2" (TimeZoneName "UTC") (Language "es") (Uid "USR02")
 
+acceptEvaluation = Evaluation (binaryResult Passed) "ok"
+rejectEvaluation = Evaluation (binaryResult Failed) "bad"
 ev    = Evaluation (binaryResult Passed) "written"
 ev2   = Evaluation (percentageResult 0.01) "escrito"
 

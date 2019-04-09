@@ -2,20 +2,26 @@
 module Bead.Persistence.SQL.Submission where
 
 import           Control.Applicative
-import           Data.Function (on)
+import           Data.Bifunctor (bimap)
+import qualified Data.ByteString.Char8 as BC
 import           Data.Maybe
-import           Data.List (maximumBy)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 
 import           Database.Persist.Sql
+import           Database.Esqueleto ( select, from, where_, on, like
+                                    , limit, orderBy, desc, InnerJoin(InnerJoin)
+                                    , val, (&&.), (^.), unValue
+                                    )
+import qualified Database.Esqueleto as Esq
 
 import qualified Bead.Domain.Entities as Domain
 import qualified Bead.Domain.Relationships as Domain
 import qualified Bead.Domain.Shared.Evaluation as Domain
 import           Bead.Persistence.SQL.Class
 import           Bead.Persistence.SQL.Entities
+import           Bead.Persistence.SQL.JSON (decodeEvaluationResult, decodeFeedbackInfo)
 
 #ifdef TEST
 import qualified Data.Set as Set
@@ -27,7 +33,7 @@ import           Bead.Persistence.SQL.User
 import           Bead.Persistence.SQL.MySQLTestRunner
 import           Bead.Persistence.SQL.TestData
 
-import           Test.Tasty.TestSet (ioTest, shrink, equals)
+import           Test.Tasty.TestSet (TestSet, ioTest, shrink, equals)
 #endif
 
 -- * Submission
@@ -98,6 +104,39 @@ evaluationOfSubmission key = do
     fmap (toDomainKey . submissionOfEvaluationEvaluation . entityVal)
          (listToMaybe es)
 
+stateOfSubmission :: Domain.SubmissionKey -> Persist Domain.SubmissionState
+stateOfSubmission sk = do
+  mEvResult <- evaluation
+  case mEvResult of
+    Nothing -> do
+      mF <- testFeedback
+      return $ case mF of
+        Just (Domain.TestResult r) -> Domain.Submission_Tested r
+        _                          -> Domain.Submission_Unevaluated
+    Just (ek, evResult) -> return $ Domain.Submission_Result ek evResult
+  where
+    sk' :: Key Submission
+    sk' = toEntityKey sk
+
+    evaluation :: Persist (Maybe (Domain.EvaluationKey, Domain.EvResult))
+    evaluation = do
+      es <- select $ from $ \(se `InnerJoin` e) -> do
+        on (se ^. SubmissionOfEvaluationEvaluation Esq.==. e ^. EvaluationId)
+        where_ (se ^. SubmissionOfEvaluationSubmission Esq.==. val sk')
+        limit 1
+        return (e ^. EvaluationId, e ^. EvaluationResult)
+      return (bimap (fromEntityKey . unValue) (decodeEvaluationResult . unValue) <$> listToMaybe es)
+
+    testFeedback :: Persist (Maybe Domain.FeedbackInfo)
+    testFeedback = do
+      fs <- select $ from $ \(fs `InnerJoin` f) -> do
+        on (fs ^. FeedbacksOfSubmissionFeedback Esq.==. f ^. FeedbackId)
+        where_ (fs ^. FeedbacksOfSubmissionSubmission Esq.==. val sk' &&. (f ^. FeedbackInfo `like` val "{\"TestResult\":%"))
+        orderBy [desc (f ^. FeedbackDate)]
+        limit 1
+        return (f ^. FeedbackInfo)
+      return (decodeFeedbackInfo . unValue <$> listToMaybe fs)
+
 -- Returns all the comments for the given submission
 commentsOfSubmission :: Domain.SubmissionKey -> Persist [Domain.CommentKey]
 commentsOfSubmission key =
@@ -113,23 +152,16 @@ feedbacksOfSubmission key =
 -- Returns the last submission of an assignment submitted by the given user if the
 -- user is submitted something otherwise Nothing
 lastSubmission :: Domain.AssignmentKey -> Domain.Username -> Persist (Maybe Domain.SubmissionKey)
-lastSubmission assignmentKey username =
-  withUser
-    username
-    (persistError "lastSubmission" $ "The user was not found " ++ show username)
-    (\userEnt -> do
-       submissionKeys <-
-         map (userSubmissionOfAssignmentSubmission . entityVal) <$> selectList
-           [ UserSubmissionOfAssignmentAssignment ==. toEntityKey assignmentKey
-           , UserSubmissionOfAssignmentUser       ==. entityKey userEnt
-           ] []
-       case submissionKeys of
-         [] -> return Nothing
-         ks -> do subEnts <- catMaybes <$> mapM getWithKey ks
-                  return $! Just . toDomainKey . entityKey $
-                    maximumBy (on compare (submissionPostDate . entityVal)) subEnts)
-  where
-    getWithKey key = (fmap (Entity key)) <$> (get key)
+lastSubmission assignmentKey username = do
+  submissionKeys <- select $ from $ \(u `InnerJoin` usa `InnerJoin` s) -> do
+    on (u ^. UserId Esq.==. usa ^. UserSubmissionOfAssignmentUser &&.
+        usa ^. UserSubmissionOfAssignmentSubmission Esq.==. s ^. SubmissionId)
+    where_ (u ^. UserUsername Esq.==. val (Domain.usernameCata Text.pack username) &&.
+            usa ^. UserSubmissionOfAssignmentAssignment Esq.==. val (toEntityKey assignmentKey))
+    orderBy [desc (s ^. SubmissionPostDate)]
+    limit 1
+    return (s ^. SubmissionId)
+  return (fromEntityKey . unValue <$> listToMaybe submissionKeys)
 
 -- Remove the submission from the opened (which need to be evaluated) queue
 removeFromOpened :: Domain.AssignmentKey -> Domain.Username -> Domain.SubmissionKey -> Persist ()
@@ -172,7 +204,7 @@ usersOpenedSubmissions key username =
          ] [])
 
 #ifdef TEST
-
+submissionTests :: TestSet ()
 submissionTests = do
   shrink "Submission end-to-end story."
     (do ioTest "Submission end-to-end test case" $ runSql $ do
@@ -244,5 +276,4 @@ submissionTests = do
           s  <- saveSubmission ca user1name sbm
           sbm' <- loadSubmission s
           equals sbm sbm' "Saved and loaded submission were different.")
-
 #endif

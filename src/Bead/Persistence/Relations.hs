@@ -492,24 +492,9 @@ removeNotFound abs = [(a, b) | (a, Just b) <- abs]
 -- It loads a 'Submission' exactly once from the database, to get the time of upload.
 submissionInfo :: SubmissionKey -> Persist SubmissionInfo
 submissionInfo sk = do
-  state <- submissionState sk
+  state <- stateOfSubmission sk
   submission <- loadSubmission sk
   return $ (sk, state, (solutionPostDate submission))
-
-submissionState :: SubmissionKey -> Persist SubmissionState
-submissionState sk = do
-  mEk <- evaluationOfSubmission sk
-  case mEk of
-    Nothing -> do
-      fs <- mapM loadFeedback =<< (feedbacksOfSubmission sk)
-      return . maybe
-        Submission_Unevaluated
-        Submission_Tested
-          $ feedbackTestResult =<< lastTestAgentFeedback fs
-    Just ek -> (Submission_Result ek . evaluationResult) <$> loadEvaluation ek
-  where
-    lastTestAgentFeedback :: [Feedback] -> Maybe Feedback
-    lastTestAgentFeedback = find isTestedFeedback . sortOn (Down . postDate)
 
 -- Produces the score key, score info for the specific user and assessment.
 -- Returns Nothing if there are multiple scoreinfos available.
