@@ -57,11 +57,12 @@ import qualified Data.Text.Encoding as TE
 import           Data.Time (UTCTime, LocalTime)
 import qualified Data.Time as Time
 
-import           Snap hiding (get)
+import           Snap hiding (get, getCookie)
 import           Snap.Blaze (blaze)
 import           Snap.Util.FileUploads
 import           Text.Blaze.Html5 (Html)
 
+import qualified Bead.View.AuthToken as Auth
 import           Bead.Config
 import           Bead.Controller.Logging as L
 import           Bead.Controller.Logging
@@ -74,7 +75,7 @@ import           Bead.View.BeadContext hiding (getDictionaryInfos)
 import qualified Bead.View.BeadContext as BeadContext
 import           Bead.View.DataBridge
 import           Bead.View.Dictionary hiding (defaultLanguage)
-import           Bead.View.Header (acceptLanguageOrDefault)
+import           Bead.View.Header (getCookie)
 import           Bead.View.I18N (IHtml, translate)
 import           Bead.View.Pagelets (runBootstrapPage, bootstrapUserFrame, publicFrame)
 import qualified Bead.Controller.Pages as P
@@ -206,9 +207,9 @@ i18nE = do
 
 i18nH :: BeadHandler' v (Translation String -> String)
 i18nH = do
-  dict <- withDictionary $ do
-    language <- acceptLanguageOrDefault
-    getDictionary language
+  cookie <- fst <$> getCookie
+  let lang = Auth.cookieLanguage cookie
+  dict <- withDictionary $ getDictionary lang
   return $ maybe trans unDictionary dict
 
 -- | Renders a Page with the given IHtml contents.
@@ -221,15 +222,13 @@ bootstrapPage page = do
   changeUserState SC.clearStatus
   i18nE >>= (return . runBootstrapPage settings (bootstrapUserFrame state page notifs))
 
--- | Translates a public page selecting the I18N translation based on the
---   language stored in the session, if there is no such value, the
+-- | Translates a public page selecting the I18N translation based on
+--   the language stored in the cookie, if there is no such value, the
+--   accept-language field is used, if there is no such value then
 --   default translator function is used.
 bootstrapPublicPage :: PageSettings -> IHtml -> BeadHandler' v Html
 bootstrapPublicPage settings p = do
-  t <- withDictionary $ do
-    language <- acceptLanguageOrDefault
-    getDictionary language
-  let translator = maybe trans unDictionary t
+  translator <- i18nH
   return $ runBootstrapPage settings (publicFrame p) translator
 
 -- Tries to decode the given value with the parameter description, if
