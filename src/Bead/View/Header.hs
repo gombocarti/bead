@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE CPP #-}
 module Bead.View.Header (
-    acceptLanguage
-  , acceptLanguageOrDefault
-  , getCookie
+    getCookie
   , loggedOutCookie
   , setCookie
 #ifdef TEST
+  , acceptLanguageOrDefault
   , acceptLanguageTests
 #endif
   ) where
@@ -34,10 +33,23 @@ import qualified Bead.View.BeadContext as Bead
 import           Test.Tasty.TestSet
 #endif
 
-getCookie :: BeadHandler' v (Either Text Auth.Cookie)
+-- | Retrieves cookie from user. If it is not found or impossible to
+-- decrypt, a reasonable default cookie is returned. If decryption
+-- failed, an error message is also returned.
+--
+-- The default cookie indicates being logged out. The language is set
+-- to the one reported by the browser (via accept-language) or the
+-- default language in that order.
+getCookie :: BeadHandler' v (Auth.Cookie, Maybe Text)
 getCookie = do
   mCookie <- Snap.getCookie (BC.pack "token")
-  maybe (Right <$> loggedOutCookie) (decryptCookie . Snap.cookieValue) mCookie
+  case mCookie of
+    Nothing -> (,) <$> loggedOutCookie <*> pure Nothing
+    Just encrypted -> do
+      decryptResult <- decryptCookie . Snap.cookieValue $ encrypted
+      case decryptResult of
+        Left err -> (,) <$> loggedOutCookie <*> pure (Just err)
+        Right cookie -> return (cookie, Nothing)
 
 loggedOutCookie :: BeadHandler' v Auth.Cookie
 loggedOutCookie = Auth.NotLoggedInCookie <$> withDictionary acceptLanguageOrDefault

@@ -163,19 +163,15 @@ index =
   where
     requireUser :: BeadHandler () -> BeadHandler () -> BeadHandler ()
     requireUser authenticated unauthenticated = do
-      eCookie <- getCookie
-      either
-        handleCookieError
-        (\cookie -> if Auth.isLoggedIn cookie
-                    then authenticated
-                    else unauthenticated)
-        eCookie
+      (cookie, mError) <- getCookie
+      maybe (return ()) reportCookieReadingError mError
+      if Auth.isLoggedIn cookie
+        then authenticated
+        else unauthenticated
 
-        where
-          handleCookieError :: T.Text -> BeadHandler ()
-          handleCookieError err = do
-            logMessage ERROR ("Cookie reading error: " ++ T.unpack err)
-            unauthenticated
+reportCookieReadingError :: T.Text -> BeadHandler ()
+reportCookieReadingError err =
+  logMessage ERROR ("Cookie reading error: " ++ T.unpack err)
 
 -- | Change language in the session
 changeLanguage :: BeadHandler ()
@@ -388,13 +384,9 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
 
 withUserState :: (UserState -> BeadHandler (a, UserState)) -> BeadHandler a
 withUserState f = do
-  eCookieData <- getCookie
-  state <- cookieToState <$> case eCookieData of
-             Left err -> do
-               logMessage ERROR ("Cookie reading error: " ++ T.unpack err)
-               loggedOutCookie
-             Right cookie ->
-               return cookie
+  (cookie, mError) <- getCookie
+  maybe (return ()) reportCookieReadingError mError
+  let state = cookieToState cookie
   (a, state') <- f state
   when (state' /= state) $ saveState state'
   return a

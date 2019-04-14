@@ -343,7 +343,6 @@ Executable Bead
   Main-is:          Main.hs
   HS-Source-Dirs:   main
   Buildable:        True
-  GHC-Options:      -threaded -with-rtsopts=-N2
 
 Executable BeadAdmin
   Build-Depends:    base, Bead
