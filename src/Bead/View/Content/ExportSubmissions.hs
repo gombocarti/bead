@@ -144,7 +144,7 @@ zipFeedback desc folder now convertToLocalTime msg = feedbacksFile path
                   $ C.submissionDescToCFs desc
 
       authorLine :: C.CommentOrFeedback -> String
-      authorLine cf = unwords [show . convertToLocalTime . C.commentOrFeedbackTime $ cf, C.commentOrFeedbackAuthor msg cf]
+      authorLine cf = unwords [showDate . convertToLocalTime . C.commentOrFeedbackTime $ cf, C.commentOrFeedbackAuthor msg cf]
 
 {-
    This is a workaround. 
