@@ -23,9 +23,9 @@ import           Bead.View.Content
 import           Bead.View.ContentHandler (ContentError, contentHandlerErrorMsg)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 
-data PageData = PageData [(UsersFile FilePath, FileInfo)] Int
+data PageData = PageData [(UsersFile FilePath, FileInfo)] Int UserTimeConverter
 
-pageDataCata f (PageData x s) = f x s
+pageDataCata f (PageData x s c) = f x s c
 
 uploadFile = ViewModifyHandler getUploadFile postUploadFile
 
@@ -33,7 +33,8 @@ getUploadFile :: GETContentHandler
 getUploadFile = do
   fs <- userStory Story.listUsersFiles
   size <- fmap maxUploadSizeInKb $ beadHandler getConfiguration
-  setPageContents $ uploadFileContent (PageData fs size)
+  convertToLocalTime <- userTimeZoneToLocalTimeConverter
+  setPageContents $ uploadFileContent (PageData fs size convertToLocalTime)
 
 data Success a
   = PolicyFailure String
@@ -110,7 +111,7 @@ uploadFileContent pd = do
       h3 $ fromString $ msg $ msg_UploadFile_FileSelection "File Selection"
       p $ do
         fromString . msg $ msg_UploadFile_Info "Please choose a file to upload.  Note that the maximum file size in kilobytes: "
-        fromString (pageDataCata (const show) pd)
+        fromString (pageDataCata (\_ s _ -> show s) pd)
 
     postForm (routeOf uploadFile) ! A.enctype "multipart/form-data" $ do
       fileInput (fieldName fileUploadField)
@@ -128,12 +129,12 @@ uploadFileContent pd = do
       td . fromString . i18n $ msg_UploadFile_FileSize "File Size (bytes)"
       td . fromString . i18n $ msg_UploadFile_FileDate "File Date"
 
-    numFiles       = pageDataCata (\fs _ -> length fs) pd
+    numFiles       = pageDataCata (\fs _ _ -> length fs) pd
 
-    usersFileLines = pageDataCata (\fs _ -> (mapM_ usersFileLine fs)) pd
+    usersFileLines = pageDataCata (\fs _ converToLocalTime -> (mapM_ (usersFileLine converToLocalTime) fs)) pd
       where
-        usersFileLine (usersfile, fileInfo) = H.tr $ do
+        usersFileLine convertToLocalTime (usersfile, fileInfo) = H.tr $ do
           td . fromString $ usersFile id id usersfile
           withFileInfo fileInfo $ \size date -> do
             td . fromString $ show size
-            td . fromString $ show date
+            td . fromString . showDate . convertToLocalTime $ date

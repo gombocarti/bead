@@ -225,7 +225,7 @@ availableAssignmentsAssessments pd timeconverter groups
                    $ p
                    $ fromString
                    $ msg $ msg_Home_HasNoAssignments "There are no available assignments yet."
-            else 
+            else do
               when (hasAssignments g) $ do
                 Bootstrap.rowColMd12 $ do
                   let areIsolateds = areOpenAndIsolatedAssignments assignments
@@ -243,8 +243,8 @@ availableAssignmentsAssessments pd timeconverter groups
                     tbody $ mapM_ (assignmentLine msg isLimited)
                       $ reverse $ sortBy (compare `on` (aEndDate . activeAsgDesc))
                       $ visibleAsgs
-                  -- Assessment table
-                  availableAssessments msg g
+              -- Assessment table
+              availableAssessments msg g
   where
     isLimitedAssignments = isJust . find limited
 
@@ -305,8 +305,7 @@ availableAssessments msg (_, _, _, assessments) | null assessments = mempty
   Bootstrap.rowColMd12 . H.p . fromString . msg $ msg_Home_AssessmentTable_Assessments "Assessments"
   Bootstrap.rowColMd12 . Bootstrap.table $ do
     H.tr (header sortedAssessments)
-    H.tr $ do
-      mapM_ evaluationViewButton (zip [(sk,si) | (_,_,sk,si) <- sortedAssessments] [1..])
+    H.tr $ mapM_ evaluationViewButton (zip [(sk,si) | (_,_,sk,si) <- sortedAssessments] [1..])
   where
       header assessments = mapM_ (H.td . assessmentLabel) (zip [assessment | (_ak,assessment,_sk,_si) <- assessments] [1..])
           where
