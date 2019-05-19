@@ -30,6 +30,7 @@ import qualified Bead.Controller.Pages as Pages
 import           Bead.Controller.UserStories (UserStory)
 import qualified Bead.Controller.UserStories as S
 import           Bead.View.Content
+import           Bead.View.Content.Bootstrap (MenuItem(Enabled, Disabled))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.VisualConstants
 import           Bead.View.Content.SubmissionState (formatSubmissionState, toLargeIcon)
@@ -108,7 +109,6 @@ submissionTablePart _tableId _now _ctx s
       Bootstrap.rowColMd12 $ Bootstrap.table $ do
         H.td (fromString $ msg $ msg_Home_SubmissionTable_NoCoursesOrStudents "There are no assignments or students yet.")
 
-
 -- Non empty table
 submissionTablePart tableId now ctx s = do
   msg <- getI18N
@@ -152,8 +152,8 @@ submissionTablePart tableId now ctx s = do
 
     -- HTML
     courseForm = submissionTableInfoCata course group s where
-      course _n _us _as _uls _ns ck      = postForm (routeOf $ Pages.deleteUsersFromCourse ck ())
-      group _n _us _cgas _uls _ns _ck gk = postForm (routeOf $ Pages.deleteUsersFromGroup gk ())
+      course _n _us _as _uls ck      = postForm (routeOf $ Pages.deleteUsersFromCourse ck ())
+      group _n _us _cgas _uls _ck gk = postForm (routeOf $ Pages.deleteUsersFromGroup gk ())
 
     headerCell = H.th
 
@@ -165,77 +165,90 @@ submissionTablePart tableId now ctx s = do
       where
         assignmentLinks = submissionTableInfoCata course group s
 
-        course _name _users as _ulines _anames _key =
-          mapM_ (\(i, ak) -> modifyAssignmentLink msg courseButtonStyle (i, ak) (exportLinksCoursePage ak)) $ zip [1..] as
+        course _name _users as ulines _key =
+          mapM_ (\(i, info@(ak, a, hasTestCase)) ->
+                   let exportAdminedGroups = Pages.exportSubmissionsOfGroups ak (stcUsername ctx) ()
+                       exportAll = Pages.exportSubmissions ak ()
+                       exportLinks = [exportAdminedGroups, exportAll]
+                       hasSolutions = if hasSubmissions ak (map snd ulines)
+                                      then Nothing
+                                      else Just (msg $ msg_AssignmentDoesntHaveSubmissions "The assignment does not have submissions.")
+                       hasTest = case hasTestCase of
+                                   HasTestCase -> Nothing
+                                   DoesNotHaveTestCase -> Just (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
+                       queueAllSubmissions = enableIf [hasTest, hasSolutions] (Pages.queueAllSubmissionsForTest ak ())
+                       dropdownItems =  queueAllSubmissions : map enable exportLinks
+                   in modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems)
+                (zip [1..] as)
 
-        group  _name _users cgas _ulines _anames ckey gkey = do
-          mapM_ header (zip [1..] cgas)
+        group  _name _users cgas ulines ckey gkey = mapM_ header (zip [1..] cgas)
           where
-            header :: (Int, CGInfo AssignmentKey) -> H.Html
-            header (i, cga) = cgInfoCata
-              (\ak -> viewAssignmentLink msg courseButtonStyle ckey (i, ak) (if isAdminedCourse ckey then exportLinksHomeForCourseAdmin ak gkey else exportLinksHomeForGroupAdmin ak gkey))
-              (\ak -> modifyAssignmentLink msg groupButtonStyle (i, ak) (exportLinksGroupAssignment ak gkey))
-              cga
+            header :: (Int, CGInfo (AssignmentKey, Assignment, HasTestCase)) -> H.Html
+            header (i, cga) =
+              let info@(ak, a, hasTestCase) = cgInfoCata id id cga
+                  exportOneGroup = Pages.exportSubmissionsOfOneGroup ak gkey ()
+                  exportAdminedGroups = Pages.exportSubmissionsOfGroups ak (stcUsername ctx) ()
+                  exportAll = Pages.exportSubmissions ak ()
+                  exportLinks = if isAdminedCourse ckey
+                                then [exportOneGroup, exportAdminedGroups, exportAll]
+                                else [exportOneGroup, exportAdminedGroups]
+                  hasSolutions = if hasSubmissions ak (map snd ulines)
+                                 then Nothing
+                                 else Just (msg $ msg_AssignmentDoesntHaveSubmissions "The assignment does not have submissions.")
+                  hasTest = case hasTestCase of
+                              HasTestCase -> Nothing
+                              DoesNotHaveTestCase -> Just (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
+                  queueAllSubmissions = enableIf [hasTest, hasSolutions] (Pages.queueAllSubmissionsForTest ak ())
+             in cgInfoCata
+                  (\_ -> -- course assignment
+                     if courseIsAdmined
+                     then let exportLinks = [exportOneGroup, exportAdminedGroups, exportAll]
+                              dropdownItems =  queueAllSubmissions : map enable exportLinks
+                          in modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems
+                     else let exportLinks = [exportOneGroup, exportAdminedGroups]
+                              dropdownItems = queueAllSubmissions : map enable exportLinks
+                          in viewAssignmentLink msg courseButtonStyle ckey (i, info) dropdownItems)
+                  (\_ -> -- group assignment
+                     let dropdownItems = [queueAllSubmissions, enable exportAll]
+                     in modifyAssignmentLink msg groupButtonStyle (i, info) dropdownItems)
+                  cga
 
-        exportLinksCoursePage :: AssignmentKey -> [H.Html]
-        exportLinksCoursePage ak = [ exportSubmissionsOfGroups ak (stcUsername ctx)
-                                   , exportSubmissions ak
-                                   ]
+            courseIsAdmined :: Bool
+            courseIsAdmined = isAdminedCourse ckey
 
-        exportLinksHomeForCourseAdmin :: AssignmentKey -> GroupKey -> [H.Html]
-        exportLinksHomeForCourseAdmin ak gk = exportSubmissionsOfOneGroup ak gk : exportLinksCoursePage ak
+        enable :: Pages.PageDesc -> MenuItem
+        enable p = Enabled (routeOf p) (msg $ linkText p)
 
-        exportLinksHomeForGroupAdmin :: AssignmentKey -> GroupKey -> [H.Html]
-        exportLinksHomeForGroupAdmin ak gk = [ exportSubmissionsOfOneGroup ak gk
-                                             , exportSubmissionsOfGroups ak (stcUsername ctx)
-                                          ]
+        disable :: String -> Pages.PageDesc -> MenuItem
+        disable reason p = Disabled (msg $ linkText p) reason
 
-        exportLinksGroupAssignment :: AssignmentKey -> GroupKey -> [H.Html]
-        exportLinksGroupAssignment ak gk = [exportSubmissions ak]
+        enableIf :: [Maybe String] -> Pages.PageDesc -> MenuItem
+        enableIf reasonsToDisable = case catMaybes reasonsToDisable of
+                                      [] -> enable
+                                      (reason:_) -> disable reason
 
-        exportSubmissions :: AssignmentKey -> H.Html
-        exportSubmissions ak = Bootstrap.link (routeOf page) (msg $ linkText page)
-          where page = Pages.exportSubmissions ak ()
+        hasSubmissions :: AssignmentKey -> [Map AssignmentKey (SubmissionKey, b)] -> Bool
+        hasSubmissions ak = any (isJust . Map.lookup ak)
 
-        exportSubmissionsOfGroups :: AssignmentKey -> Username -> H.Html
-        exportSubmissionsOfGroups ak u = Bootstrap.link (routeOf page) (msg $ linkText page)
-          where page = Pages.exportSubmissionsOfGroups ak u ()
-
-        exportSubmissionsOfOneGroup :: AssignmentKey -> GroupKey -> H.Html
-        exportSubmissionsOfOneGroup ak gk = Bootstrap.link (routeOf page) (msg $ linkText page)
-          where page = Pages.exportSubmissionsOfOneGroup ak gk ()
-            
-
-    assignmentName ak = maybe "" Assignment.name . Map.lookup ak $ stiAssignmentInfos s
-
-    isActiveAssignment ak =
-      maybe False (flip Assignment.isActive now) . Map.lookup ak $ stiAssignmentInfos s
-
-    modifyAssignmentLink :: Show a => I18N -> (String, String) -> (a, AssignmentKey) -> [H.Html] -> H.Html
-    modifyAssignmentLink msg _buttonStyle@(active, passive) (i,ak) dropdownItems =
+    modifyAssignmentLink :: I18N -> (String, String) -> (Int, (AssignmentKey, Assignment, HasTestCase)) -> [MenuItem] -> H.Html
+    modifyAssignmentLink msg _buttonStyle@(active, passive) (i, (ak, a, _hasTestCase)) dropdownItems =
       -- If the assignment is active we render with active assignment button style,
       -- if not active the closed button style
       H.td $ Bootstrap.customSplitButton
-               [if (isActiveAssignment ak) then active else passive]
+               [if (Assignment.isActive a now) then active else passive]
                (routeOf $ Pages.modifyAssignment ak ())
-               (assignmentName ak)
+               (Assignment.name a)
                (show i)
                dropdownItems
 
-    viewAssignmentLink :: Show a => I18N -> (String, String) -> CourseKey -> (a, AssignmentKey) -> [H.Html] -> H.Html
-    viewAssignmentLink msg _buttonStyle@(active, passive) ck (i,ak) dropdownItems =
+    viewAssignmentLink :: I18N -> (String, String) -> CourseKey -> (Int, (AssignmentKey, Assignment, HasTestCase)) -> [MenuItem] -> H.Html
+    viewAssignmentLink msg _buttonStyle@(active, passive) ck (i,(ak,a,_)) dropdownItems =
       H.td $ Bootstrap.customSplitButton
-               [if (isActiveAssignment ak) then active else passive]
-               (viewOrModifyAssignmentLink ck ak)
-               (assignmentName ak)
+               [if (Assignment.isActive a now) then active else passive]
+               (routeOf $ Pages.viewAssignment ak ())
+               (Assignment.name a)
                (show i)
                dropdownItems
-
-        where
-        viewOrModifyAssignmentLink ck ak =
-          case Map.lookup ck (stcAdminCourses ctx) of
-            Nothing -> routeOf $ Pages.viewAssignment ak ()
-            Just _  -> routeOf $ Pages.modifyAssignment ak ()
 
     isAdminedCourse :: CourseKey -> Bool
     isAdminedCourse ck = Map.member ck (stcAdminCourses ctx)
@@ -254,13 +267,13 @@ submissionTablePart tableId now ctx s = do
       where
         submissionCells :: I18N -> Username -> SubmissionTableInfo -> H.Html
         submissionCells msg username = submissionTableInfoCata course group where
-          course _n _users as _ulines _anames _key = mapM_ (submissionInfoCell msg username) as
+          course _n _users as _ulines _key = mapM_ (submissionInfoCell msg username) as
 
-          group _n _users as _ulines _anames _ck _gk =
+          group _n _users as _ulines _ck _gk =
             mapM_ (cgInfoCata (submissionInfoCell msg username) (submissionInfoCell msg username)) as
 
-        submissionInfoCell :: I18N -> Username -> AssignmentKey -> H.Html
-        submissionInfoCell msg u ak = case Map.lookup ak submissionMap of
+        submissionInfoCell :: I18N -> Username -> (AssignmentKey, Assignment, HasTestCase) -> H.Html
+        submissionInfoCell msg u (ak, _, _) = case Map.lookup ak submissionMap of
           Nothing -> H.td $ mempty
           Just ss -> submissionCell msg u ss
 
@@ -275,24 +288,24 @@ submissionTablePart tableId now ctx s = do
                             Just ek -> Pages.modifyEvaluation sKey ek ()
 
     deleteHeaderCell msg = submissionTableInfoCata deleteForCourseButton deleteForGroupButton s where
-        deleteForCourseButton _n _us _as _uls _ans _ck =
+        deleteForCourseButton _n _us _as _uls _ck =
           headerCell $ submitButtonDanger
             removeButton
             (msg $ msg_Home_DeleteUsersFromCourse "Remove") ! A.disabled ""
 
-        deleteForGroupButton _n _us _as _uls _ans _ck _gk =
+        deleteForGroupButton _n _us _as _uls _ck _gk =
           headerCell $ submitButtonDanger
             removeButton
             (msg $ msg_Home_DeleteUsersFromGroup "Remove") ! A.disabled ""
 
     deleteUserCheckbox u = submissionTableInfoCata deleteCourseCheckbox deleteGroupCheckbox s where
-        deleteCourseCheckbox _n _us _as _uls _ans _ck =
+        deleteCourseCheckbox _n _us _as _uls _ck =
           H.td $ checkBox
             (Param.name delUserFromCoursePrm)
             (encode delUserFromCoursePrm $ ud_username u)
             False ! A.onclick (fromString (onClick ++ "(this)"))
 
-        deleteGroupCheckbox _n _us _as _uls _ans _ck _gk =
+        deleteGroupCheckbox _n _us _as _uls _ck _gk =
           H.td $ checkBox
             (Param.name delUserFromGroupPrm)
             (encode delUserFromGroupPrm $ ud_username u)
@@ -301,8 +314,8 @@ submissionTablePart tableId now ctx s = do
 
 courseTestScriptTable :: CourseTestScriptInfos -> SubmissionTableInfo -> IHtml
 courseTestScriptTable cti = submissionTableInfoCata course group where
-  course _n _us _as _uls _ans ck = testScriptTable cti ck
-  group _n _us _as _uls _ans _ck _gk = (return (return ()))
+  course _n _us _as _uls ck = testScriptTable cti ck
+  group _n _us _as _uls _ck _gk = (return (return ()))
 
 -- Renders a course test script modification table if the information is found in the
 -- for the course, otherwise an error message. If the course is found, and there is no
@@ -331,7 +344,7 @@ managementMenu
   -> IHtml
 managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
   where
-    groupMenu _n _us _as _uls _ans ck gk = maybe
+    groupMenu _n _us _as _uls ck gk = maybe
       (return (return ()))
       (const $ do
         msg <- getI18N
@@ -342,7 +355,7 @@ managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
                          ++ [dropdown msg [Pages.exportEvaluationsScores ck (), Pages.exportEvaluationsScoresAllGroups ck ()]])
       (Map.lookup gk groups)
 
-    courseMenu _n _us _as _uls _ans ck = maybe
+    courseMenu _n _us _as _uls ck = maybe
       (return (return ()))
       (const $ do
         msg <- getI18N
@@ -359,7 +372,9 @@ managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
     button msg page = Bootstrap.buttonLink (routeOf page) (msg $ linkText page)
 
     dropdown :: I18N -> [Pages.PageDesc] -> H.Html
-    dropdown msg pages = Bootstrap.dropdown (msg $ msg_Home_SubmissionTable_ExportEvaluations "Export Evaluations") (map (\page -> Bootstrap.link (routeOf page) (msg $ linkText page)) pages)
+    dropdown msg pages = Bootstrap.dropdown
+      (msg $ msg_Home_SubmissionTable_ExportEvaluations "Export Evaluations")
+      (map (\page -> (Enabled (routeOf page) (msg $ linkText page))) pages)
 
 -- * CSS Section
 
@@ -389,17 +404,17 @@ colorStyle (RGB (r,g,b)) = join ["background-color:#", hex r, hex g, hex b]
 -- * Tools
 
 sortUserLines = submissionTableInfoCata course group where
-  course name users assignments userlines names key =
-      CourseSubmissionTableInfo name users assignments (sort userlines) names key
+  course name users assignments userlines key =
+      CourseSubmissionTableInfo name users assignments (sort userlines) key
 
-  group name users assignments userlines names ckey gkey =
-      GroupSubmissionTableInfo name users assignments (sort userlines) names ckey gkey
+  group name users assignments userlines ckey gkey =
+      GroupSubmissionTableInfo name users assignments (sort userlines) ckey gkey
 
   sort :: [(UserDesc, a)] -> [(UserDesc, a)]
   sort = sortOn fst
 
 submissionTableInfoAssignments = submissionTableInfoCata course group where
-  course _n _us as _uls _ans _ck = as
-  group _n _us cgas _uls _ans _ck _gk = map (cgInfoCata id id) cgas
+  course _n _us as _uls _ck = as
+  group _n _us cgas _uls _ck _gk = map (cgInfoCata id id) cgas
 
 headLine = H.tr . H.th . fromString

@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Bead.Config (
-    Config(..)
+    beadConfigFileName
+  , Config(..)
 #ifdef SSO
   , SSOLoginConfig(..)
   , sSOLoginConfig
@@ -24,6 +25,9 @@ import Bead.Config.Parser
 #ifdef TEST
 import Test.Tasty.TestSet
 #endif
+
+beadConfigFileName :: String
+beadConfigFileName = "bead.config"
 
 -- Represents the hostname (and/or port) of the bead server
 type Hostname = String

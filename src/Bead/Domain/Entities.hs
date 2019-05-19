@@ -9,17 +9,12 @@ module Bead.Domain.Entities (
   , SubmissionValue(..)
   , submissionValue
   , withSubmissionValue
-  , CourseName
-  , UsersFullname
   , evaluationResultCata
-  , allBinaryEval
-  , allPercentEval
   , Evaluation(..)
   , evaluationCata
   , withEvaluation
   , resultString
   , evaluationToFeedback
-  , CourseCode(..)
   , CGInfo(..)
   , cgInfoCata
   , Course(..)
@@ -33,9 +28,6 @@ module Bead.Domain.Entities (
   , roles
   , groupAdmin
   , OutsideRole(..)
-  , parseRole
-  , printRole
-  , atLeastCourseAdmin
   , InRole(..)
   , Permission(..)
   , canOpen
@@ -48,14 +40,7 @@ module Bead.Domain.Entities (
   , Username(..)
   , usernameCata
   , withUsername
-  , AsUsername(..)
-  , Password
-  , AsPassword(..)
-  , passwordCata
   , Email(..)
-  , emailFold
-  , parseEmail
-  , email'
   , emailCata
   , TimeZoneName(..)
   , timeZoneName
@@ -161,10 +146,6 @@ submissionCata f (Submission sub subPostDate) = f sub subPostDate
 -- | Template function for submission with flipped arguments
 withSubmission s f = submissionCata f s
 
-type CourseName = String
-
-type UsersFullname = String
-
 evaluationResultCata
   binary
   percentage
@@ -173,12 +154,6 @@ evaluationResultCata
     BinEval b -> binary b
     PctEval p -> percentage p
     FreeEval f -> freeForm f
-
-allBinaryEval :: [EvaluationData b p f] -> Maybe [b]
-allBinaryEval = sequence . map binaryEval
-
-allPercentEval :: [EvaluationData b p f] -> Maybe [p]
-allPercentEval = sequence . map percentEval
 
 -- | Evaluation of a submission
 data Evaluation = Evaluation {
@@ -205,9 +180,6 @@ resultString = evResultCata
 evaluationToFeedback :: UTCTime -> User -> Evaluation -> Feedback
 evaluationToFeedback t u e = Feedback info t where
   info = Evaluated (evaluationResult e) (writtenEvaluation e) (u_name u)
-
-newtype CourseCode = CourseCode String
-  deriving (Eq, Ord, Show)
 
 -- Course or Group info. Some information is attached to
 -- course or group
@@ -300,23 +272,6 @@ data OutsideRole
   | TestAgentRole
   deriving (Eq, Ord)
 
-parseRole :: String -> Maybe Role
-parseRole "Student"      = Just Student
-parseRole "Group Admin"  = Just GroupAdmin
-parseRole "Course Admin" = Just CourseAdmin
-parseRole "Admin"        = Just Admin
-parseRole _              = Nothing
-
-printRole = roleCata
-  "Student"
-  "Group Admin"
-  "Course Admin"
-  "Admin"
-
-atLeastCourseAdmin Admin       = True
-atLeastCourseAdmin CourseAdmin = True
-atLeastCourseAdmin _           = False
-
 class InRole r where
   isAdmin       :: r -> Bool
   isCourseAdmin :: r -> Bool
@@ -388,32 +343,8 @@ usernameCata f (Username u) = f u
 withUsername :: Username -> (String -> a) -> a
 withUsername (Username u) f = f u
 
-class AsUsername c where
-  asUsername :: c -> Username
-
-type Password = String
-
-class AsPassword p where
-  asPassword :: p -> Password
-
-passwordCata :: (String -> a) -> Password -> a
-passwordCata f p = f p
-
 newtype Email = Email String
-  deriving (Eq, Ord, Read)
-
-emailFold :: (String -> a) -> Email -> a
-emailFold f (Email e) = f e
-
-parseEmail :: String -> Maybe Email
-parseEmail = Just . Email
-
-instance Show Email where
-  show (Email e) = e
-
--- TODO: throw exception if email string is unacceptable
-email' :: String -> Email
-email' = Email
+  deriving (Eq, Ord, Show)
 
 emailCata :: (String -> a) -> Email -> a
 emailCata f (Email e) = f e
@@ -699,7 +630,6 @@ enableFullMarkdownRendering s = s { needsLatex = True
 
 entityTests = do
   compareHunTests
-  roleTest
 
 compareHunTests = group "compareHun" $ eqPartitions compareHun'
   [ Partition "Small normal letters a-a" ('a', 'a') EQ ""
@@ -715,12 +645,5 @@ compareHunTests = group "compareHun" $ eqPartitions compareHun'
   , Partition "Capital accented letters É-Ú" ('É', 'Ú') LT ""
   , Partition "Capital accented letters Ű-Á" ('Ű', 'Á') GT ""
   ] where compareHun' = uncurry compareHun
-
-roleTest =
-  assertProperty
-    "parse and print role are inverse functions"
-    (\r -> ((Just r) ==) . parseRole . printRole $ r)
-    enumGen
-    "printRole roles must generate string parseable by parseRole"
 
 #endif

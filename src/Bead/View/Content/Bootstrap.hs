@@ -12,11 +12,12 @@ import           Data.Data
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
 import           Data.String
+import           Data.Text (Text)
 
 import qualified Text.Blaze as B
-import           Text.Blaze.Html5 hiding (map)
+import           Text.Blaze.Html5 hiding (map, link)
 import qualified Text.Blaze.Html5 as H hiding (map)
-import           Text.Blaze.Html5.Attributes
+import           Text.Blaze.Html5.Attributes hiding (id)
 import qualified Text.Blaze.Html5.Attributes as A
 
 import           Bead.View.Fay.JSON.ServerSide
@@ -120,13 +121,17 @@ listGroupAlertLinkItem alert route text = H.a ! href (fromString route) ! class_
 listGroupTextItem text = H.li ! class_ "list-group-item" $ fromString text
 
 -- | Creates a badge that can be displayed in the list group
-badge text = H.span ! class_ "badge" $ fromString text
+badgeColored :: ToMarkup a => Alert -> a -> H.Html
+badgeColored alert text = H.span
+                            ! class_ (toValue $ unwords ["badge", alertColor])
+                            $ toMarkup text
+    where
+      alertColor :: String
+      alertColor = alertAlgebra "success" "info" "warning" "danger" alert
 
-badgeAlert :: Alert -> String -> H.Html
-badgeAlert alert text = H.span ! class_ (fromString $ "badge alert-" ++ alertColor) $ fromString text
-  where
-    alertColor :: String
-    alertColor = alertAlgebra "success" "info" "warning" "danger" alert
+-- | Creates a badge that can be displayed in the list group
+badge :: ToMarkup a => a -> H.Html
+badge text = H.span ! class_ "badge" $ toMarkup text
 
 alert color = H.div ! class_ (fromString $ "alert alert-" ++ alertColor)
   where alertColor = alertAlgebra "success" "info" "warning" "danger" color
@@ -153,6 +158,14 @@ customButtonLink custom ref ttl text =
 -- | Creates a button styled link
 buttonLink :: ToMarkup a => String -> a -> Html
 buttonLink ref text = customButtonLink ["btn-default"] ref "" text
+
+disabledButton :: (ToMarkup a, ToValue b) => a -> b -> Html
+disabledButton text reason =
+  H.div ! class_ (toValue ("btn btn-default" :: Text))
+        ! customAttribute "role" "button"
+        ! A.disabled ""
+        ! A.title (toValue reason)
+        $ toMarkup text
 
 -- | Creates a block button styled link
 blockButtonLink ref text = customButtonLink ["btn-default", "btn-block"] ref "" text
@@ -200,28 +213,37 @@ customDropdownButton custom text =
   button ! type_ "button"
          ! class_ (fromString $ unwords $ "btn" : "dropdown-toggle" : custom)
          ! dataAttribute "toggle" "dropdown"
-         $ do (fromString text); caret
+         $ toMarkup text <> caret
 
 dropdownButton text = customDropdownButton ["btn-default"] text
 
 -- | Creates a list of dropdown menu items
-dropdownMenu items = H.ul ! class_ "dropdown-menu" ! customAttribute "role" "menu" $ mapM_ li items
+dropdownMenu :: [MenuItem] -> Html
+dropdownMenu items = H.ul ! class_ "dropdown-menu" ! customAttribute "role" "menu" $ mapM_ listItem items
+  where
+    listItem :: MenuItem -> Html
+    listItem (Enabled ref text) = li (link ref text)
+    listItem (Disabled text reason) = li ! class_ "disabled" $ a ! A.title (toValue reason) $ (toMarkup text)
+
+data MenuItem = Enabled String String
+              | Disabled String String
 
 -- | Creates a dropdown from the items with the given text on the button
+dropdown :: ToMarkup a => a -> [MenuItem] -> Html
 dropdown text items = buttonGroup $ do
   dropdownButton text
   dropdownMenu items
 
 customSplitButton custom ref ttl text items = buttonGroup ! A.style "display:flex" $ do
   customButtonLink custom ref ttl text
-  customDropdownButton custom ""
+  customDropdownButton custom ("" :: Text)
   dropdownMenu items
 
 splitButton ref text items = customSplitButton ["btn-default"] ref "" text items
 
 customButtonWithDropdown custom ref ttl text items = buttonGroup ! showOnMouseEnter ! hideOnMouseOut $ do
   customButtonLink custom ref ttl text 
-  dropdownButton "" ! A.style "display:none"
+  dropdownButton ("" :: Text) ! A.style "display:none"
   dropdownMenu items
   where
     showOnMouseEnter :: B.Attribute
@@ -387,17 +409,17 @@ labeledText name value =
 
 
 
-grayLabel :: String -> Html
-grayLabel text  = H.span ! class_ "label label-default" $ fromString text
+grayLabel :: Text -> Html
+grayLabel t  = H.span ! class_ "label label-default" $ text t
 
-greenLabel :: String -> Html
-greenLabel text = H.span ! class_ "label label-success" $ fromString text
+greenLabel :: Text -> Html
+greenLabel t = H.span ! class_ "label label-success" $ text t
 
-redLabel :: String -> Html
-redLabel text = H.span ! class_ "label label-danger"  $ fromString text
+redLabel :: Text -> Html
+redLabel t = H.span ! class_ "label label-danger"  $ text t
 
-blueLabel :: String -> Html
-blueLabel text = H.span ! class_ "label label-primary" $ fromString text
+blueLabel :: Text -> Html
+blueLabel t = H.span ! class_ "label label-primary" $ text t
 
 -- | Creates a text area input field with the given name as id, a given id
 textAreaField paramName height =
@@ -587,6 +609,7 @@ formControl = class_ "form-control"
 areaMultiselectable = customAttribute "aria-multiselectable"
 
 -- | Adds a tooltip to a given HTML tag
+tooltip :: Attribute
 tooltip = dataToggle "tooltip"
 
 -- | Place the tooltip on the top

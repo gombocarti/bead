@@ -150,7 +150,6 @@ Library
       Bead.Persistence.SQL.Submission
       Bead.Persistence.SQL.TestCase
       Bead.Persistence.SQL.TestData
-      Bead.Persistence.SQL.TestFeedback
       Bead.Persistence.SQL.TestJob
       Bead.Persistence.SQL.TestScript
       Bead.Persistence.SQL.User
@@ -173,7 +172,6 @@ Library
     CPP-Options: -DEmailEnabled
 
     Exposed-Modules:
-      Bead.Daemon.Email
       Bead.View.EmailTemplate
       Bead.View.ResetPassword
 
@@ -241,6 +239,7 @@ Library
     Bead.Controller.Pages
     Bead.Controller.ServiceContext
     Bead.Controller.UserStories
+    Bead.Daemon.Email
     Bead.Daemon.TestAgent
     Bead.Domain.Entity.Assessment
     Bead.Domain.Entity.Assignment
@@ -287,6 +286,7 @@ Library
     Bead.View.Content.Public.Index
     Bead.View.Content.Public.Registration
     Bead.View.Content.Public.ResetPassword
+    Bead.View.Content.QueueSubmissionForTest
     Bead.View.Content.Rest.SubmissionTable.Page
     Bead.View.Content.Score.Page
     Bead.View.Content.Submission.Common
@@ -362,6 +362,7 @@ Executable BeadTest
     directory,
     filepath,
     HUnit,
+    MissingH,
     mtl,
     QuickCheck,
     snap,
@@ -396,6 +397,7 @@ Executable BeadTest
     Test.Unit.Module
     Test.Unit.Persistence
     Test.Unit.UserStory
+    Test.View
 
   if flag(Tests)
     Buildable:      True

@@ -13,9 +13,7 @@ import           System.IO.Temp (createTempDirectory)
 import           Bead.Config
 import qualified Bead.Controller.Logging as L
 import           Bead.Controller.ServiceContext as S
-#ifdef EmailEnabled
-import           Bead.Daemon.Email
-#endif
+import           Bead.Daemon.Email (startEmailDaemon)
 #ifdef SSO
 import           Bead.Daemon.LDAP
 #else
@@ -136,10 +134,8 @@ startService config = do
 
   creating "test comments agent" $ startTestCommentsAgent userActionLogger 30 5 {-s-} context
 
-#ifdef EmailEnabled
   emailDaemon <- creating "email daemon" $
     startEmailDaemon userActionLogger
-#endif
 
 #ifdef SSO
   ldapDaemon <- creating "ldap daemon" $
@@ -147,17 +143,9 @@ startService config = do
 #endif
 
 #ifdef SSO
-#ifdef EmailEnabled
   let daemons = Daemons emailDaemon ldapDaemon
 #else
-  let daemons = Daemons ldapDaemon
-#endif
-#else
-#ifdef EmailEnabled
   let daemons = Daemons emailDaemon
-#else
-  let daemons = Daemons
-#endif
 #endif
 
   serveSnaplet defaultConfig (beadContextInit config context daemons tempDir)

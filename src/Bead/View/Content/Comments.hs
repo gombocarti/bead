@@ -62,7 +62,7 @@ sortIncreasingTime = sortOn time where
 -- Sort the items by descreasing by the creation time
 sortDecreasingTime = reverse . sortIncreasingTime
 
--- Filters out the comments and feedback not visible for the students
+-- Filters out comments and feedback not visible for the students
 forStudentCFs :: Bool -> [CommentOrFeedback] -> [CommentOrFeedback]
 forStudentCFs ballotBox = filter forStudent where
   forStudent =
@@ -70,6 +70,7 @@ forStudentCFs ballotBox = filter forStudent where
       ((&&) (not ballotBox) . isStudentComment . snd)
       (feedback
          (feedbackInfo
+           True
            (const True) -- result
            (const True) -- student
            (const False) -- admin
@@ -87,18 +88,20 @@ commentPar i18n id_ t (n, c) = do
   let comment = commentOrFeedbackText i18n c
   let badge = concat [showDate . t $ commentOrFeedbackTime c, " ", commentOrFeedbackAuthor i18n c]
   let commentId = fromString $ id_ ++ show n
-  seeMoreComment commentId i18n maxLength maxLines (badge, style) (anchorValue c) (commentOrFeedbackText i18n c)
+  seeMoreComment commentId i18n maxLength maxLines (badge, color) (anchorValue c) (commentOrFeedbackText i18n c)
   where
     anchorValue =
       commentOrFeedback
         (Just . fst)
         (const Nothing)
 
-    style =
+    color :: Maybe Bootstrap.Alert
+    color =
       commentOrFeedback
         ((commentCata (const4 Nothing)) . snd)
         (feedback
           (feedbackInfo
+            Nothing  -- queued for test
             (const Nothing) -- result
             (const Nothing) -- student
             (const $ Just Bootstrap.Warning) -- admin
@@ -115,12 +118,15 @@ commentOrFeedbackText i18n =
     ((commentCata $ \comment _author _date _type -> comment) . snd)
     (feedback
        (feedbackInfo
+         queuedForTest
          (bool testsPassed testsFailed) -- result
          id   -- comment
          id   -- comment
          evaluationText) -- evaluation
        p_1_2)
   where
+     queuedForTest = i18n $ msg_Comments_QueuedForTest "The submission is queued for test."
+    
      testsPassed = i18n $ msg_Comments_TestPassed "The submission has passed the tests."
      testsFailed = i18n $ msg_Comments_TestFailed "The submission has failed the tests."
 
@@ -155,6 +161,7 @@ commentOrFeedbackAuthor i18n =
          author) . snd)-- admin
     (feedback
       (feedbackInfo
+        testScript
         (const result) -- result
         (const testScript) -- student
         (const adminTestScript) -- admin

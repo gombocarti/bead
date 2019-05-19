@@ -375,6 +375,8 @@ linkText = P.pageCata
 #endif
   (c2 $ msg_LinkText_DeleteUsersFromCourse "Remove Students")
   (c2 $ msg_LinkText_DeleteUsersFromGroup "Remove Students")
+  (c2 $ msg_LinkText_QueueSubmissionForTest "Run Test")
+  (c2 $ msg_LinkText_QueueAllSubmissionsForTest "Run Test on All Submissions")
   (c2 $ msg_LinkText_UnsubscribeFromCourse "Unregister")
   (c2 $ msg_LinkText_ExportEvaluations "Export Evaluations of Admined Groups of this Course")
   (c2 $ msg_LinkText_ExportEvaluationsAllGroups "Export Evaluations of All Groups of this Course")
@@ -417,9 +419,6 @@ linkToPageBlank :: P.Page a b c d e f -> IHtml
 linkToPageBlank g = do
   msg <- getI18N
   return $ Bootstrap.link (routeOf g) (msg $ linkText g) ! A.target "_blank" ! A.id (fieldName g)
-
-linkToPageWithText :: P.Page a b c d e f -> String -> Html
-linkToPageWithText g t = H.p $ Bootstrap.link (routeOf g) t ! A.id (fieldName g)
 
 -- Produces a HTML-link with the given route text and title
 linkWithTitle :: String -> String -> String -> Html

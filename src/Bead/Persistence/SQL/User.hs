@@ -118,19 +118,19 @@ administratedGroups username =
 
 -- * Users file upload
 
--- Copies the given file with the given filename to the users data directory
+-- | Copies the given file with the given filename to the users data directory
 copyFile :: Domain.Username -> FilePath -> Domain.UsersFile FilePath -> Persist ()
 copyFile = FS.copyUsersFile
 
--- Saves a file with the given filename and contents in the users data directory
+-- | Saves a file with the given filename and contents in the users data directory
 saveFile :: Domain.Username -> FilePath -> Domain.UsersFile ByteString -> Persist ()
 saveFile = FS.saveUsersFile
 
--- List all the user's files
+-- | Lists user's all files.
 listFiles :: Domain.Username -> Persist [(Domain.UsersFile FilePath, Domain.FileInfo)]
 listFiles = FS.listFiles
 
--- Get the current path for the user's file
+-- | Gets the path for the user's file
 getFile :: Domain.Username -> Domain.UsersFile FilePath -> Persist FilePath
 getFile = FS.getFile
 

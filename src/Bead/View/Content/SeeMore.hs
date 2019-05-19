@@ -33,7 +33,7 @@ seeMoreSubmission id_ i18n content = do
             H.pre # assignmentTextPre $ fromString content
 
 seeMoreComment :: String -> I18N -> Int -> Int -> (String, Maybe Bootstrap.Alert) -> Maybe CommentKey -> String -> Html
-seeMoreComment id_ i18n maxLength maxLines (badgeText, alert) anchorVal content =
+seeMoreComment id_ i18n maxLength maxLines (badgeText, color) anchorVal content =
   let headingId = "heading" ++ id_
       collapseClass = if collapsed then "panel-collapse collapse"
                                    else "panel-collapse collapse in"
@@ -53,7 +53,7 @@ seeMoreComment id_ i18n maxLength maxLines (badgeText, alert) anchorVal content 
         H.div ! A.class_ "panel-body" $
           H.pre # commentTextPre $ fromString content
   where
-    badge = maybe Bootstrap.badge Bootstrap.badgeAlert alert
+    badge = maybe Bootstrap.badge Bootstrap.badgeColored color
     cmt = take maxLength $ content
     ml  = unlines $ take maxLines $ lines cmt
     preview = if isLargeContent then concat $ [take (length ml - 1) ml, " ..."]

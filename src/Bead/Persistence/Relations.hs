@@ -57,6 +57,7 @@ import qualified Data.HashSet as HashSet
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime, getCurrentTime)
+import           Data.Tuple.Utils (fst3)
 import           Data.Foldable (traverse_)
 
 import           Bead.Domain.Entities hiding (fullGroupName)
@@ -420,18 +421,19 @@ courseSubmissionTableInfo ck = do
 
 -- Sort the given keys into an ordered list based on the time function
 sortKeysByTime :: (key -> Persist UTCTime) -> [key] -> Persist [key]
-sortKeysByTime time keys = map snd . sortBy (compare `on` fst) <$> mapM getTime keys
+sortKeysByTime time keys = map snd . sortOn fst <$> mapM getTime keys
   where
     getTime k = do
       t <- time k
       return (t,k)
 
-loadAssignmentInfos :: [AssignmentKey] -> Persist (Map AssignmentKey Assignment)
-loadAssignmentInfos as = Map.fromList <$> mapM loadAssignmentInfo as
+loadAssignmentInfos :: [AssignmentKey] -> Persist [(AssignmentKey, Assignment, HasTestCase)]
+loadAssignmentInfos as = mapM loadAssignmentInfo as
   where
     loadAssignmentInfo a = do
        asg <- loadAssignment a
-       return (a,asg)
+       hasTestCase <- maybe DoesNotHaveTestCase (const HasTestCase) <$> testCaseOfAssignment a
+       return (a, asg, hasTestCase)
 
 lastSubmissionAsgKey :: Username -> AssignmentKey -> Persist (AssignmentKey, Maybe SubmissionInfo)
 lastSubmissionAsgKey u ak = addKey <$> (userLastSubmission u ak)
@@ -451,9 +453,8 @@ mkCourseSubmissionTableInfo courseName us as key = do
   return CourseSubmissionTableInfo {
       stiCourse = courseName
     , stiUsers = us
-    , stiAssignments = assignments
+    , stiAssignments = assignmentInfos
     , stiUserLines = ulines
-    , stiAssignmentInfos = assignmentInfos
     , stiCourseKey = key
     }
 
@@ -463,8 +464,9 @@ mkGroupSubmissionTableInfo
   -> CourseKey -> GroupKey
   -> Persist SubmissionTableInfo
 mkGroupSubmissionTableInfo courseName us cas gas ckey gkey = do
-  cgAssignments   <- sortKeysByTime createdTime ((map CourseInfo cas) ++ (map GroupInfo gas))
-  assignmentInfos <- loadAssignmentInfos (cas ++ gas)
+  cAssignmentInfos <- loadAssignmentInfos cas
+  gAssignmentInfos <- loadAssignmentInfos gas
+  cgAssignments <- sortKeysByTime createdTime (map CourseInfo cAssignmentInfos ++ map GroupInfo gAssignmentInfos)
   ulines <- forM us $ \u -> do
     ud <- userDescription u
     casInfos <- mapM (lastSubmissionAsgKey u) cas
@@ -475,15 +477,14 @@ mkGroupSubmissionTableInfo courseName us cas gas ckey gkey = do
     , stiUsers = us
     , stiCGAssignments = cgAssignments
     , stiUserLines = ulines
-    , stiAssignmentInfos = assignmentInfos
     , stiCourseKey = ckey
     , stiGroupKey  = gkey
     }
   where
-    createdTime :: CGInfo AssignmentKey -> Persist UTCTime
+    createdTime :: CGInfo (AssignmentKey, Assignment, a) -> Persist UTCTime
     createdTime = cgInfoCata
-      (assignmentCreatedTime)
-      (assignmentCreatedTime)
+      (assignmentCreatedTime . fst3)
+      (assignmentCreatedTime . fst3)
 
 removeNotFound :: [(a, Maybe b)] -> [(a, b)]
 removeNotFound abs = [(a, b) | (a, Just b) <- abs]

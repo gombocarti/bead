@@ -64,14 +64,14 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
       return sk1
     
     testAgentStory $ do
-      U.insertTestFeedback sk1 (TestResult False)
+      U.insertTestFeedback sk1 [TestResult False]
       testAgentFeedbacks
       -- Introduce some delay between two feedbacks.
       -- In an unrealistic scenario, the two feedbacks have the same date.
       -- This is very unlikely in the real world, where each submission has at most one test feedback, and the hardware is not super fast,
       -- but this is needed for travis.
       liftIO $ threadDelay (10^5) -- 0.1 second
-      U.insertTestFeedback sk1 (TestResult True)
+      U.insertTestFeedback sk1 [TestResult True]
       testAgentFeedbacks    
     
     si <- userStory studentUsername $ do
@@ -82,8 +82,7 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
                    (_, _, submState) <- find (\(ak, _, _) -> ak == ak1) asgs
                    submState
 
-    -- TODO: Write assert typeclass
-    lift $ assertBool "Submission test information is not changed" (si == Just (sk1, Submission_Tested True))
+    lift $ assertBool "Submission test information didn't change" (si == Just (sk1, Submission_Tested True))
   where
     value = snd
     trd (_x,_y,z) = z

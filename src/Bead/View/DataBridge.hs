@@ -307,8 +307,8 @@ loginUsernamePrm = customUsernamePrm (fieldName loginUsername)
 
 emailPrm :: String -> Parameter Email
 emailPrm field = validateBy isEmailAddress $ Parameter {
-    encode = emailFold id
-  , decode = parseEmail
+    encode = emailCata id
+  , decode = Just . Email
   , name = field
   , decodeError = \m -> printf "Invalid email address: %s" m
   , notFound    = "The email address could not be found."

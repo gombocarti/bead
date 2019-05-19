@@ -11,24 +11,24 @@ import Test.Tasty.HUnit (testCase)
 import Test.Tasty.TestSet
 
 -- Bead imports
-import Control.Monad.IO.Class (liftIO)
-
-
 import Bead.Domain.Entities
 import Bead.Domain.TimeZone (utcZoneInfo)
 import Bead.Domain.Shared.Evaluation
 import Bead.Domain.Relationships
 import Bead.Persistence.Initialization
 import Bead.Persistence.Persist
+import Bead.Persistence.SQL.FileSystem (initFS, removeFS, testOutgoing)
 import qualified Bead.Persistence.SQL.TestData as TestData
 import qualified Bead.Persistence.Guards as G
 import Bead.Persistence.Relations
 
 -- Utils
 
+import Control.Concurrent (threadDelay)
 import Control.Monad (join, when)
+import Control.Monad.IO.Class (liftIO)
 import Data.Maybe
-import Data.List ((\\))
+import Data.List ((\\), isSuffixOf)
 import Data.Time.Clock
 import System.Directory
 import System.FilePath
@@ -52,7 +52,8 @@ normal = emptyAspects
 
 ballot = aspectsFromList [BallotBox]
 
-test_initialize_persistence = testCase "Initialize NoSQLDir persistence layer" $ do
+test_initialize_persistence :: TestTree
+test_initialize_persistence = testCase "Initialize persistence layer" $ do
   init <- createPersistInit defaultConfig
   setUp <- isSetUp init
   assertBool "Persistence was set up" (not setUp)
@@ -60,27 +61,77 @@ test_initialize_persistence = testCase "Initialize NoSQLDir persistence layer" $
   setUp <- isSetUp init
   assertBool "Setting up persistence was failed" setUp
 
+test_feedbacks :: TestTree
 test_feedbacks = testCase "Create and delete test feedbacks" $ do
-  -- Given
+  removeFS
+  initFS
   interp <- createPersistInterpreter defaultConfig
   let skey = "s2013"
       skey' = SubmissionKey skey
-      sdir = testIncomingDataDir </> skey
       publicMsg = "Public Message"
       privateMsg = "Private Message"
       result = "True"
-  createDirectory sdir
-  writeFile (sdir </> "private") privateMsg
-  writeFile (sdir </> "public")  publicMsg
-  writeFile (sdir </> "result")  result
-  -- When
-  rs <- fmap (map (\(sk, f) -> (sk, info f))) $ liftE interp $ testFeedbacks
-  -- Then
-  assertBool "Wrong values" $ and $ map (`elem` rs)
-    [ (skey', MessageForAdmin privateMsg)
-    , (skey', MessageForStudent publicMsg)
-    , (skey', TestResult True)
+
+      skey2 = "s2019"
+      skey2' = SubmissionKey skey2
+
+      skey3 = "s2020"
+  
+  dumpFeedback "1" skey (Just privateMsg) (Just publicMsg) (Just result)
+  dumpFeedback "2" skey2 Nothing (Just publicMsg) (Just result)
+  dumpFeedback "3" skey2 (Just privateMsg) Nothing (Just result)
+  dumpFeedback "4" skey3 (Just privateMsg) (Just publicMsg) Nothing
+
+  rs <- fmap (map (\(sk, fs) -> (sk, map info fs))) $ liftE interp $ testFeedbacks
+  equals rs
+    [ (skey', [ TestResult True
+              , MessageForAdmin privateMsg
+              , MessageForStudent publicMsg
+              ]
+      )
+    , (skey2', [ TestResult True
+               , MessageForStudent publicMsg
+               ]
+      )
+    , (skey2', [ TestResult True
+               , MessageForAdmin privateMsg
+               ]
+      )
     ]
+    "Wrong values"
+
+  dumpFeedback "5" skey3 (Just privateMsg) (Just publicMsg) (Just "invalid")
+  dumpFeedback "6" skey Nothing Nothing (Just "False")
+  rs <- fmap (map (\(sk, fs) -> (sk, map info fs))) $ liftE interp $ testFeedbacks
+  equals [(skey', [TestResult False])] rs "Couldn't handle invalid test results."
+
+  haveAllInvalids <- and <$> mapM doesDirectoryExist [testIncoming </> "4.invalid", testIncoming </> "5.invalid"]
+  assertBool "A .invalid directory is missing." haveAllInvalids
+
+  entries <- liftIO $ listDirectory testOutgoing
+  equals [] (filter (\p -> not $ ".invalid" `isSuffixOf` p) entries) "Test jobs are not removed."
+
+  -- Test order of feedbacks of the same submission
+  dumpFeedback "8" skey Nothing Nothing (Just "True")
+  threadDelay (1 * 10^5) -- 0.1s
+  dumpFeedback "7" skey Nothing Nothing (Just "False")
+  rs <- fmap (map (\(sk, fs) -> (sk, map info fs))) $ liftE interp $ testFeedbacks
+
+  equals rs
+    [ (skey', [ TestResult True ])
+    , (skey', [ TestResult False ])
+    ]
+    "Wrong order of feedbacks"
+
+  where
+    dumpFeedback :: String -> String -> Maybe String -> Maybe String -> Maybe String -> IO ()
+    dumpFeedback d sk private public result = do
+      let sdir = testIncoming </> d
+      createDirectory sdir
+      writeFile (sdir </> "id") sk
+      maybe (return ()) (writeFile (sdir </> "private")) private
+      maybe (return ()) (writeFile (sdir </> "public")) public
+      maybe (return ()) (writeFile (sdir </> "result")) result
 
 testStateOfSubmission :: TestTree
 testStateOfSubmission = testCase "stateOfSubmission tests" $ do
@@ -95,29 +146,35 @@ testStateOfSubmission = testCase "stateOfSubmission tests" $ do
     s <- saveSubmission a TestData.user1name TestData.sbm
     st <- stateOfSubmission s
     equals Submission_Unevaluated st "Submission state is not unevaluated initially."
-    saveFeedback s TestData.fbMsgStudent
+    saveFeedbacks s [TestData.fbMsgStudent]
     st <- stateOfSubmission s
     equals Submission_Unevaluated st "Submission state is not unevaluated after message for a student."
-    saveFeedback s TestData.fbMsgForAdmin
+    saveFeedbacks s [TestData.fbMsgForAdmin]
     st <- stateOfSubmission s
     equals Submission_Unevaluated st "Submission state is not unevaluated after message for an admin."
     saveComment s TestData.cmt
     st <- stateOfSubmission s
     equals Submission_Unevaluated st "Submission state is not unevaluated after a comment."
 
-    saveFeedback s (Feedback (TestResult False) TestData.time)
+    let (time:time1:time2:time3:time4:time5:time6:time7: _) = TestData.times
+
+    saveFeedbacks s [Feedback QueuedForTest time]
+    st <- stateOfSubmission s
+    equals Submission_QueuedForTest st "Submission state is not queued for test after scheduling event."
+
+    saveFeedbacks s [Feedback (TestResult False) time1]
     st <- stateOfSubmission s
     equals (Submission_Tested False) st "Submission state is not tested after test result False."
 
-    saveFeedback s (Feedback (TestResult True) TestData.time2)
+    saveFeedbacks s [Feedback (TestResult True) time2]
     st <- stateOfSubmission s
     equals (Submission_Tested True) st "Submission state didn't change after a new test result."
 
-    saveFeedback s TestData.fbMsgStudent
+    saveFeedbacks s [TestData.fbMsgStudent]
     st <- stateOfSubmission s
     equals (Submission_Tested True) st "Submission state changed after a message for a student."
 
-    saveFeedback s (Feedback (TestResult False) TestData.time3)
+    saveFeedbacks s [Feedback (TestResult False) time3]
     st <- stateOfSubmission s
     equals (Submission_Tested False) st "Submission state didn't change after second test result False."
 
@@ -129,6 +186,10 @@ testStateOfSubmission = testCase "stateOfSubmission tests" $ do
     st <- stateOfSubmission s
     equals (Submission_Tested False) st "Submission state changed after a new submission."
 
+    saveFeedbacks s [Feedback QueuedForTest time4]
+    st <- stateOfSubmission s
+    equals (Submission_QueuedForTest) st "Submission state is not queued again for test after scheduling event."
+
     e <- saveSubmissionEvaluation s TestData.acceptEvaluation
     st <- stateOfSubmission s
     equals (Submission_Result e (evaluationResult TestData.acceptEvaluation)) st "Submission state is not evaluated after evaluation."
@@ -138,11 +199,11 @@ testStateOfSubmission = testCase "stateOfSubmission tests" $ do
     st <- stateOfSubmission s
     equals rejected st "Submission state didn't change after new evaluation."
 
-    saveFeedback s (Feedback (TestResult True) TestData.time4)
+    saveFeedbacks s [Feedback (TestResult True) time5]
     st <- stateOfSubmission s
     equals rejected st "Evaluated state of submission changed after second test result True."
 
-    saveFeedback s TestData.fbMsgStudent
+    saveFeedbacks s [TestData.fbMsgStudent]
     st <- stateOfSubmission s
     equals rejected st "Evaluated state of submission changed after a message for a student."
 
@@ -153,7 +214,30 @@ testStateOfSubmission = testCase "stateOfSubmission tests" $ do
     saveSubmission a TestData.user1name TestData.sbm2
     st <- stateOfSubmission s
     equals rejected st "Evaluated state of submission changed after a new submission."
-  
+    s <- saveSubmission a TestData.user1name TestData.sbm2
+    st <- stateOfSubmission s
+    equals Submission_Unevaluated st "Submission 2 state is not unevaluated initially."
+    e <- saveSubmissionEvaluation s TestData.rejectEvaluation
+    st <- stateOfSubmission s
+    equals (Submission_Result e (evaluationResult TestData.rejectEvaluation)) st "Submission 2 state didn't change after new evaluation."
+
+    s <- saveSubmission a TestData.user1name TestData.sbm2
+    st <- stateOfSubmission s
+    equals Submission_Unevaluated st "Submission 3 state is not unevaluated initially"
+
+    saveFeedbacks s [Feedback QueuedForTest time6]
+    st <- stateOfSubmission s
+    equals (Submission_QueuedForTest) st "Submission 3 state is not queued again for test after scheduling event."
+
+    e <- saveSubmissionEvaluation s TestData.acceptEvaluation
+    let accepted = Submission_Result e (evaluationResult TestData.acceptEvaluation)
+    st <- stateOfSubmission s
+    equals accepted st "Submission 3 state didn't change after new evaluation."
+
+    saveFeedbacks s [Feedback (TestResult False) time7]
+    st <- stateOfSubmission s
+    equals accepted st "Submission 3 state changed from evaluated after result False."
+
 test_create_load_exercise = testCase "Create and load exercise" $ do
   interp <- createPersistInterpreter defaultConfig
   let str = utcTimeConstant

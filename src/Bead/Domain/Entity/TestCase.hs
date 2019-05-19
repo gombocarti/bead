@@ -46,3 +46,5 @@ withTestCase t tc f = testCaseCata tc f t
 -- Applicative functor based TestCase value creation
 testCaseAppAna name desc value info
   = TestCase <$> name <*> desc <*> value <*> info
+
+data HasTestCase = HasTestCase | DoesNotHaveTestCase

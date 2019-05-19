@@ -85,13 +85,14 @@ module Bead.Persistence.Persist (
   , modifyTestScriptOfTestCase
 
   -- Test Jobs
-  , saveTestJob -- Saves the test job for the test daemon
+  , queueSubmissionForTest -- Creates a new test job for the test daemon
 
   -- Test Feedback
+#ifdef TEST
   , insertTestFeedback
   , finalizeTestFeedback
+#endif
   , testFeedbacks
-  , deleteTestFeedbacks -- Deletes the test daemon's feedbacks from the test-incomming
 
   -- Assignment Persistence
   , assignmentKeys
@@ -126,7 +127,7 @@ module Bead.Persistence.Persist (
   , usersOpenedSubmissions
 
   -- Feedback
-  , saveFeedback
+  , saveFeedbacks
   , loadFeedback
   , submissionOfFeedback
 
@@ -173,16 +174,19 @@ module Bead.Persistence.Persist (
   , evaluationOfScore
   , scoreOfAssessmentAndUser
 
-  , testIncomingDataDir
+  , testIncoming
 #ifdef TEST
   , persistTests
+  , runPersistIOCmd
 #endif
   ) where
 
 import           Control.Applicative
 import           Control.Monad
+import           Control.Monad.IO.Class (liftIO)
 import           Data.ByteString (ByteString)
-import           Data.Time (UTCTime)
+import           Data.Maybe (isJust)
+import           Data.Time (UTCTime, getCurrentTime)
 import           Data.Set (Set)
 import           System.FilePath (FilePath)
 
@@ -460,32 +464,33 @@ modifyTestScriptOfTestCase = PersistImpl.modifyTestScriptOfTestCase
 
 -- * Test Jobs
 
-saveTestJob :: SubmissionKey -> Persist () -- Saves the test job for the test daemon
-saveTestJob = PersistImpl.saveTestJob
+queueSubmissionForTest :: SubmissionKey -> Persist ()
+queueSubmissionForTest sk = do
+  job <- PersistImpl.saveTestJob sk
+  when (isJust job) $ do
+    now <- liftIO getCurrentTime
+    void $ saveFeedbacks sk [Feedback QueuedForTest now]
 
 -- * Test Feedbacks
-
--- | Inserts a test feedback for the incoming test comment directory,
+#ifdef TEST
+-- | Inserts test feedback for the incoming test comment directory,
 -- this function is mainly for testing of this functionality.
 -- It creates a test feedback in a locked state. Use finalizeTestFeedback
 -- to unlock it.
-insertTestFeedback :: SubmissionKey -> FeedbackInfo -> Persist ()
+insertTestFeedback :: SubmissionKey -> [FeedbackInfo] -> Persist ()
 insertTestFeedback = PersistImpl.insertTestFeedback
 
 -- | Unlocks the test feedback, this functionality is mainly
 -- for supporting testing.
 finalizeTestFeedback :: SubmissionKey -> Persist ()
 finalizeTestFeedback = PersistImpl.finalizeTestFeedback
+#endif
 
 -- | List the feedbacks that the test daemon left in the test-incomming,
 -- comments for the groups admin, and comments for the student, and
 -- the final test result.
-testFeedbacks :: Persist [(SubmissionKey, Feedback)]
+testFeedbacks :: Persist [(SubmissionKey, [Feedback])]
 testFeedbacks = PersistImpl.testFeedbacks
-
--- Deletes the test daemon's comment from the test-incomming
-deleteTestFeedbacks :: SubmissionKey -> Persist ()
-deleteTestFeedbacks = PersistImpl.deleteTestFeedbacks
 
 -- * Assignment
 
@@ -607,8 +612,8 @@ usersOpenedSubmissions = PersistImpl.usersOpenedSubmissions
 -- * Feedback
 
 -- Saves the feedback
-saveFeedback :: SubmissionKey -> Feedback -> Persist FeedbackKey
-saveFeedback = PersistImpl.saveFeedback
+saveFeedbacks :: SubmissionKey -> [Feedback] -> Persist [FeedbackKey]
+saveFeedbacks = PersistImpl.saveFeedbacks
 
 -- Loads the feedback
 loadFeedback :: FeedbackKey -> Persist Feedback
@@ -738,8 +743,8 @@ scoreOfAssessmentAndUser = PersistImpl.scoreOfAssessmentAndUser
 
 -- * Incomming dir for the test results
 
-testIncomingDataDir :: FilePath
-testIncomingDataDir = PersistImpl.testIncomingDataDir
+testIncoming :: FilePath
+testIncoming = PersistImpl.testIncoming
 
 -- * Persistence initialization
 
@@ -767,6 +772,13 @@ runPersist :: Interpreter -> Persist a -> IO (Erroneous a)
 runPersist = PersistImpl.runInterpreter
 
 #ifdef TEST
+
+runPersistIOCmd :: Interpreter -> Persist a -> IO a
+runPersistIOCmd interp m  = do
+  x <- runPersist interp m
+  case x of
+    Left msg -> fail msg
+    Right x  -> return x
 
 persistTests :: TestSet ()
 persistTests = PersistImpl.tests

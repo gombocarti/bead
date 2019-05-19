@@ -28,11 +28,12 @@ import           Test.Tasty.TestSet (ioTest, shrink, equals)
 -- * Comment
 
 -- Saves the feedback for the given submission
-saveFeedback :: Domain.SubmissionKey -> Domain.Feedback -> Persist Domain.FeedbackKey
-saveFeedback submissionKey f = do
-  key <- insert (fromDomainValue f)
-  insert (FeedbacksOfSubmission (toEntityKey submissionKey) key)
-  return $! toDomainKey key
+saveFeedbacks :: Domain.SubmissionKey -> [Domain.Feedback] -> Persist [Domain.FeedbackKey]
+saveFeedbacks submissionKey fs = do
+  keys <- insertMany (map fromDomainValue fs)
+  let sk = toEntityKey submissionKey
+  insertMany_ (map (FeedbacksOfSubmission sk) keys)
+  return $! map toDomainKey keys
 
 -- Loads the feedback from the database
 loadFeedback :: Domain.FeedbackKey -> Persist Domain.Feedback
@@ -65,7 +66,7 @@ feedbackTests = do
       (Set.fromList fs)
       "Feedbacks were for an empty submission."
 
-    let saveFb s f = do fm <- saveFeedback s f
+    let saveFb s f = do [fm] <- saveFeedbacks s [f]
                         f' <- loadFeedback fm
                         equals f f' "The feedback was not saved and loaded correctly"
                         return fm

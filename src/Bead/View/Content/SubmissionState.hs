@@ -26,6 +26,7 @@ import qualified Bead.Domain.Shared.Evaluation as Eval
 
 data Style a = Style {
     nonEvaluated :: I18N -> a
+  , queuedForTest :: I18N -> a
   , testsPassed :: I18N -> a
   , testsFailed :: I18N -> a
   , accepted :: I18N -> a
@@ -38,6 +39,7 @@ data Style a = Style {
 toPlainText :: Style T.Text
 toPlainText = Style {
     nonEvaluated = \msg -> T.pack $ msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
+  , queuedForTest = \msg -> T.pack $ msg $ msg_SubmissionState_QueuedForTest "Queued for test"
   , testsPassed = \msg -> T.pack $ msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
   , testsFailed = \msg -> T.pack $ msg $ msg_SubmissionState_Tests_Failed "Tests are failed"
   , accepted = \msg -> T.pack $ msg $ msg_SubmissionState_Accepted "Accepted"
@@ -51,13 +53,14 @@ toPlainText = Style {
 -- This 'Style' is used on the student section of the Home page.
 toLabel :: Style H.Html
 toLabel = Style {
-    nonEvaluated = \msg -> Bootstrap.grayLabel $ msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
-  , testsPassed = \msg -> Bootstrap.grayLabel $ msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
-  , testsFailed = \msg -> Bootstrap.grayLabel $ msg $ msg_SubmissionState_Tests_Failed "Tests are failed"
-  , accepted = \msg -> Bootstrap.greenLabel $ msg $ msg_SubmissionState_Accepted "Accepted"
-  , rejected = \msg -> Bootstrap.redLabel $ msg $ msg_SubmissionState_Rejected "Rejected"
-  , percentageTag = Bootstrap.blueLabel
-  , freeFormTag = \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel text)
+    nonEvaluated = \msg -> Bootstrap.grayLabel $ nonEvaluated toPlainText msg 
+  , queuedForTest = \msg -> Bootstrap.grayLabel $ queuedForTest toPlainText msg
+  , testsPassed = \msg -> Bootstrap.grayLabel $ testsPassed toPlainText msg
+  , testsFailed = \msg -> Bootstrap.grayLabel $ testsFailed toPlainText msg
+  , accepted = \msg -> Bootstrap.greenLabel $ accepted toPlainText msg
+  , rejected = \msg -> Bootstrap.redLabel $ rejected toPlainText msg
+  , percentageTag = Bootstrap.blueLabel . T.pack
+  , freeFormTag = \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel (T.pack text))
   , freeFormPlaceholder = Just $ const "..."
   }
 
@@ -69,43 +72,54 @@ toLargeIcon = toIcon Bootstrap.Large
 
 -- |Convert a 'SubmissionState' into a colored icon.
 -- This 'Style' is used on the admin section of the Home page,
--- at the top of the Evaluation page, and on the EvaluationTable page.
+-- at the top of the Evaluation page and on the EvaluationTable page.
 toIcon :: Bootstrap.Size -> Style H.Html
 toIcon size = Style {
     nonEvaluated = \msg ->
-      H.i ! A.class_ "glyphicon glyphicon-stop"
+      H.span
+          ! A.class_ "glyphicon glyphicon-stop"
           ! A.style (H.toValue $ unwords ["color:#AAAAAA;", iconSize])
-          ! tooltip (msg $ msg_SubmissionState_NonEvaluated "Non evaluated")
+          ! tooltip (nonEvaluated toPlainText msg)
           $ mempty
+  , queuedForTest = \msg ->
+      H.span
+        ! A.class_ "glyphicon glyphicon-wrench"
+        ! A.style (H.toValue $ unwords ["color:#AAAAAA;", iconSize])
+        ! tooltip (queuedForTest toPlainText msg)
+        $ mempty
   , testsPassed = \msg ->
-      H.i ! A.class_ "glyphicon glyphicon-ok-circle"
-          ! A.style (H.toValue $ unwords ["color:#AAAAAA;", iconSize])
-          ! tooltip (msg $ msg_SubmissionState_Tests_Passed "Tests are passed")
-          $ mempty
+      H.span
+        ! A.class_ "glyphicon glyphicon-ok-circle"
+        ! A.style (H.toValue $ unwords ["color:#AAAAAA;", iconSize])
+        ! tooltip (testsPassed toPlainText msg)
+        $ mempty
   , testsFailed = \msg ->
-      H.i ! A.class_ "glyphicon glyphicon-remove-circle"
-          ! A.style (H.toValue $ unwords ["color:#AAAAAA;", iconSize])
-          ! tooltip (msg $ msg_SubmissionState_Tests_Failed "Tests are failed")
-          $ mempty
+      H.span
+        ! A.class_ "glyphicon glyphicon-remove-circle"
+        ! A.style (H.toValue $ unwords ["color:#AAAAAA;", iconSize])
+        ! tooltip (testsFailed toPlainText msg)
+        $ mempty
   , accepted = \msg ->
-      H.i ! A.class_ "glyphicon glyphicon-thumbs-up"
-          ! A.style (H.toValue $ unwords ["color:#00FF00;", iconSize])
-          ! tooltip (msg $ msg_SubmissionState_Accepted "Accepted")
-          $ mempty
+      H.span
+        ! A.class_ "glyphicon glyphicon-thumbs-up"
+        ! A.style (H.toValue $ unwords ["color:#00FF00;", iconSize])
+        ! tooltip (accepted toPlainText msg)
+        $ mempty
   , rejected = \msg ->
-      H.i ! A.class_ "glyphicon glyphicon-thumbs-down"
-          ! A.style (H.toValue $ unwords ["color:#FF0000;", iconSize])
-          ! tooltip (msg $ msg_SubmissionState_Rejected "Rejected")
-          $ mempty
+      H.span
+        ! A.class_ "glyphicon glyphicon-thumbs-down"
+        ! A.style (H.toValue $ unwords ["color:#FF0000;", iconSize])
+        ! tooltip (rejected toPlainText msg)
+        $ mempty
   , percentageTag =
-      Bootstrap.blueLabel
+      Bootstrap.blueLabel . T.pack
   , freeFormTag =
-      \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel text)
+      \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel (T.pack text))
   , freeFormPlaceholder =
       Just $ const "..."
   }
   where
-    tooltip :: String -> H.Attribute
+    tooltip :: T.Text -> H.Attribute
     tooltip s = A.title (H.toValue s)
 
     iconSize :: String
@@ -114,11 +128,12 @@ toIcon size = Style {
 -- |This style is used in list groups that lists submissions.
 toBadge :: Style H.Html
 toBadge = Style {
-    nonEvaluated = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
-  , testsPassed = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
-  , testsFailed = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_Tests_Failed "Tests are failed"
-  , accepted = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_Accepted "Accepted"
-  , rejected = \msg -> Bootstrap.badge $ msg $ msg_SubmissionState_Rejected "Rejected"
+    nonEvaluated = \msg -> Bootstrap.badge $ nonEvaluated toPlainText msg
+  , queuedForTest = \msg -> Bootstrap.badge $ queuedForTest toPlainText msg
+  , testsPassed = \msg -> Bootstrap.badge $ testsPassed toPlainText msg
+  , testsFailed = \msg -> Bootstrap.badge $ testsFailed toPlainText msg
+  , accepted = \msg -> Bootstrap.badge $ accepted toPlainText msg
+  , rejected = \msg -> Bootstrap.badge $ rejected toPlainText msg
   , percentageTag = Bootstrap.badge
   , freeFormTag = \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.badge text)
   , freeFormPlaceholder = Just $ \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
@@ -149,6 +164,7 @@ formatSubmissionState :: forall a. Style a -> I18N -> SubmissionState -> a
 formatSubmissionState style msg =
   submissionStateCata
     (nonEvaluated style msg)
+    (queuedForTest style msg)
     tested
     (\_key result -> val result) -- evaluated
 

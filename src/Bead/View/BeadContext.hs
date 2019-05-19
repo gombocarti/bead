@@ -231,21 +231,6 @@ createPasswordGenerator = do
     digit :: Int -> Char
     digit n = ['0'..'9'] !! (mod n 10)
 
-
--- | Represents an application context that has a debugging
--- log capacibility
-type DebugLoggerContext = SnapContext SnapLogger
-
--- | Creates a debug logger for pointing the "./log/debug.log" file
-createDebugLogger :: SnapletInit a DebugLoggerContext
-createDebugLogger = makeSnaplet
-  "Debug logger"
-  "A snaplet holding a debug logger output"
-  Nothing $ liftIO $ do
-    logger <- SnapLogger.createSnapLogger "./log/debug.log"
-    ref <- newIORef logger
-    return $! SnapContext ref
-
 -- * Timezone
 
 type TimeZoneContext = SnapContext TimeZoneConverter
@@ -297,7 +282,6 @@ data BeadContext = BeadContext {
   , _checkUsernameContext :: Snaplet CheckUsernameContext
 #endif
   , _timeZoneContext :: Snaplet TimeZoneContext
-  , _debugLoggerContext :: Snaplet DebugLoggerContext
 #ifdef SSO
   , _ldapContext :: Snaplet LDAPContext
 #endif
@@ -381,11 +365,6 @@ checkUsername usr = withTop checkUsernameContext . snapContextHandlerCata $ \f -
 -- Generates a new password string
 getRandomPassword :: BeadHandler' b String
 getRandomPassword = withTop randomPasswordContext $ snapContextHandlerCata liftIO
-
--- | Log the message to the debug stream
-debugMessage :: String -> BeadHandler' a ()
-debugMessage msg = withTop debugLoggerContext . snapContextHandlerCata $ \logger ->
-  liftIO (log (SnapLogger.snapLogger logger) DEBUG msg)
 
 -- * Cookie-related functions
 

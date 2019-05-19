@@ -42,7 +42,8 @@ RUN curl -L https://www.stackage.org/stack/linux-x86_64 -o /usr/local/bin/stack.
 
 # Create development dirs
 RUN mkdir -p /development/bead && \
-    mkdir    /bead-server
+    mkdir    /bead-server && \
+    chown dev:dev /bead-server
 
 # Create user
 RUN adduser --system --uid 1000 --group dev

@@ -275,9 +275,23 @@ data ModifyPage a
   | ChangePassword a
   | DeleteUsersFromCourse R.CourseKey a
   | DeleteUsersFromGroup R.GroupKey a
+  | QueueSubmissionForTest SubmissionKey a
+  | QueueAllSubmissionsForTest AssignmentKey a
   | UnsubscribeFromCourse R.GroupKey a
   deriving (Eq, Ord, Show, Functor)
 
+modifyPageCata :: (a -> b)
+               -> (a -> b)
+               -> (a -> b)
+               -> (a -> b)
+               -> (a -> b)
+               -> (CourseKey -> a -> b)
+               -> (GroupKey -> a -> b)
+               -> (SubmissionKey -> a -> b)
+               -> (AssignmentKey -> a -> b)
+               -> (GroupKey -> a -> b)
+               -> ModifyPage a
+               -> b
 modifyPageCata
   createCourse
   createGroup
@@ -286,6 +300,8 @@ modifyPageCata
   changePassword
   deleteUsersFromCourse
   deleteUsersFromGroup
+  queueSubmissionForTest
+  queueAllSubmissionsForTest
   unsubscribeFromCourse
   p = case p of
     CreateCourse a -> createCourse a
@@ -295,6 +311,8 @@ modifyPageCata
     ChangePassword a -> changePassword a
     DeleteUsersFromCourse ck a -> deleteUsersFromCourse ck a
     DeleteUsersFromGroup gk a -> deleteUsersFromGroup gk a
+    QueueSubmissionForTest sk a ->  queueSubmissionForTest sk a
+    QueueAllSubmissionsForTest ak a -> queueAllSubmissionsForTest ak a
     UnsubscribeFromCourse gk a -> unsubscribeFromCourse gk a
 
 modifyPageValue :: ModifyPage a -> a
@@ -306,6 +324,8 @@ modifyPageValue = modifyPageCata
   id -- changePassword
   cid -- deleteUsersFromCourse
   cid -- deleteUsersFromGroup
+  cid -- queueSubmissionForTest
+  cid -- queueAllSubmissionsForTest
   cid -- unsubscribeFromCourse
   where
     cid = const id
@@ -440,6 +460,8 @@ assignGroupAdmin  = Modify . AssignGroupAdmin
 changePassword    = Modify . ChangePassword
 deleteUsersFromCourse ck          = Modify . DeleteUsersFromCourse ck
 deleteUsersFromGroup gk           = Modify . DeleteUsersFromGroup gk
+queueSubmissionForTest sk         = Modify . QueueSubmissionForTest sk
+queueAllSubmissionsForTest ak     = Modify . QueueAllSubmissionsForTest ak
 unsubscribeFromCourse gk          = Modify . UnsubscribeFromCourse gk
 
 submissionTable gk = RestView . SubmissionTable gk
@@ -484,6 +506,8 @@ pageCata
 #endif
   deleteUsersFromCourse
   deleteUsersFromGroup
+  queueSubmissionForTest
+  queueAllSubmissionsForTest
   unsubscribeFromCourse
   exportEvaluationsScores
   exportEvaluationsScoresAllGroups
@@ -541,6 +565,8 @@ pageCata
 #endif
     (Modify (DeleteUsersFromCourse ck a)) -> deleteUsersFromCourse ck a
     (Modify (DeleteUsersFromGroup gk a)) -> deleteUsersFromGroup gk a
+    (Modify (QueueSubmissionForTest sk a)) -> queueSubmissionForTest sk a
+    (Modify (QueueAllSubmissionsForTest ak a)) -> queueAllSubmissionsForTest ak a
     (Modify (UnsubscribeFromCourse gk a)) -> unsubscribeFromCourse gk a
     (Data (ExportEvaluationsScores ck a)) -> exportEvaluationsScores ck a
     (Data (ExportEvaluationsScoresAllGroups ck a)) -> exportEvaluationsScoresAllGroups ck a
@@ -600,6 +626,8 @@ constantsP
 #endif
   deleteUsersFromCourse_
   deleteUsersFromGroup_
+  queueSubmissionForTest_
+  queueAllSubmissionsForTest_
   unsubscribeFromCourse_
   exportEvaluationsScores_
   exportEvaluationsScoresAllGroups_
@@ -657,6 +685,8 @@ constantsP
 #endif
       (\ck _ -> deleteUsersFromCourse ck deleteUsersFromCourse_)
       (\gk _ -> deleteUsersFromGroup gk deleteUsersFromGroup_)
+      (\sk _ -> queueSubmissionForTest sk queueSubmissionForTest_)
+      (\ak _ -> queueAllSubmissionsForTest ak queueAllSubmissionsForTest_)
       (\gk _ -> unsubscribeFromCourse gk unsubscribeFromCourse_)
       (\ck _ -> exportEvaluationsScores ck exportEvaluationsScores_)
       (\ck _ -> exportEvaluationsScoresAllGroups ck exportEvaluationsScoresAllGroups_)
@@ -718,6 +748,8 @@ liftsP
 #endif
   deleteUsersFromCourse_
   deleteUsersFromGroup_
+  queueSubmissionForTest_
+  queueAllSubmissionsForTest_
   unsubscribeFromCourse_
   exportEvaluationsScores_
   exportEvaluationsScoresAllGroups_
@@ -775,6 +807,8 @@ liftsP
 #endif
       (\ck a -> deleteUsersFromCourse ck (deleteUsersFromCourse_ ck a))
       (\gk a -> deleteUsersFromGroup gk (deleteUsersFromGroup_ gk a))
+      (\sk a -> queueSubmissionForTest sk (queueSubmissionForTest_ sk a))
+      (\ak a -> queueAllSubmissionsForTest ak (queueAllSubmissionsForTest_ ak a))
       (\gk a -> unsubscribeFromCourse gk (unsubscribeFromCourse_ gk a))
       (\ck a -> exportEvaluationsScores ck (exportEvaluationsScores_ ck a))
       (\ck a -> exportEvaluationsScoresAllGroups ck (exportEvaluationsScoresAllGroups_ ck a))
@@ -904,6 +938,12 @@ isDeleteUsersFromCourse _ = False
 isDeleteUsersFromGroup (Modify (DeleteUsersFromGroup _ _)) = True
 isDeleteUsersFromGroup _ = False
 
+isQueueSubmissionForTest (Modify (QueueSubmissionForTest _ _)) = True
+isQueueSubmissionForTest _ = False
+
+isQueueAllSubmissionsForTest (Modify (QueueAllSubmissionsForTest _ _)) = True
+isQueueAllSubmissionsForTest _ = False
+
 isUnsubscribeFromCourse (Modify (UnsubscribeFromCourse _ _)) = True
 isUnsubscribeFromCourse _ = False
 
@@ -1012,6 +1052,8 @@ groupAdminPages = [
   , isModifyEvaluation
   , isDeleteUsersFromCourse
   , isDeleteUsersFromGroup
+  , isQueueSubmissionForTest
+  , isQueueAllSubmissionsForTest
   , isSubmissionTable
   ]
 
@@ -1055,6 +1097,8 @@ courseAdminPages = [
   , isModifyEvaluation
   , isDeleteUsersFromCourse
   , isDeleteUsersFromGroup
+  , isQueueSubmissionForTest
+  , isQueueAllSubmissionsForTest
   , isSubmissionTable
   ]
 
@@ -1125,6 +1169,7 @@ parentPage = pageCata'
   (const Nothing)  -- data
   (const Nothing)  -- restView
   where
+    c2 :: a -> b -> c -> a
     c2 = const . const
     viewModifyParent = Just . viewModifyPageCata
       profile -- profile
@@ -1149,6 +1194,7 @@ parentPage = pageCata'
       (const home)   -- newGroupAssessment
       (const home)   -- newCourseAssessment
 
+    modifyParent :: ModifyPage () -> Maybe PageDesc
     modifyParent = Just . modifyPageCata
       administration -- createCourse
       courseAdmin    -- createGroup
@@ -1157,6 +1203,8 @@ parentPage = pageCata'
       profile        -- changePassword
       (const home)   -- deleteUsersFromCourse
       (const home)   -- deleteUsersFromGroup
+      evaluation     -- queueSubmissionForTest
+      (const home)   -- queueAllSubmissionsForTest
       (const home)   -- unsubscribeFromCourse
 
 #ifdef TEST
@@ -1225,6 +1273,8 @@ pageGen = oneof [
         , modifyUserScore <$> scoreKey <*> unit
         , deleteUsersFromCourse <$> courseKey <*> unit
         , deleteUsersFromGroup <$> groupKey <*> unit
+        , queueSubmissionForTest <$> submissionKey <*> unit
+        , queueAllSubmissionsForTest <$> assignmentKey <*> unit
         , unsubscribeFromCourse <$> groupKey <*> unit
         , modifyTestScript <$> testScriptKey <*> unit
         , newCourseAssignment <$> courseKey <*> unit

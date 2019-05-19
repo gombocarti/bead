@@ -5,17 +5,21 @@ import Bead.Domain.Entities
 import Bead.Domain.Relationships
 import Bead.Domain.Shared.Evaluation
 
-import Data.Time.Clock (UTCTime)
+import Data.Time.Clock (UTCTime, addUTCTime)
 
 course  = Course "name" "desc" TestScriptSimple
 
 group   = Group "name" "desc"
 
-time, time2, time3, time4 :: UTCTime
+time, time2 :: UTCTime
 time    = read "2014-06-09 12:55:27 UTC"
 time2   = read "2014-06-09 12:55:28 UTC"
-time3   = read "2014-06-09 12:55:29 UTC"
-time4   = read "2014-06-09 12:55:30 UTC"
+
+times :: [UTCTime]
+times = map (\sec -> addUTCTime (fromIntegral sec) t) ([0..] :: [Int])
+  where
+    t :: UTCTime
+    t = read "2019-04-19 18:55:32.151280 UTC"
 
 sbm     = Submission (SimpleSubmission "submission") time
 sbm2    = Submission (ZippedSubmission "submission2") time2

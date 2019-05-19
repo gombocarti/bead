@@ -189,31 +189,36 @@ submTime = thd3
 data SubmissionState
   = Submission_Unevaluated
     -- ^ Submission is not evaluated yet.
+  | Submission_QueuedForTest
+    -- ^ Submission is waiting to be tested.
   | Submission_Tested Bool
-    -- ^ Submission is tested by the automation testing framework.
+    -- ^ Submission is tested by the automated testing framework.
     -- The parameter is True if the submission has passed the tests, and False if has failed
     -- the tests.
   | Submission_Result EvaluationKey EvResult
     -- ^ Submission is evaluated.
   deriving (Eq, Show)
 
-submissionStateCata :: a -> (Bool -> a) -> (EvaluationKey -> EvResult -> a) -> SubmissionState -> a
+submissionStateCata :: a -> a -> (Bool -> a) -> (EvaluationKey -> EvResult -> a) -> SubmissionState -> a
 submissionStateCata
   unevaluated
+  queued
   tested
   result
   s = case s of
     Submission_Unevaluated -> unevaluated
+    Submission_QueuedForTest -> queued
     Submission_Tested r    -> tested r
     Submission_Result k r  -> result k r
 
-withSubmissionState :: SubmissionState -> a -> (Bool -> a) -> (EvaluationKey -> EvResult -> a) -> a
-withSubmissionState s unevaluated tested result
-  = submissionStateCata unevaluated tested result s
+withSubmissionState :: SubmissionState -> a -> a -> (Bool -> a) -> (EvaluationKey -> EvResult -> a) -> a
+withSubmissionState s unevaluated queuedForTest tested result
+  = submissionStateCata unevaluated queuedForTest tested result s
 
 siEvaluationKey :: SubmissionState -> Maybe EvaluationKey
 siEvaluationKey = submissionStateCata
   Nothing -- unevaluated
+  Nothing -- queued for test
   (const Nothing) -- tested
   (\key _result -> Just key) -- result
 
@@ -228,17 +233,15 @@ data SubmissionTableInfo
   = CourseSubmissionTableInfo {
       stiCourse :: String
     , stiUsers       :: [Username]      -- Alphabetically ordered list of usernames
-    , stiAssignments :: [AssignmentKey] -- Cronologically ordered list of assignments
+    , stiAssignments :: [(AssignmentKey, Assignment, HasTestCase)] -- Cronologically ordered list of assignments
     , stiUserLines   :: [(UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))]
-    , stiAssignmentInfos :: Map AssignmentKey Assignment
     , stiCourseKey :: CourseKey
     }
   | GroupSubmissionTableInfo {
       stiCourse :: String
     , stiUsers      :: [Username] -- Alphabetically ordered list of usernames
-    , stiCGAssignments :: [CGInfo AssignmentKey] -- Cronologically ordered list of course and group assignments
+    , stiCGAssignments :: [CGInfo (AssignmentKey, Assignment, HasTestCase)] -- Cronologically ordered list of course and group assignments
     , stiUserLines :: [(UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))]
-    , stiAssignmentInfos :: Map AssignmentKey Assignment
     , stiCourseKey :: CourseKey
     , stiGroupKey :: GroupKey
     }
@@ -247,10 +250,10 @@ submissionTableInfoCata
   course
   group
   ti = case ti of
-    CourseSubmissionTableInfo crs users asgs lines ainfos key ->
-                       course crs users asgs lines ainfos key
-    GroupSubmissionTableInfo  crs users asgs lines ainfos ckey gkey ->
-                       group  crs users asgs lines ainfos ckey gkey
+    CourseSubmissionTableInfo crs users asgs lines key ->
+                       course crs users asgs lines key
+    GroupSubmissionTableInfo  crs users asgs lines ckey gkey ->
+                       group  crs users asgs lines ckey gkey
 
 submissionTableInfoToCourseGroupKey :: SubmissionTableInfo -> Either CourseKey GroupKey
 submissionTableInfoToCourseGroupKey t@(CourseSubmissionTableInfo {}) = Left $ stiCourseKey t
@@ -313,7 +316,9 @@ newtype CommentKey = CommentKey String
   deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 newtype SubmissionKey = SubmissionKey String
-  deriving (Eq, Ord, Show, Read, Data, Typeable)
+  deriving (Eq, Ord, Show, Read, Data, Typeable, Generic)
+
+instance Hashable SubmissionKey
 
 submissionKeyMap :: (String -> a) -> SubmissionKey -> a
 submissionKeyMap f (SubmissionKey s) = f s
@@ -333,19 +338,6 @@ newtype TestCaseKey = TestCaseKey String
 
 -- Template function for the TestCaseKey value
 testCaseKeyCata f (TestCaseKey x) = f x
-
--- Key for the Test Job that the test daemon will consume
-newtype TestJobKey = TestJobKey String
-  deriving (Eq, Ord, Show)
-
--- Template function for the TestJobKey value
-testJobKeyCata f (TestJobKey x) = f x
-
--- Converts a TestJobKey to a SubmissionKey
-testJobKeyToSubmissionKey = testJobKeyCata SubmissionKey
-
--- Converts a SubmissionKey to a TestJobKey
-submissionKeyToTestJobKey = submissionKeyMap TestJobKey
 
 newtype CourseKey = CourseKey String
   deriving (Generic, Data, Eq, Ord, Show, Typeable)

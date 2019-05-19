@@ -45,6 +45,8 @@ INPUT=${_INPUT}
 
 set_paths $JAILNAME $JOB_ID
 
+SUBM_ID="$(cat $SUBMISSION_ID)"
+
 test_build() {
     local build_result
     local result
@@ -61,14 +63,14 @@ test_build() {
     chmod ug=rw ${BUILD_PATH}/submission ${BUILD_PATH}/tests
     ${SCRIPT_PREFIX}/Test "test_runner" "build.sh" "${BUILD_PATH}" "${SANDBOX_PATH}" "${ULIMIT_BUILD}" > ${build_log} 2>&1
     build_result="$?"
-    mkdir -p ${OUTPUT_DIR_TMP}
-    chmod g+w,o+w ${OUTPUT_DIR_TMP}
+    mkdir -p ${OUTPUT_DIR}
+    chmod g+w,o+w ${OUTPUT_DIR}
     if [ "${build_result}" -ne "0" ]; then
         publish ${build_log} ${OUTPUT}
         publish ${build_msg} ${MESSAGE}
         echo "False" > ${build_rst}
         force_publish ${build_rst} ${RESULT}
-        mv -T ${OUTPUT_DIR_TMP} ${OUTPUT_DIR}
+        force_publish ${SUBMISSION_ID} ${SUBMISSION_ID_OUT}
         result=1
     else
         rm -f ${build_log}
@@ -101,21 +103,22 @@ test_run() {
     publish ${run_log} ${OUTPUT}
     publish ${run_msg} ${MESSAGE}
     force_publish ${run_rst} ${RESULT}
-    mv -T ${OUTPUT_DIR_TMP} ${OUTPUT_DIR}
+    force_publish ${SUBMISSION_ID} ${SUBMISSION_ID_OUT}
     return ${run_result}
 }
 
-msg_n "[${JOB_ID}] Building ($$)..."
+msg_n "[${JOB_ID}/${SUBM_ID}] Building ($$)..."
 
 test_build
 build_result="$?"
 echo "result=${build_result}"
 
 if [ "${build_result}" -eq "0" ]; then
-    msg_n "[${JOB_ID}] Running ($$)..."
+    msg_n "[${JOB_ID}/${SUBM_ID}] Running ($$)..."
     test_run
     run_result="$?"
     echo "result=${run_result}"
 fi
+pkill -P $WATCHDOG
 kill -9 $WATCHDOG
 ${SCRIPT_PREFIX}/Drop "${JOB_ID}"

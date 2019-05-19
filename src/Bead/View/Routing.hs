@@ -12,7 +12,6 @@ module Bead.View.Routing (
 import           Control.Arrow
 import           Control.Monad (void)
 
-import           Control.Monad.IO.Class (liftIO)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as BC
 
@@ -317,6 +316,9 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
   getPost :: BeadHandler () -> BeadHandler () -> BeadHandler ()
   getPost g p = method GET g <|> method POST p
 
+  getOrPost :: BeadHandler () -> BeadHandler ()
+  getOrPost p = methods [GET, POST] p
+
   getContentsOrError :: ContentHandler (PageContents H.Html) -> BeadHandler ()
   getContentsOrError handler = do
     response <- loggedInFilter $ \s ->
@@ -377,7 +379,7 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
   viewModify = (\(get, post) -> getPost (getContentsOrError get) (runActionOrError post)) . P.viewModifyPageValue
 
   modify :: P.ModifyPage (ContentHandler UserAction) -> BeadHandler ()
-  modify = post . runActionOrError . P.modifyPageValue
+  modify = getOrPost . runActionOrError . P.modifyPageValue
 
   restView :: P.RestViewPage (ContentHandler Aeson.Encoding) -> BeadHandler ()
   restView = get . getJsonOrError . P.restViewPageValue
@@ -479,6 +481,8 @@ routeToPageMap = Map.fromList [
 #endif
   , (deleteUsersFromCoursePath , \ps -> P.deleteUsersFromCourse <$> courseKey ps <*> unit)
   , (deleteUsersFromGroupPath , \ps -> P.deleteUsersFromGroup <$> groupKey ps <*> unit)
+  , (queueSubmissionForTestPath, \ps -> P.queueSubmissionForTest <$> submissionKey ps <*> unit)
+  , (queueAllSubmissionsForTestPath, \ps -> P.queueAllSubmissionsForTest <$> assignmentKey ps <*> unit)
   , (unsubscribeFromCoursePath , \ps -> P.unsubscribeFromCourse <$> groupKey ps <*> unit)
   , (exportEvaluationsScoresPath, \ps -> P.exportEvaluationsScores <$> courseKey ps <*> unit)
   , (exportEvaluationsScoresAllGroupsPath, \ps -> P.exportEvaluationsScoresAllGroups <$> courseKey ps <*> unit)
