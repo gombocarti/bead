@@ -205,7 +205,7 @@ availableAssignmentsAssessments pd timeconverter groups
   | otherwise = do
       msg <- getI18N
       return $ do
-        when (any (\g -> hasAssignments g || hasAssessments g) groups) $ do
+        when (any hasAssignments groups) $ do
           Bootstrap.rowColMd12
             $ p
             $ fromString . msg $ msg_Home_Assignments_Info $ concat
