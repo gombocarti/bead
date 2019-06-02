@@ -169,7 +169,7 @@ submissionTablePart tableId now ctx s = do
           mapM_ (\(i, info@(ak, a, hasTestCase)) ->
                    let exportAdminedGroups = Pages.exportSubmissionsOfGroups ak (stcUsername ctx) ()
                        exportAll = Pages.exportSubmissions ak ()
-                       exportLinks = [exportAdminedGroups, exportAll]
+                       exportLinks = map (enableIf [hasSolutions]) [exportAdminedGroups, exportAll]
                        hasSolutions = if hasSubmissions ak (map snd ulines)
                                       then Nothing
                                       else Just (msg $ msg_AssignmentDoesntHaveSubmissions "The assignment does not have submissions.")
@@ -177,7 +177,7 @@ submissionTablePart tableId now ctx s = do
                                    HasTestCase -> Nothing
                                    DoesNotHaveTestCase -> Just (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
                        queueAllSubmissions = enableIf [hasTest, hasSolutions] (Pages.queueAllSubmissionsForTest ak ())
-                       dropdownItems =  queueAllSubmissions : map enable exportLinks
+                       dropdownItems =  queueAllSubmissions : Bootstrap.Separator : exportLinks
                    in modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems)
                 (zip [1..] as)
 
@@ -189,9 +189,6 @@ submissionTablePart tableId now ctx s = do
                   exportOneGroup = Pages.exportSubmissionsOfOneGroup ak gkey ()
                   exportAdminedGroups = Pages.exportSubmissionsOfGroups ak (stcUsername ctx) ()
                   exportAll = Pages.exportSubmissions ak ()
-                  exportLinks = if isAdminedCourse ckey
-                                then [exportOneGroup, exportAdminedGroups, exportAll]
-                                else [exportOneGroup, exportAdminedGroups]
                   hasSolutions = if hasSubmissions ak (map snd ulines)
                                  then Nothing
                                  else Just (msg $ msg_AssignmentDoesntHaveSubmissions "The assignment does not have submissions.")
@@ -202,14 +199,14 @@ submissionTablePart tableId now ctx s = do
              in cgInfoCata
                   (\_ -> -- course assignment
                      if courseIsAdmined
-                     then let exportLinks = [exportOneGroup, exportAdminedGroups, exportAll]
-                              dropdownItems =  queueAllSubmissions : map enable exportLinks
+                     then let exportLinks = map (enableIf [hasSolutions]) [exportOneGroup, exportAdminedGroups, exportAll]
+                              dropdownItems =  queueAllSubmissions : Bootstrap.Separator : exportLinks
                           in modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems
-                     else let exportLinks = [exportOneGroup, exportAdminedGroups]
-                              dropdownItems = queueAllSubmissions : map enable exportLinks
+                     else let exportLinks = map (enableIf [hasSolutions]) [exportOneGroup, exportAdminedGroups]
+                              dropdownItems = queueAllSubmissions : Bootstrap.Separator : exportLinks
                           in viewAssignmentLink msg courseButtonStyle ckey (i, info) dropdownItems)
                   (\_ -> -- group assignment
-                     let dropdownItems = [queueAllSubmissions, enable exportAll]
+                     let dropdownItems = [queueAllSubmissions, Bootstrap.Separator, enableIf [hasSolutions] exportAll]
                      in modifyAssignmentLink msg groupButtonStyle (i, info) dropdownItems)
                   cga
 

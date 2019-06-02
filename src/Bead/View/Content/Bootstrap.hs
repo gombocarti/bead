@@ -224,9 +224,11 @@ dropdownMenu items = H.ul ! class_ "dropdown-menu" ! customAttribute "role" "men
     listItem :: MenuItem -> Html
     listItem (Enabled ref text) = li (link ref text)
     listItem (Disabled text reason) = li ! class_ "disabled" $ a ! A.title (toValue reason) $ (toMarkup text)
+    listItem Separator = li ! role "separator" ! class_ "divider" $ mempty
 
 data MenuItem = Enabled String String
               | Disabled String String
+              | Separator
 
 -- | Creates a dropdown from the items with the given text on the button
 dropdown :: ToMarkup a => a -> [MenuItem] -> Html
