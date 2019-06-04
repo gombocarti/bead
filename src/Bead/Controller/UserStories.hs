@@ -425,7 +425,7 @@ loadTestScript tsk = logAction INFO ("loads the test script: " ++ show tsk) $ do
 
 -- | Returns Just test case key and test case for the given assignment if there any, otherwise Nothing
 testCaseOfAssignment :: AssignmentKey -> UserStory (Maybe (TestCaseKey, TestCase, TestScriptKey))
-testCaseOfAssignment ak = logAction INFO (" loads the test case for assignment: " ++ show ak) $ do
+testCaseOfAssignment ak = logAction INFO ("loads the test case for assignment: " ++ show ak) $ do
   persistence $ do
     mtk <- Persist.testCaseOfAssignment ak
     maybe
@@ -435,7 +435,11 @@ testCaseOfAssignment ak = logAction INFO (" loads the test case for assignment: 
                  return (Just (tk, tc, tsk)))
       mtk
 
--- | Returns the test scrips of the given assignments, that are attached to the course of the assignment
+hasAssignmentTestCase :: AssignmentKey -> UserStory HasTestCase
+hasAssignmentTestCase ak = logAction INFO (unwords ["checks whether assignment", show ak, "has test case"]) $
+  persistence $ maybe DoesNotHaveTestCase (const HasTestCase) <$> (Persist.testCaseOfAssignment ak)
+
+-- | Returns the test scripts of the given assignments, that are attached to the course of the assignment
 testScriptInfosOfAssignment :: AssignmentKey -> UserStory [(TestScriptKey, TestScriptInfo)]
 testScriptInfosOfAssignment ak = do
   authorize P_Open P_TestScript
@@ -599,7 +603,7 @@ isUserInCourse ck = logAction INFO ("checks if user is in the course " ++ show c
 subscribedToCourse :: CourseKey -> UserStory [Username]
 subscribedToCourse ck = logAction INFO ("lists all users in course " ++ show ck) $ do
   authorize P_Open P_Course
-  isAdministratedCourse ck
+  isCourseOrGroupAdmin ck
   persistence $ Persist.subscribedToCourse ck
 
 -- | Lists all users subscribed for the given group
@@ -1050,7 +1054,7 @@ scoresOfGroup gk ak = logAction INFO ("lists scores of group " ++ show gk ++ " a
 scoresOfCourse :: CourseKey -> AssessmentKey -> UserStory [(UserDesc, Maybe ScoreInfo)]
 scoresOfCourse ck ak = logAction INFO ("lists scores of course " ++ show ck ++ " and assessment " ++ show ak) $ do
   authorize P_Open P_Course
-  isAdministratedCourse ck
+  isCourseOrGroupAdmin ck
   usernames <- subscribedToCourse ck
   forM usernames $ \u -> do
     userDesc <- loadUserDesc u
@@ -1132,10 +1136,6 @@ authorize p o = do
         (P_Open, P_TestIncoming), (P_Open, P_Submission), (P_Create, P_Feedback)
       ]
 
--- | No operational User Story
-noOperation :: UserStory ()
-noOperation = return ()
-
 -- | Log error message through the log subsystem
 logErrorMessage :: String -> UserStory ()
 logErrorMessage = logMessage ERROR
@@ -1151,12 +1151,12 @@ logMessage level msg = do
       loggedIn
   where
     logMsg prefix =
-      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ join [prefix, " ", msg, "."]))
+      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ unwords [prefix, msg]))
 
     userNotLoggedIn _  = logMsg "[USER NOT LOGGED IN]"
     registration       = logMsg "[REGISTRATION]"
     testAgent          = logMsg "[TEST AGENT]"
-    loggedIn _ u _ _ _ uuid _ _ = logMsg (join [Entity.uid id u, " ", UUID.toString uuid])
+    loggedIn _ u _ _ _ uuid _ _ = logMsg (unwords [Entity.uid id u, UUID.toString uuid])
 
 
 -- | Change user state
@@ -1193,7 +1193,7 @@ submitSolution ak s = logAction INFO ("submits solution for assignment " ++ show
     if attended
       then do removeUserOpenedSubmissions user ak
               sk <- Persist.saveSubmission ak user s
-              Persist.saveTestJob sk
+              Persist.queueSubmissionForTest sk
               return (return sk)
       else return $ do
              logMessage INFO . violation $
@@ -1214,6 +1214,17 @@ submitSolution ak s = logAction INFO ("submits solution for assignment " ++ show
       when (now > end) . errorPage . userError $
         msg_UserStoryError_SubmissionDeadlineIsReached "The submission deadline is reached."
       return ()
+
+queueSubmissionForTest :: SubmissionKey -> UserStory ()
+queueSubmissionForTest sk = logAction INFO (unwords ["queues submission", show sk, "for test"]) $ do
+  isAdministratedSubmission sk
+  persistence $ Persist.queueSubmissionForTest sk
+
+queueAllSubmissionsForTest :: AssignmentKey -> UserStory ()
+queueAllSubmissionsForTest ak = logAction INFO (unwords ["queues all submissions of", show ak, "for test"]) $ do
+  isAdministratedAssignment ak
+  sks <- lastSubmissions ak
+  persistence $ mapM_ Persist.queueSubmissionForTest sks
 
 -- Returns all groups with admins for which the user have not submitted
 -- a solution already
@@ -1328,15 +1339,8 @@ userAssignmentsAssessments = logAction INFO "lists assignments and assessments" 
 submissionDescription :: SubmissionKey -> UserStory SubmissionDesc
 submissionDescription sk = logAction INFO msg $ do
   authPerms submissionDescPermissions
-  u <- username
-  join . persistence $ do
-    admined <- Persist.isAdministratedSubmission u sk
-    if admined
-      then do sd <- Persist.submissionDesc sk
-              return (return sd)
-      else return $ do
-             logMessage INFO . violation $ printf "The user tries to evaluate a submission that not belongs to him."
-             errorPage $ userError nonAdministratedSubmission
+  isAdministratedSubmission sk
+  persistence $ Persist.submissionDesc sk
   where
     msg = "loads submission infomation for " ++ show sk
 
@@ -1376,40 +1380,36 @@ newEvaluation :: SubmissionKey -> Evaluation -> UserStory ()
 newEvaluation sk e = logAction INFO ("saves new evaluation for " ++ show sk) $ do
   authorize P_Open   P_Submission
   authorize P_Create P_Evaluation
+  isAdministratedSubmission sk
   now <- liftIO $ getCurrentTime
   userData <- currentUser
   join . withUserAndPersist $ \u -> do
     let user = u_username u
-    admined <- Persist.isAdminedSubmission user sk
-    if admined
-      then do mek <- Persist.evaluationOfSubmission sk
-              case mek of
-                Nothing -> do
-                  ek <- Persist.saveSubmissionEvaluation sk e
-                  Persist.removeOpenedSubmission sk
-                  Persist.saveFeedback sk (evaluationToFeedback now userData e)
-                  let msg = Notification.NE_EvaluationCreated (u_name u) (withSubmissionKey sk id)
-                  ak  <- Persist.assignmentOfSubmission sk
-                  mck <- Persist.courseOfAssignment ak
-                  mgk <- Persist.groupOfAssignment ak
-                  submitter <- Persist.usernameOfSubmission sk
-                  affected <- case (mck, mgk) of
-                                (Just ck, _) -> do
-                                  cas <- Persist.courseAdminKeys ck
-                                  return $ nub ([submitter] ++ cas) \\ [user]
-                                (_, Just gk) -> do
-                                  gas <- Persist.groupAdminKeys gk
-                                  return $ nub ([submitter] ++ gas) \\ [user]
-                                _            -> return []
-                  Persist.notifyUsers (Notification.Notification msg now $ Notification.Evaluation ek) affected
-                  return (return ())
-                Just _ -> return $ do
-                            logMessage INFO "Other admin just evaluated this submission"
-                            putStatusMessage $ msg_UserStory_AlreadyEvaluated
-                              "Other admin just evaluated this submission"
-      else return $ do
-             logMessage INFO . violation $ printf "The user tries to save evalution for a submission (%s) that not belongs to him" (show sk)
-             errorPage $ userError nonAdministratedSubmission
+    mek <- Persist.evaluationOfSubmission sk
+    case mek of
+      Nothing -> do
+        ek <- Persist.saveSubmissionEvaluation sk e
+        Persist.removeOpenedSubmission sk
+        Persist.saveFeedbacks sk [evaluationToFeedback now userData e]
+        let msg = Notification.NE_EvaluationCreated (u_name u) (withSubmissionKey sk id)
+        ak  <- Persist.assignmentOfSubmission sk
+        mck <- Persist.courseOfAssignment ak
+        mgk <- Persist.groupOfAssignment ak
+        submitter <- Persist.usernameOfSubmission sk
+        affected <- case (mck, mgk) of
+          (Just ck, _) -> do
+            cas <- Persist.courseAdminKeys ck
+            return $ nub ([submitter] ++ cas) \\ [user]
+          (_, Just gk) -> do
+            gas <- Persist.groupAdminKeys gk
+            return $ nub ([submitter] ++ gas) \\ [user]
+          _            -> return []
+        Persist.notifyUsers (Notification.Notification msg now $ Notification.Evaluation ek) affected
+        return (return ())
+      Just _ -> return $ do
+        logMessage INFO "Other admin just evaluated this submission"
+        putStatusMessage $ msg_UserStory_AlreadyEvaluated
+          "Other admin just evaluated this submission"
 
 modifyEvaluation :: EvaluationKey -> Evaluation -> UserStory ()
 modifyEvaluation ek e = logAction INFO ("modifies evaluation " ++ show ek) $ do
@@ -1454,7 +1454,7 @@ modifyEvaluation ek e = logAction INFO ("modifies evaluation " ++ show ek) $ do
         admined <- Persist.isAdminedSubmission user sk
         if admined
           then do Persist.modifyEvaluation ek e
-                  Persist.saveFeedback sk (evaluationToFeedback now userData e)
+                  Persist.saveFeedbacks sk [evaluationToFeedback now userData e]
                   let msg = Notification.NE_AssignmentEvaluationUpdated (u_name u) (withSubmissionKey sk id)
                   affected <- do
                     ak  <- Persist.assignmentOfSubmission sk
@@ -1516,11 +1516,11 @@ createComment sk c = logAction INFO ("comments on " ++ show sk) $ do
 
 #ifdef TEST
 -- Insert test feedback with the TestAgent only for testing purposes.
-insertTestFeedback :: SubmissionKey -> FeedbackInfo -> UserStory ()
-insertTestFeedback sk fb = do
+insertTestFeedback :: SubmissionKey -> [FeedbackInfo] -> UserStory ()
+insertTestFeedback sk fbs = do
   authorize P_Create P_Feedback
   persistence $ do
-    Persist.insertTestFeedback sk fb
+    Persist.insertTestFeedback sk fbs
     Persist.finalizeTestFeedback sk
 #endif
 
@@ -1533,10 +1533,7 @@ testAgentFeedbacks = do
   authorize P_Create P_Feedback
   persistence $ do
     feedbacks <- Persist.testFeedbacks
-    forM_ feedbacks (uncurry Persist.saveFeedback)
-    mapM_ Persist.deleteTestFeedbacks (nub $ map submission feedbacks)
-  where
-    submission = fst
+    forM_ feedbacks (uncurry Persist.saveFeedbacks)
 
 -- List all the related notifications for the active user and marks them
 -- as seen if their state is new.
@@ -1684,10 +1681,22 @@ isAdministratedGroup = guard
   "The user tries to access a group (%s) which is not administrated by him."
   (userError nonAdministratedGroup)
 
+isCourseOrGroupAdmin :: CourseKey -> UserStory ()
+isCourseOrGroupAdmin = guard
+  Persist.isCourseOrGroupAdmin
+  "The user tries to access a course (%s) where she is not an admin."
+  (userError notCourseOrGroupAdmin)
+
+isAdministratedSubmission :: SubmissionKey -> UserStory ()
+isAdministratedSubmission = guard
+  Persist.isAdministratedSubmission
+  "The user tries to access a submission (%s) which is not administrated by him."
+  (userError nonAdministratedSubmission)
+
 groupsOfCourse :: CourseKey -> UserStory [GroupKey]
 groupsOfCourse ck = do
   authorize P_Open P_Course
-  isAdministratedCourse ck
+  isCourseOrGroupAdmin ck
   persistence $ Persist.groupKeysOfCourse ck
 
 -- Produces a list of groupkeys, each of them represents a group of
@@ -1832,6 +1841,7 @@ persistence m = do
 
 nonAdministratedCourse = msg_UserStoryError_NonAdministratedCourse "The course is not administrated by you."
 nonAdministratedGroup  = msg_UserStoryError_NonAdministratedGroup "This group is not administrated by you."
+notCourseOrGroupAdmin = msg_UserStoryError_NotCourseOrGroupAdmin "You are not an admin in this course."
 nonAdministratedAssignment = msg_UserStoryError_NonAdministratedAssignment "This assignment is not administrated by you."
 nonAdministratedAssessment = msg_UserStoryError_NonAdministratedAssessment "This assessment is not administrated by you."
 nonAdministratedSubmission = msg_UserStoryError_NonAdministratedSubmission "The submission is not administrated by you."

@@ -21,8 +21,8 @@ sleep ${TIMEOUT}
 if kill -9 $TESTER_PID; then
     pgrep -U test_runner | ${SCRIPT_PREFIX}/Kill
     msg "[watchdog] Had to kill test_runner's all processes."
-    mkdir -p ${OUTPUT_DIR_TMP}
-    chmod g+w,o+w ${OUTPUT_DIR_TMP}
+    mkdir -p ${OUTPUT_DIR}
+    chmod g+w,o+w ${OUTPUT_DIR}
     watchdog_output=$(mktemp)
     watchdog_message=$(mktemp)
     watchdog_result=$(mktemp)
@@ -32,6 +32,6 @@ if kill -9 $TESTER_PID; then
     force_publish ${watchdog_output} ${OUTPUT}
     force_publish ${watchdog_message} ${MESSAGE}
     force_publish ${watchdog_result} ${RESULT}
-    mv -T ${OUTPUT_DIR_TMP} ${OUTPUT_DIR}
+    force_publish ${SUBMISSION_ID} ${SUBMISSION_ID_OUT}
     ${SCRIPT_PREFIX}/Drop "${JOB_ID}"
 fi

@@ -14,16 +14,12 @@ import           Bead.View.Common
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.I18N (IHtml, getI18N)
-import           Bead.View.Markdown
 import           Bead.View.RouteOf
 import           Bead.View.Translation
 
 import           Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
-
-fromMarkdown :: String -> H.Html
-fromMarkdown = markdownToHtml
 
 index :: Maybe AuthFailure -> BeadHandler IHtml
 index authError = do
@@ -35,7 +31,7 @@ index authError = do
         Bootstrap.pageHeader $ H.h2 $
           fromString $ msg $ msg_Index_Header "Welcome"
 
-        fromMarkdown $ fromString $
+        H.p $ fromString $
           msg $ msg_Index_Body "This page can be only used with an account registered in the Active Directory of the hosting institute."
 
         postForm (routeOf $ P.login ()) $ do

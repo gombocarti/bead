@@ -18,7 +18,6 @@ import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Content
 import           Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.Comments
-import           Bead.View.Content.SeeMore
 import           Bead.View.Content.Submission.Common
 import           Bead.View.Markdown
 
@@ -127,7 +126,7 @@ submissionDetailsContent p = do
                 "The submission may be downloaded as a plain text file by clicking on the link."
               downloadSubmissionButton
               H.br
-              div # submissionTextDiv $ seeMoreSubmission "submission-details-" msg $ sdSubmission info
+              H.pre $ fromString $ sdSubmission info
     Bootstrap.rowColMd12 $ do
       H.a ! A.name (anchor SubmissionDetailsEvaluationDiv) $ mempty
       h2 $ fromString $ msg $ msg_SubmissionDetails_Evaluation "Evaluation"

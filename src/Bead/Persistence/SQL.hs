@@ -7,6 +7,7 @@ module Bead.Persistence.SQL (
   , module Bead.Persistence.SQL.Entities
   , module Bead.Persistence.SQL.Evaluation
   , module Bead.Persistence.SQL.Feedback
+  , module Bead.Persistence.SQL.FileSystem
   , module Bead.Persistence.SQL.Group
   , module Bead.Persistence.SQL.MySQL
   , module Bead.Persistence.SQL.Notification
@@ -16,7 +17,6 @@ module Bead.Persistence.SQL (
   , module Bead.Persistence.SQL.Score
   , module Bead.Persistence.SQL.Submission
   , module Bead.Persistence.SQL.TestCase
-  , module Bead.Persistence.SQL.TestFeedback
   , module Bead.Persistence.SQL.TestJob
   , module Bead.Persistence.SQL.TestScript
   , module Bead.Persistence.SQL.User
@@ -32,6 +32,7 @@ import Bead.Persistence.SQL.Course
 import Bead.Persistence.SQL.Entities (Persist)
 import Bead.Persistence.SQL.Evaluation
 import Bead.Persistence.SQL.Feedback
+import Bead.Persistence.SQL.FileSystem (testIncoming, testFeedbacks, finalizeTestFeedback, insertTestFeedback)
 import Bead.Persistence.SQL.Group
 import Bead.Persistence.SQL.MySQL
 import Bead.Persistence.SQL.Notification
@@ -41,7 +42,6 @@ import Bead.Persistence.SQL.Registration
 import Bead.Persistence.SQL.Score
 import Bead.Persistence.SQL.Submission
 import Bead.Persistence.SQL.TestCase
-import Bead.Persistence.SQL.TestFeedback
 import Bead.Persistence.SQL.TestJob
 import Bead.Persistence.SQL.TestScript
 import Bead.Persistence.SQL.User

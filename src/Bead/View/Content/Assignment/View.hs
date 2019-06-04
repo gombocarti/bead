@@ -24,7 +24,7 @@ import           Bead.View.Fay.HookIds
 import           Bead.View.Fay.Hooks
 import           Bead.View.Content hiding (name, option, required)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
-import           Bead.View.Markdown
+import           Bead.View.Markdown (markdownToHtml, minHeaderLevel, headersToDiv)
 
 import           Bead.View.Content.Assignment.Data
 
@@ -283,7 +283,7 @@ newAssignmentContent pd = do
                 let assignmentPreview a = do
                       Bootstrap.formGroup $ do
                         H.label $ fromString $ msg $ msg_NewAssignment_AssignmentPreview "Assignment Preview"
-                        H.div # assignmentTextDiv $ markdownToHtml $ Assignment.desc a
+                        Bootstrap.panel Nothing (headersToDiv . minHeaderLevel 2 . markdownToHtml $ Assignment.desc a)
 
                 pageDataCata
                   (const5 mempty)
@@ -560,8 +560,8 @@ newAssignmentContent pd = do
           testCaseText Nothing = Nothing
           testCaseText (Just (_,tc,_)) = withTestCaseValue (tcValue tc) Just (const Nothing)
 
-          testCaseFileName Nothing = return ()
-          testCaseFileName (Just (_,tc',_)) = fromString $ tcInfo tc'
+          testCaseFileName Nothing = mempty
+          testCaseFileName (Just (_,tc',_)) = Bootstrap.plainPre $ fromString $ tcInfo tc'
 
           viewTestCaseArea ts tc = maybe
             (return ())
@@ -574,7 +574,7 @@ newAssignmentContent pd = do
 
               usersFile = do
                 H.h4 $ fromString . msg $ msg_NewAssignment_TestFile "Test File"
-                H.pre $ testCaseFileName tc
+                testCaseFileName tc
 
           overwriteTestCaseAreaPreview fs ts tc tm = maybe
             (return ())
@@ -591,7 +591,7 @@ newAssignmentContent pd = do
                   (fieldName assignmentUsersFileField)
                   (msg $ msg_NewAssignment_TestFile "Test File")
                   (==uf) (map keyValue ((Left ()):map Right fs))
-                H.pre $ testCaseFileName tc
+                testCaseFileName tc
                 Bootstrap.helpBlock $ fromString $ printf (msg $ msg_NewAssignment_TestFile_Info
                   "A file passed to the tester (containing the test data) may be set here.  Files may be added on the \"%s\" subpage.")
                   (msg $ msg_LinkText_UploadFile "Upload File")
@@ -617,7 +617,7 @@ newAssignmentContent pd = do
                   (msg $ msg_NewAssignment_TestFile "Test File")
                   (const False)
                   (map keyValue ((Left ()):map Right fs))
-                H.pre $ testCaseFileName tc
+                testCaseFileName tc
                 Bootstrap.helpBlock $ printf (msg $ msg_NewAssignment_TestFile_Info
                   "A file passed to the tester (containing the test data) may be set here.  Files may be added on the \"%s\" subpage.")
                   (msg $ msg_LinkText_UploadFile "Upload File")

@@ -26,7 +26,6 @@ import           Text.Printf
 import           Bead.Controller.Pages as Pages
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
-import           Bead.View.Content.SeeMore
 import           Bead.Domain.Shared.Evaluation
 
 type CommentOrFeedback = Either (CommentKey, Comment) Feedback
@@ -62,7 +61,7 @@ sortIncreasingTime = sortOn time where
 -- Sort the items by descreasing by the creation time
 sortDecreasingTime = reverse . sortIncreasingTime
 
--- Filters out the comments and feedback not visible for the students
+-- Filters out comments and feedback not visible for the students
 forStudentCFs :: Bool -> [CommentOrFeedback] -> [CommentOrFeedback]
 forStudentCFs ballotBox = filter forStudent where
   forStudent =
@@ -70,6 +69,7 @@ forStudentCFs ballotBox = filter forStudent where
       ((&&) (not ballotBox) . isStudentComment . snd)
       (feedback
          (feedbackInfo
+           True
            (const True) -- result
            (const True) -- student
            (const False) -- admin
@@ -79,35 +79,68 @@ forStudentCFs ballotBox = filter forStudent where
 commentsDiv :: String -> UserTimeConverter -> [CommentOrFeedback] -> IHtml
 commentsDiv id_ t cs = do
   msg <- getI18N
-  return $ Bootstrap.panelGroup ! A.role "tablist" ! Bootstrap.areaMultiselectable "true" $ do
-    mapM_ (commentPar msg id_ t) $ zip [1..] (sortDecreasingTime cs)
+  return $ do
+    seeMore
+    Bootstrap.panelGroup ! A.role "tablist" ! Bootstrap.areaMultiselectable "true" $ do
+    mapM_ (seeMoreComment msg id_ t) $ zip [1..] (sortDecreasingTime cs)
 
-commentPar :: I18N -> String -> UserTimeConverter -> (Int, CommentOrFeedback) -> Html
-commentPar i18n id_ t (n, c) = do
-  let comment = commentOrFeedbackText i18n c
-  let badge = concat [showDate . t $ commentOrFeedbackTime c, " ", commentOrFeedbackAuthor i18n c]
-  let commentId = fromString $ id_ ++ show n
-  seeMoreComment commentId i18n maxLength maxLines (badge, style) (anchorValue c) (commentOrFeedbackText i18n c)
   where
+    seeMore :: Html
+    seeMore = --H.script "function seemore(event) { val parent = event.target.parentNode; alert(parent.id); }"
+      H.script $ fromString $ concat
+        [ "function seemore(toHide, toShow) {"
+        , "toHide.forEach(e => document.getElementById(e).remove());"
+        , "toShow.forEach(e => document.getElementById(e).style.removeProperty('display'));"
+        , "}"
+        ]
+
+seeMoreComment :: I18N -> String -> UserTimeConverter -> (Int, CommentOrFeedback) -> Html
+seeMoreComment i18n id_ t (n, c) =
+  let comment = commentOrFeedbackText i18n c
+      badge = concat [showDate . t $ commentOrFeedbackTime c, " ", commentOrFeedbackAuthor i18n c]
+      commentId = fromString $ id_ ++ show n
+  in seeMoreComment commentId i18n badge (commentOrFeedbackText i18n c)
+  where
+    anchorValue :: CommentOrFeedback -> Maybe CommentKey
     anchorValue =
       commentOrFeedback
         (Just . fst)
         (const Nothing)
 
-    style =
-      commentOrFeedback
-        ((commentCata (const4 Nothing)) . snd)
-        (feedback
-          (feedbackInfo
-            (const Nothing) -- result
-            (const Nothing) -- student
-            (const $ Just Bootstrap.Warning) -- admin
-            (const3 $ Just Bootstrap.Warning)) -- evaluation
-          p_1_2)
-        c
-
     maxLength = 100
     maxLines = 5
+
+    seeMoreComment :: String -> I18N -> String -> String -> Html
+    seeMoreComment id_ i18n badgeText content =
+      let heading = do
+            maybe mempty (\ac -> H.div ! A.id (anchor ac) $ mempty) (anchorValue c)
+            Bootstrap.badge badgeText
+      in
+        Bootstrap.panel Nothing $ do
+          heading
+          Bootstrap.plainPre $ do
+            fromString preview
+            when isLargeContent $ do
+              H.span ! A.id (fromString dotsId) $ fromString " ..."
+              H.span ! A.style "display: none"
+                     ! A.id (fromString moreId)
+                     $ fromString rest
+          when isLargeContent $
+            Bootstrap.buttonOnClick
+            ""
+            (i18n $ msg_SeeMore_SeeMore "See More")
+            (printf "seemore(['%s', '%s'], ['%s'])" dotsId buttonId moreId)
+            ! A.id (fromString buttonId)
+      where
+        (cmtShort, rest) = splitAt maxLength content
+        preview = if isLargeContent then cmtShort else content
+        isLargeContent = (not . null) rest || (not . null . drop maxLines . lines) content
+
+        dotsId, moreId, buttonId :: String
+        dotsId = id_ ++ "-dots"
+        moreId = id_ ++ "-more"
+        buttonId = id_ ++ "-button"
+
 
 commentOrFeedbackText :: I18N -> CommentOrFeedback -> String
 commentOrFeedbackText i18n =
@@ -115,22 +148,27 @@ commentOrFeedbackText i18n =
     ((commentCata $ \comment _author _date _type -> comment) . snd)
     (feedback
        (feedbackInfo
+         queuedForTest
          (bool testsPassed testsFailed) -- result
          id   -- comment
          id   -- comment
          evaluationText) -- evaluation
        p_1_2)
   where
+     queuedForTest = i18n $ msg_Comments_QueuedForTest "The submission is queued for test."
+    
      testsPassed = i18n $ msg_Comments_TestPassed "The submission has passed the tests."
      testsFailed = i18n $ msg_Comments_TestFailed "The submission has failed the tests."
 
      bool true false x = if x then true else false
 
      evaluationText result comment _author =
-      withEvResult result
-        (\b -> join [comment, "\n\n", translateMessage i18n (binaryResult b)])
-        (const $ join [comment, "\n\n", translateMessage i18n (pctResult result)])
-        (\(FreeForm msg) -> join [comment, "\n\n", msg])
+       let text res | null comment = res
+                    | otherwise    = unlines [comment, "", res]
+       in withEvResult result
+            (\b -> text (translateMessage i18n (binaryResult b)))
+            (const $ text (translateMessage i18n (pctResult result)))
+            (\(FreeForm msg) -> text msg)
 
      binaryResult (Binary b) =
       TransMsg $ resultCata (msg_Comments_BinaryResultPassed "The submission is accepted.")
@@ -155,6 +193,7 @@ commentOrFeedbackAuthor i18n =
          author) . snd)-- admin
     (feedback
       (feedbackInfo
+        testScript
         (const result) -- result
         (const testScript) -- student
         (const adminTestScript) -- admin

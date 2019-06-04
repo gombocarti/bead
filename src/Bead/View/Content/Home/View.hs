@@ -8,6 +8,7 @@ import           Data.List (find, intersperse, sortBy)
 import qualified Data.Map as Map
 import           Data.Maybe (isJust)
 import           Data.String (fromString)
+import qualified Data.Text as T
 
 import           Text.Blaze.Html5 hiding (map, id)
 import qualified Text.Blaze.Html5 as H
@@ -123,8 +124,8 @@ homeContent d = do
 -- * Helpers
 
 submissionTableInfoAssignments = submissionTableInfoCata course group where
-  course _n _us as _uls _ans _ck = as
-  group _n _us cgas _uls _ans _ck _gk = map (cgInfoCata id id) cgas
+  course _n _us as _uls _ck = as
+  group _n _us cgas _uls _ck _gk = map (cgInfoCata id id) cgas
 
 htmlSubmissionTables :: HomePageData -> IHtml
 htmlSubmissionTables pd = do
@@ -204,7 +205,7 @@ availableAssignmentsAssessments pd timeconverter groups
   | otherwise = do
       msg <- getI18N
       return $ do
-        when (any (\g -> hasAssignments g || hasAssessments g) groups) $ do
+        when (any hasAssignments groups) $ do
           Bootstrap.rowColMd12
             $ p
             $ fromString . msg $ msg_Home_Assignments_Info $ concat
@@ -293,7 +294,7 @@ availableAssignmentsAssessments pd timeconverter groups
         submissionStateLabel :: Html
         submissionStateLabel = 
           maybe
-          (Bootstrap.grayLabel $ msg $ msg_Home_SubmissionCell_NoSubmission "No submission")
+          (Bootstrap.grayLabel $ T.pack $ msg $ msg_Home_SubmissionCell_NoSubmission "No submission")
           (\(key, state) ->
              Bootstrap.link (routeOf (submissionDetails key)) (SState.formatSubmissionState SState.toLabel msg state))
           subm
@@ -310,7 +311,7 @@ availableAssessments msg (_, _, _, assessments) | null assessments = mempty
       header assessments = mapM_ (H.td . assessmentLabel) (zip [assessment | (_ak,assessment,_sk,_si) <- assessments] [1..])
           where
             assessmentLabel :: (Assessment, Int) -> Html
-            assessmentLabel (as,n) = Bootstrap.grayLabel (show n) ! tooltip
+            assessmentLabel (as,n) = Bootstrap.grayLabel (T.pack $ show n) ! tooltip
                 where aTitle = assessment (\title _desc _creation _cfg _visible -> title) as
                       tooltip = A.title . fromString $ aTitle
 

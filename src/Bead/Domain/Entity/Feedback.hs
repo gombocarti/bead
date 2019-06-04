@@ -6,7 +6,6 @@ module Bead.Domain.Entity.Feedback (
   , mkFeedback
   , FeedbackInfo(..)
   , feedbackInfo
-  , isTestedFeedback
   , feedbackTestResult
 #ifdef TEST
   , feedbackTests
@@ -29,7 +28,9 @@ import           Test.Tasty.TestSet hiding (shrink)
 -- | The feedback info describes information and the stage of the
 -- evaluation for a given submission.
 data FeedbackInfo
-  = TestResult { testResult :: Bool }
+  = QueuedForTest
+    -- ^ Indicates that the submission is waiting to be tested.
+  | TestResult { testResult :: Bool }
     -- ^ Indicates that the submission has passed the automated test scripts
     -- or not, True means that the submission is passed.
   | MessageForStudent { studentComment :: String }
@@ -42,12 +43,14 @@ data FeedbackInfo
   deriving (Data, Eq, Read, Show, Typeable)
 
 feedbackInfo
+  queuedForTest
   result
   student
   admin
   evaluated
   s
   = case s of
+      QueuedForTest -> queuedForTest
       TestResult testResult -> result testResult
       MessageForStudent studentComment -> student studentComment
       MessageForAdmin adminComment -> admin adminComment
@@ -56,12 +59,14 @@ feedbackInfo
 #ifdef TEST
 instance Arbitrary FeedbackInfo where
   arbitrary = oneof [
-      TestResult <$> arbitrary
+      return QueuedForTest
+    , TestResult <$> arbitrary
     , MessageForStudent <$> arbitrary
     , MessageForAdmin <$> arbitrary
     , Evaluated <$> arbitrary <*> arbitrary <*> arbitrary
     ]
   shrink = feedbackInfo
+    []
     (fmap TestResult . shrink)
     (fmap MessageForStudent . shrink)
     (fmap MessageForAdmin . shrink)
@@ -73,7 +78,7 @@ instance Arbitrary FeedbackInfo where
 #endif
 
 -- | Feedback consist of a piece of information and a date when the information
--- is posted intot the system.
+-- is posted into the system.
 data Feedback = Feedback { info :: FeedbackInfo, postDate :: UTCTime }
   deriving (Data, Eq, Read, Show, Typeable)
 
@@ -82,39 +87,22 @@ feedback g f (Feedback i p) = f (g i) p
 -- Creates a feedback in applicative style.
 mkFeedback info date = Feedback <$> info <*> date
 
--- Returns True if the feedback is a test result one, otherwise False
-isTestedFeedback :: Feedback -> Bool
-isTestedFeedback = feedback
-  (feedbackInfo (const True) (const False) (const False) (const3 False))
-  forgetTheDate
-
-#ifdef TEST
-isTestedFeedbackTests = group "isTestedFeedback" $ do
-  let date = read "2014-08-10 17:15:19.707507 UTC"
-  eqPartitions isTestedFeedback
-    [ Partition "Result: True"      (Feedback (TestResult True) date) True "Does not recognized."
-    , Partition "Result: False"     (Feedback (TestResult False) date) True "Does not recognized."
-    , Partition "MessageForStudent" (Feedback (MessageForStudent "s") date) False "Does recognized."
-    , Partition "MessageForAdmin"   (Feedback (MessageForAdmin "a") date) False "Does recognized."
-    , Partition "Evaluated"         (Feedback (Evaluated undefined "a" "b") date) False "Does recognized."
-    ]
-#endif
-
 -- Returns the result of a test fedback otherwise Nothing
 feedbackTestResult :: Feedback -> Maybe Bool
 feedbackTestResult = feedback
-  (feedbackInfo Just (const Nothing) (const Nothing) (const3 Nothing))
+  (feedbackInfo Nothing Just (const Nothing) (const Nothing) (const3 Nothing))
   forgetTheDate
 
 #ifdef TEST
 feedbackTestResultTests = group "feedbackTestResult" $ do
   let date = read "2014-08-10 17:15:19.707507 UTC"
   eqPartitions feedbackTestResult
-    [ Partition "Result: True"      (Feedback (TestResult True) date) (Just True) "Does not recognized."
-    , Partition "Result: False"     (Feedback (TestResult False) date) (Just False) "Does not recognized."
-    , Partition "MessageForStudent" (Feedback (MessageForStudent "s") date) Nothing "Does recognized."
-    , Partition "MessageForAdmin"   (Feedback (MessageForAdmin "a") date) Nothing "Does recognized."
-    , Partition "Evaluated"         (Feedback (Evaluated undefined "a" "b") date) Nothing "Does recognized."
+    [ Partition "QueuedForTest"     (Feedback QueuedForTest date) Nothing "Recognized."
+    , Partition "Result: True"      (Feedback (TestResult True) date) (Just True) "Din't recognize."
+    , Partition "Result: False"     (Feedback (TestResult False) date) (Just False) "Didn't recognize."
+    , Partition "MessageForStudent" (Feedback (MessageForStudent "s") date) Nothing "Recognized."
+    , Partition "MessageForAdmin"   (Feedback (MessageForAdmin "a") date) Nothing "Recognized."
+    , Partition "Evaluated"         (Feedback (Evaluated undefined "a" "b") date) Nothing "Recognized."
     ]
 
 #endif
@@ -125,6 +113,5 @@ forgetTheDate = p_1_2
 
 #ifdef TEST
 feedbackTests = do
-  isTestedFeedbackTests
   feedbackTestResultTests
 #endif

@@ -19,7 +19,7 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           Data.Time (getCurrentTime, LocalTime)
-import           Data.Tuple.Utils (fst3, thd3)
+import           Data.Tuple.Utils (fst3, snd3, thd3)
 import           System.FilePath ((<.>), (</>))
 
 import qualified Bead.Controller.UserStories as S
@@ -74,12 +74,12 @@ makeFilePath :: String -> String -> FilePath
 makeFilePath folder filename = replaceSlash folder </> replaceSlash filename
 
 evaluationCsvs :: I18N -> [(GroupKey, Group, String)] -> [SubmissionTableInfo] -> [(FilePath, Text)]
-evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter (not . null . assignmentKeys) submissionTables)
+evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter hasAssignment submissionTables)
   where
-    assignmentKeys :: SubmissionTableInfo -> [AssignmentKey]
-    assignmentKeys = submissionTableInfoCata
-                       (\_ _ assignments _ _ _ -> assignments)
-                       (\_ _ assignments _ _ _ _ -> map (cgInfoCata id id) assignments)
+    hasAssignment :: SubmissionTableInfo -> Bool
+    hasAssignment = submissionTableInfoCata
+                       (\_ _ assignments _ _ -> not . null $ assignments)
+                       (\_ _ assignments _ _ _ -> not . null $ assignments)
 
     submissionTableToCsv :: SubmissionTableInfo -> (FilePath, Text)
     submissionTableToCsv submissionTable = (filename, T.unlines (header : map userLine (L.sortBy (compareHun `on` (ud_fullname . fst)) (stiUserLines submissionTable))))
@@ -87,8 +87,8 @@ evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter (n
         filename :: FilePath
         filename = concat
                      [ submissionTableInfoCata
-                         (\course _ _ _ _ _ -> replaceSlash course)
-                         (\course _ _ _ _ _ gk -> maybe
+                         (\course _ _ _ _ -> replaceSlash course)
+                         (\course _ _ _ _ gk -> maybe
                                                     (replaceSlash course)
                                                     (\(_, grp, _) -> replaceSlash (E.groupName grp))
                                                     (L.find (\(gk',_,_) -> gk == gk') groups))
@@ -97,24 +97,24 @@ evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter (n
                      , msg (msg_ExportEvaluations_Evaluations "evaluations")
                      ] <.> "csv"
 
-        aks :: [AssignmentKey]
-        aks = assignmentKeys submissionTable
+        as :: [(AssignmentKey, Assignment, HasTestCase)]
+        as = submissionTableInfoCata course group submissionTable
+          where
+            course _ _ as _ _ = as
+            group _ _ as _ _ _ = map (cgInfoCata id id) as
 
         header :: Text
-        header = T.intercalate "," ("" : "" : map assignmentName aks)
-
-        assignmentName :: AssignmentKey -> Text
-        assignmentName ak = maybe "" (T.pack . A.name) (M.lookup ak (stiAssignmentInfos submissionTable))
+        header = T.intercalate "," ("" : "" : map (T.pack . A.name . snd3) as)
 
         userLine :: (UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState)) -> Text
-        userLine (uDesc, evaluations) = T.intercalate "," (T.pack (ud_fullname uDesc) : uid : map getEvaluation aks)
+        userLine (uDesc, evaluations) = T.intercalate "," (T.pack (ud_fullname uDesc) : uid : map getEvaluation as)
 
           where
             uid :: Text
             uid = E.uid T.pack (ud_uid uDesc)
 
-            getEvaluation :: AssignmentKey -> Text
-            getEvaluation ak = maybe "" (\(_, st) -> SbmState.formatSubmissionState SbmState.toPlainText msg st) (M.lookup ak evaluations)
+            getEvaluation :: (AssignmentKey, Assignment, HasTestCase) -> Text
+            getEvaluation (ak, _, _) = maybe "" (\(_, st) -> SbmState.formatSubmissionState SbmState.toPlainText msg st) (M.lookup ak evaluations)
 
 assessmentCsvs :: I18N -> [(GroupKey, Group, String)] -> [ScoreBoard] -> [(FilePath, Text)]
 assessmentCsvs msg groups scoreBoards = map scoreBoardToCsv (filter (not . null . sbAssessments) scoreBoards)

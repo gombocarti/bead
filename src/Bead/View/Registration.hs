@@ -57,7 +57,7 @@ doesUserExist :: Persist.Interpreter -> Username -> IO Bool
 doesUserExist persist username =
   isLeft <$> Persist.runPersist persist (Persist.doesUserExist username)
 
-changeUserPassword :: Username -> Bead.View.Content.Password -> IO ()
+changeUserPassword :: Username -> String -> IO ()
 changeUserPassword _username _password = return ()
 
 createUserWithRole :: Bead.View.Content.Role -> Persist.Interpreter -> UserRegInfo -> IO ()

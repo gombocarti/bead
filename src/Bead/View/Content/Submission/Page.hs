@@ -31,7 +31,7 @@ import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import qualified Bead.View.Content.SubmissionState as St
 import           Bead.View.Content.Submission.Common
-import           Bead.View.Markdown (markdownToHtml)
+import           Bead.View.Markdown (markdownToHtml, minHeaderLevel)
 
 submission = ViewModifyHandler submissionPage submissionPostHandler
 
@@ -39,6 +39,7 @@ data PageData = PageData {
     asKey   :: AssignmentKey
   , asValue :: Assignment
   , asDesc  :: AssignmentDesc
+  , asHasTestCase :: HasTestCase
   , asTimeConv :: UserTimeConverter
   , asNow :: UTCTime
   , asMaxFileSize :: Int
@@ -58,13 +59,14 @@ submissionPage = do
   ut <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ getCurrentTime
   size <- fmap maxUploadSizeInKb $ beadHandler getConfiguration
-  (limit, aDesc, asg, submissions) <- userStory $ do
+  (limit, aDesc, asg, submissions, hasTest) <- userStory $ do
     Story.doesBlockAssignmentView ak
     Story.isUsersAssignment ak
     (aDesc, asg) <- Story.userAssignmentForSubmission ak
     lmt <- Story.assignmentSubmissionLimit ak
     submissions <- Story.userSubmissionInfos ak
-    return $! (lmt, aDesc, asg, submissions)
+    hasTest <- Story.hasAssignmentTestCase ak
+    return $! (lmt, aDesc, asg, submissions, hasTest)
 
   if (now < Assignment.start asg)
     then setPageContents assignmentNotAvailableYetContent
@@ -75,6 +77,7 @@ submissionPage = do
             asKey = ak
           , asValue = asg
           , asDesc = aDesc
+          , asHasTestCase = hasTest
           , asTimeConv = ut
           , asNow = now
           , asMaxFileSize = size
@@ -170,6 +173,8 @@ submissionContent p = do
         let a = asDesc p
           in (msg $ msg_Submission_Course "Course:") .|. maybe (courseName $ aCourse a) (fullGroupName (aCourse a)) (aGroup a)
         (msg $ msg_Submission_Assignment "Assignment:") .|. (Assignment.name $ asValue p)
+        when (Assignment.isActive (asValue p) (asNow p)) $
+          (msg $ msg_Submission_Test "Test:") .|. (msg $ infoOnTestCase)
         (msg $ msg_Submission_Deadline "Deadline:")     .|.
           (showDate . (asTimeConv p) . Assignment.end $ asValue p)
         (msg $ msg_Submission_TimeLeft "Time left:")    .|. (startEndCountdownDiv
@@ -186,15 +191,14 @@ submissionContent p = do
         (const $ limitReached msg)
         (asLimit p)
 
-    Bootstrap.rowColMd12 H.hr
-
     Bootstrap.rowColMd12 $ do
       let submissions = asSubmissions p
       userSubmissionInfo msg submissions
- 
-    Bootstrap.rowColMd12 $ do
-      H.h2 $ fromString $ msg $ msg_Submission_Description "Description"
-      H.div # assignmentTextDiv $ markdownToHtml $ Assignment.desc $ asValue p
+
+    Bootstrap.rowColMd12 H.hr
+
+    Bootstrap.rowColMd12 $
+      minHeaderLevel 2 . markdownToHtml $ Assignment.desc $ asValue p
 
   where
     submission = Pages.submission (asKey p) ()
@@ -203,6 +207,11 @@ submissionContent p = do
     limitReached :: I18N -> H.Html
     limitReached msg = Bootstrap.alert Bootstrap.Danger $ H.p $ fromString $ msg $
       msg_Submission_LimitReached "Submission limit is reached."
+
+    infoOnTestCase :: Translation String
+    infoOnTestCase = case asHasTestCase p of
+                       HasTestCase -> msg_SubmissionWillBeTested "The submission will be automatically tested."
+                       DoesNotHaveTestCase -> msg_AssignmentDoesntHaveTestCase "The assignment does not have test case."
 
     submissionForm :: I18N -> H.Html
     submissionForm msg =

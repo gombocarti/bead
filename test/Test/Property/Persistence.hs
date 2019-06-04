@@ -1,7 +1,21 @@
 {-# LANGUAGE Rank2Types #-}
 module Test.Property.Persistence (
-    tests
+    admins
+  , courses
+  , courseAndGroupAssignments
+  , courseAssignmentGen
+  , createInterpreter
   , createTestData
+  , groupAssignmentGen
+  , groups
+  , reinitPersistence
+  , runPersistIOCmd
+  , submissions
+  , subscribeUsers
+  , testCases
+  , testScripts
+  , tests
+  , users
   ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -9,24 +23,26 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Concurrent (forkIO)
 import qualified Data.ByteString.Char8 as BS
+import Data.Function (on)
 import qualified Data.Set as Set
 import qualified Data.HashSet as HashSet
 
-import Data.List ((\\), intersperse, nub, find)
+import Data.List ((\\), intersperse, nub, find, sort, sortOn, maximumBy, delete)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.IORef
 import Data.Time
+import Data.Tuple.Utils (fst3, thd3)
 import System.Directory hiding (copyFile)
 import System.IO
 import System.IO.Temp (createTempDirectory)
 import System.FilePath ((</>))
 
 import Bead.Persistence.Initialization
-import Bead.Persistence.Persist hiding (groups)
+import Bead.Persistence.Persist hiding (groups, runPersistIOCmd)
 import qualified Bead.Persistence.Persist as Persist
 import Bead.Persistence.Relations
-import Bead.Persistence.SQL.FileSystem (dirName)
+import Bead.Persistence.SQL.FileSystem (testOutgoing)
 
 import qualified Test.Property.EntityGen as Gen
 
@@ -185,6 +201,15 @@ createListRef = newIORef []
 insertListRef :: ListRef a -> a -> IO ()
 insertListRef r e = modifyIORef r (e:)
 
+modifyListRef :: ListRef a -> ([a] -> [a]) -> IO ()
+modifyListRef = modifyIORef
+
+popListRef :: ListRef a -> IO a
+popListRef r = do
+  a:as <- readIORef r
+  writeIORef r as
+  return a
+
 -- Returns the list hold in the list reference
 listInRef :: ListRef a -> IO [a]
 listInRef r = readIORef r
@@ -240,9 +265,9 @@ courseAssignmentGen :: Int -> [CourseKey] -> IO [AssignmentKey]
 courseAssignmentGen n cs = do
   list <- createListRef
   quick n $ do
-    gk <- pick $ elements cs
+    ck <- pick $ elements cs
     ak <- saveAndLoadIdenpotent "Course assignment"
-      (saveCourseAssignment gk) (loadAssignment) (Gen.assignments startDate endDate)
+      (saveCourseAssignment ck) (loadAssignment) (Gen.assignments startDate endDate)
     run $ insertListRef list ak
   listInRef list
 
@@ -312,11 +337,11 @@ setGroupAdmins as gs n = do
 -- SubmissionInfoList is a list from username, assignment-key and the submission-key for them.
 -- Interpretation: The submission information about which user submitted which submission
 -- for the given assignment.
-type SubmissionInfoList = [((Username,AssignmentKey),SubmissionKey)]
+type SubmissionInfoList = [((Username,AssignmentKey),(SubmissionKey, UTCTime))]
 
 -- Throws away the assignment and the username from the submission information
 infoListToSubmissionKeys :: SubmissionInfoList -> [SubmissionKey]
-infoListToSubmissionKeys = (fmap snd)
+infoListToSubmissionKeys = map (fst . snd)
 
 -- Generates and stores the given number of comments, for the randomly selected
 -- submissions. Returns all the created comment key with the associated submissionKey.
@@ -338,7 +363,7 @@ feedbacks n ss = do
   let now = utcTimeConstant
   quick n $ do
     sk <- pick $ elements ss
-    fk <- saveAndLoadIdenpotent "Feedback" (saveFeedback sk) (loadFeedback) (Gen.feedbacks now)
+    fk <- saveAndLoadIdenpotent "Feedback" (fmap head . saveFeedbacks sk . (: [])) (loadFeedback) (Gen.feedbacks now)
     run $ insertListRef list (fk, sk)
   listInRef list
 
@@ -382,12 +407,15 @@ feedbackNotifications n fs = do
 submissions :: Int -> [Username] -> [AssignmentKey] -> IO SubmissionInfoList
 submissions n us as = do
   list <- createListRef
+  ds <- createListRef
+  writeIORef ds dates
   quick n $ do
-    u <- pick $ elements us
-    ak <- pick $ elements as
-    sk <- saveAndLoadIdenpotent "Submission"
-      (saveSubmission ak u) (loadSubmission) (Gen.submissions startDate)
-    run $ insertListRef list ((u,ak),sk)
+      d <- run $ popListRef ds
+      u <- pick $ elements us
+      ak <- pick $ elements as
+      sk <- saveAndLoadIdenpotent "Submission"
+        (saveSubmission ak u) (loadSubmission) (Gen.submissions d)
+      run $ insertListRef list ((u,ak),(sk,d))
   listInRef list
 
 -- Generate and store the given number of evaluations, for the randomly selected
@@ -404,6 +432,7 @@ evaluations n ss = do
 
 -- Generates and stores the given number of test scripts for the randomly selected
 -- courses, and returns all the created TestScriptKeys
+testScripts :: Int -> [CourseKey] -> IO [TestScriptKey]
 testScripts n cs = do
   list <- createListRef
   quick n $ do
@@ -425,6 +454,7 @@ scores n us as = do
 
 -- Generates and stores the given number of the test cases for the randomly selected
 -- test scripts and assignments, and returns all the created TestCaseKeys
+testCases :: Int -> [TestScriptKey] -> [AssignmentKey] -> IO [(AssignmentKey, TestScriptKey, TestCaseKey)]
 testCases n tcs as = do
   list <- createListRef
   quick n $ do
@@ -435,7 +465,7 @@ testCases n tcs as = do
       Just tk -> return ()
       Nothing -> do tck <- saveAndLoadIdenpotent "TestCase"
                              (saveTestCase tsk ak) (loadTestCase) (Gen.testCases)
-                    run $ insertListRef list tck
+                    run $ insertListRef list (ak, tsk, tck)
   listInRef list
 
 massPersistenceTest = do
@@ -449,10 +479,13 @@ massPersistenceTest = do
   evaluations 400 ss
   return ()
 
+runPropertyM :: Testable a => PropertyM IO a -> IO ()
+runPropertyM = quick 1
 
 quick :: Testable a => Int -> PropertyM IO a -> IO ()
 quick n p = check (return ()) $ quickCheckWithResult (success n) $ monadicIO p
 
+quickWithCleanUp :: Testable b => IO a -> Int -> PropertyM IO b -> IO a
 quickWithCleanUp cleanup n p = check cleanup $ quickCheckWithResult (success n) $ monadicIO p
 
 check :: IO a -> IO QuickCheck.Result -> IO a
@@ -767,7 +800,7 @@ lastEvaluationTest = test $ testCase "Always the last evaluation is valid for th
 createCourseAdmins n us cs = quick n $ do
   u <- pick $ elements us
   usr <- runPersistCmd $ loadUser u
-  pre (atLeastCourseAdmin . u_role $ usr)
+  pre (u_role usr `elem` [CourseAdmin, Admin])
   c <- pick $ elements cs
   runPersistCmd $ createCourseAdmin u c
 
@@ -912,7 +945,7 @@ modifyAssignmentsTest = test $ testCase "Modified assignments must be untouched 
     a  <- pick (Gen.assignments startDate endDate)
     runPersistCmd $ modifyAssignment ak a
     a1 <- runPersistCmd $ loadAssignment ak
-    assertEquals a a1 "Modified and loaded assignments were differents"
+    assertEquals a a1 "Modified and loaded assignments were different"
 
 -- Modified evaluations must be untouched after loading them
 modifyEvaluationTest = test $ testCase "Modified evaluations must be untouched after loading them" $ do
@@ -941,13 +974,12 @@ modifyEvaluationTest = test $ testCase "Modified evaluations must be untouched a
       ]
 
 -- Subscribe users to groups
+subscribeUsers :: Int -> [Username] -> [GroupKey] -> IO ()
 subscribeUsers n us gs =
   quick n $ do
     u <- pick $ elements us
     g <- pick $ elements gs
-    runPersistCmd $ do
-      c <- courseOfGroup g
-      subscribe u g
+    runPersistCmd $ subscribe u g
 
 -- Test if the users make unsubscribe from the courses by the admin
 deleteUsersFromCourseTest = test $ testCase "Delete user form course" $ do
@@ -969,21 +1001,21 @@ deleteUsersFromCourseTest = test $ testCase "Delete user form course" $ do
       c <- pick $ elements cs
       runPersistCmd $ deleteUserFromCourse c u
       ucs <- runPersistCmd $ userCourses u
-      assertEquals [] ucs "Subscirbed to some course."
+      assertEquals [] ucs "Subscribed to some course."
 
     -- Test if subscribing from the course produces an empty course list
     testOneCourse u c = do
       runPersistCmd $ deleteUserFromCourse c u
       ucs <- runPersistCmd $ userCourses u
-      assertEquals [] ucs "Subscirbed to some course."
+      assertEquals [] ucs "Subscribed to some course."
 
     -- Check if the deletion of one course removes only the deleted course
     testMoreCourses u cs' = do
       c <- pick $ elements cs'
       runPersistCmd $ deleteUserFromCourse c u
       ucs <- runPersistCmd $ userCourses u
-      assertEquals ((length cs') - 1) (length ucs) "No only one courses was deleted"
-      assertEquals (cs' \\ [c]) ucs "No the right course was deleted"
+      assertEquals ((length cs') - 1) (length ucs) "Not only one course was deleted"
+      assertEquals (cs' \\ [c]) ucs "Nos the right course was deleted"
 
 deleteUsersFromCourseNegativeTest = test $ testCase "Delete user from courses not belong to" $ do
   cs <- courses 50
@@ -1052,13 +1084,14 @@ saveLoadAndModifyTestScriptsTest = test $ testCase "Save, load and modify test s
         assertEquals nts nts' "Modifing the test script failed"
         assertTrue (elem ts ctss) "Test Script is not in it's course"
 
+saveLoadAndModifyTestCasesTest :: TestSet ()
 saveLoadAndModifyTestCasesTest = test $ testCase "Save, load and modify test cases" $ do
   reinitPersistence
   cs <- courses 100
   gs <- groups 200 cs
   tss <- testScripts 500 cs
   as <- courseAndGroupAssignments 100 100 cs gs
-  tcs <- testCases 1000 tss as
+  tcs <- map thd3 <$> testCases 1000 tss as
   quick 1000 $ do
     tc  <- pick $ elements tcs
     ntc <- pick $ Gen.testCases
@@ -1067,6 +1100,61 @@ saveLoadAndModifyTestCasesTest = test $ testCase "Save, load and modify test cas
       ntc' <- loadTestCase tc
       return $ do
         assertEquals ntc ntc' "Modification of the test case has failed"
+
+-- Check testCaseOfAssignment. It should reflect effects of
+-- saveTestCase and removeTestCaseAssignment and should be invariant
+-- for modifyTestCase.
+--
+-- The test case manipulation functions (save, modify, remove) should not
+-- affect other assignments.
+testCaseOfAssignmentTest :: TestSet ()
+testCaseOfAssignmentTest = test $ testCase "Check test case of assignment" $ do
+  reinitPersistence
+  cs <- courses 10
+  gs <- groups 40 cs
+  tss <- testScripts 10 cs
+  as <- courseAndGroupAssignments 5 5 cs gs
+  noneHasTestCase <- runPersistIOCmd $ allM (fmap isNothing . testCaseOfAssignment) as
+  assertTrue noneHasTestCase "An assignment has test case initially."
+  runPropertyM $ foldM_ (\(withTestCase, withoutTestCase) _ -> do
+             a <- pick (elements as)
+             case find ((== a) . fst) withTestCase of
+               Just (a, tck) -> do
+                 tc <- pick (Gen.testCases)
+                 runPersistCmd $ do
+                   modifyTestCase tck tc
+                   noneChanged <- allM (\(a', tck') -> (== Just tck') <$> testCaseOfAssignment a') withTestCase
+                   noneHasTestCase <- allM (fmap isNothing . testCaseOfAssignment) withoutTestCase
+                   liftIO $ assertTrue noneChanged "Test case key of assignment changed."
+                   liftIO $ assertTrue noneHasTestCase "Test case for an assignment is set after change."
+                   removeTestCaseAssignment tck a
+                   hasNoTestCase <- isNothing <$> testCaseOfAssignment a
+                   let withTestCase' = delete (a, tck) withTestCase
+                   noneChanged <- allM (\(a', tck') -> (== Just tck') <$> testCaseOfAssignment a') withTestCase'
+                   noneHasTestCase <- allM (fmap isNothing . testCaseOfAssignment) withoutTestCase
+                   liftIO $ assertTrue noneChanged "The test case key of an assignment changed after removal."
+                   liftIO $ assertTrue noneHasTestCase "Test case key for an assignment is set after removal."
+                   return (withTestCase', withoutTestCase)
+               Nothing -> do
+                 ts <- pick (elements tss)
+                 tc <- pick (Gen.testCases)
+                 runPersistCmd $ do
+                   tck <- saveTestCase ts a tc
+                   mtck' <- testCaseOfAssignment a
+                   let withoutTestCase' = delete a withoutTestCase
+                   liftIO $ assertEquals (Just tck) mtck' "Test case key of assignment is different or missing."
+                   noneChanged <- allM (\(a', tck') -> (== Just tck') <$> testCaseOfAssignment a') withTestCase
+                   noneHasTestCase <- allM (fmap isNothing . testCaseOfAssignment) withoutTestCase'
+                   liftIO $ assertTrue noneChanged "The test case key of an assignment changed after save."
+                   liftIO $ assertTrue noneHasTestCase "Test case key for an assignment is set after save."
+                   return ((a, tck) : withTestCase, withoutTestCase')
+         )
+    ([], [])
+    [1..2 * length as]
+
+  where
+    allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
+    allM p l = and <$> mapM p l
 
 -- Creates a temporary directory for the bead in the system's temp dir
 createBeadTempDir :: IO FilePath
@@ -1168,6 +1256,7 @@ userOverwriteFileTest = test $ testCase "Overwrite user's data file" $ do
         assertEquals path path' "The user's file path was changed"
         assertEquals content content' "The user's file content is not copied correctly"
 
+testJobCreationTest :: TestSet ()
 testJobCreationTest = test $ testCase "Test job creation" $ do
   reinitPersistence
   us <- users 400
@@ -1177,54 +1266,52 @@ testJobCreationTest = test $ testCase "Test job creation" $ do
   as <- courseAndGroupAssignments 200 200 cs gs
   tcs <- testCases 600 tss as
   ss <- submissions 1500 us as
-  testedSks <- createListRef
   quick 1000 $ do
-    ((_u,_ak),sk) <- pick $ elements ss
-    tsks <- run $ listInRef testedSks
-    case sk `elem` tsks of
-      True -> return ()
-      False -> do
-        run $ insertListRef testedSks sk
-        join $ runPersistCmd $ do
-          saveTestJob sk
-          ak <- assignmentOfSubmission sk
-          mtck <- testCaseOfAssignment ak
-          maybe (testIfHasNoTestJob sk) (testIfHasTestJob sk) mtck
+    ((_u,ak),(sk, _d)) <- pick $ elements ss
+    entriesBeforeSave <- liftIO $ listDirectory testOutgoing
+    runPersistCmd $ do
+       queueSubmissionForTest sk
+       mtck <- testCaseOfAssignment ak
+       maybe (testIfHasNoTestJob entriesBeforeSave) (testIfHasTestJob entriesBeforeSave sk) mtck
 
   where
-    testIfHasNoTestJob sk = do
-      let tk = submissionKeyToTestJobKey sk
-      exist <- liftIO $ doesDirectoryExist $ dirName tk
-      return $ do
-        assertFalse exist "Test Job directory is exist"
+    testIfHasNoTestJob :: [FilePath] -> Persist ()
+    testIfHasNoTestJob entriesBeforeSave =
+      liftIO $ do
+        entries <- listDirectory testOutgoing
+        assertEquals (sort entriesBeforeSave) (sort entries) "Test Job directory exists"
 
-    testIfHasTestJob sk tck = do
+    testIfHasTestJob :: [FilePath] -> SubmissionKey -> TestCaseKey -> Persist ()
+    testIfHasTestJob entriesBeforeSave sk tck = do
       -- Domain knowledge is used
-      tsk <- testScriptOfTestCase tck
-      let tk = submissionKeyToTestJobKey sk
-      script     <- liftIO $ readFile $ dirName tk </> "script"
+      entries <- liftIO $ listDirectory testOutgoing
+      let [job] = map (testOutgoing </>) $ sort entries \\ sort entriesBeforeSave
+      sk' <- liftIO $ SubmissionKey <$> readFile (job </> "id")
+      script     <- liftIO $ readFile $ job </> "script"
       submission2 <- loadSubmission sk
       assertSubmissions <- withSubmissionValue (solution submission2)
-        (\sol -> do testSolution <- liftIO $ readFile $ dirName tk </> "submission"
+        (\sol -> do testSolution <- liftIO $ readFile $ job </> "submission"
                     return $ assertEquals sol testSolution "Solutions are different")
-        (\sol -> do testSolution <- liftIO $ BS.readFile $ dirName tk </> "submission"
+        (\sol -> do testSolution <- liftIO $ BS.readFile $ job </> "submission"
                     return $ assertEquals sol testSolution "Solutions are different")
+      tsk <- testScriptOfTestCase tck
       script2     <- loadTestScript tsk
       case2       <- loadTestCase   tck
       assertTests <- withTestCaseValue
         (tcValue case2)
-        (\testValue -> do tests <- liftIO $ readFile $ dirName tk </> "tests"
+        (\testValue -> do tests <- liftIO $ readFile $ job </> "tests"
                           return $ assertEquals tests testValue "Tests are different")
-        (\testValue -> do tests <- liftIO $ BS.readFile $ dirName tk </> "tests"
+        (\testValue -> do tests <- liftIO $ BS.readFile $ job </> "tests"
                           return $ assertEquals tests testValue "Tests are different")
-      return $ do
---        assertEquals submission (solution submission2) "Submissions are different"
+      liftIO $ do
+        assertEquals sk' sk "SubmissionKeys are different"
         assertEquals script (tsScript script2) "Scripts are different"
         assertTests
         assertSubmissions
 
-insertAndFinalizeTestFeedback sk feedback = do
-  insertTestFeedback sk feedback
+insertAndFinalizeTestFeedback :: SubmissionKey -> [FeedbackInfo] -> Persist ()
+insertAndFinalizeTestFeedback sk testFeedback = do
+  insertTestFeedback sk testFeedback
   finalizeTestFeedback sk
 
 finalizeFeedbacksTest = test $ testCase "Locked feedback tests" $ do
@@ -1237,70 +1324,29 @@ finalizeFeedbacksTest = test $ testCase "Locked feedback tests" $ do
   lockedFeedbackList <- createListRef
   finalizedFeedbackList <- createListRef
   quick 1000 $ do
-    ((_u,_ak),sk) <- pick $ elements ss
-    locked    <- run $ listInRef lockedFeedbackList
-    finalized <- run $ listInRef finalizedFeedbackList
-    case (sk `elem` locked, sk `elem` finalized) of
-      (False, False) -> checkIfCanBeAttached sk lockedFeedbackList
-      (False, True)  -> checkIfThereIsAFeedback sk
-      (True, False)  -> checkIfCanBeFinalized sk finalizedFeedbackList
-      (True, True)   -> checkIfThereIsAFeedback sk
+    ((_u,_ak),(sk, _d)) <- pick $ elements ss
+    locked <- run $ listInRef lockedFeedbackList
+    if sk `elem` locked
+      then checkIfCanBeFinalized sk lockedFeedbackList
+      else checkIfCanBeAttached sk lockedFeedbackList
 
   where
-    checkIfThereIsAFeedback sk =
-      join $ runPersistCmd $ do
+    checkIfCanBeAttached sk locked = do
+      run $ insertListRef locked sk
+      testFeedback <- pick $ Gen.testFeedbackInfo
+      runPersistCmd $ do
+        insertTestFeedback sk testFeedback
         cks <- map fst <$> testFeedbacks
-        return $ do
-          assertTrue (sk `elem` cks) "Test Feedback is not inserted."
+        liftIO $ assertFalse (sk `elem` cks)
+                   "Test Locked Feedback occurs in the feedback list."
 
-    checkIfCanBeAttached sk feedbackList = do
-      run $ insertListRef feedbackList sk
-      feedback <- pick $ Gen.testFeedbackInfo
-      join $ runPersistCmd $ do
-        insertTestFeedback sk feedback
-        cks <- map fst <$> testFeedbacks
-        return $ do
-          assertFalse (sk `elem` cks)
-            "Test Locked Feedback occurs in the feedback list."
-
-    checkIfCanBeFinalized sk feedbackList = do
-      run $ insertListRef feedbackList sk
-      join $ runPersistCmd $ do
+    checkIfCanBeFinalized sk locked = do
+      run $ modifyListRef locked (delete sk)
+      runPersistCmd $ do
         finalizeTestFeedback sk
         cks <- map fst <$> testFeedbacks
-        return $ do
-          assertTrue (sk `elem` cks)
-            "Test Finalized Feedback does not occur in the feedback list."
-
-incomingFeedbacksTest = test $ testCase "Incoming feedbacks" $ do
-  reinitPersistence
-  us <- users 400
-  cs <- courses 50
-  gs <- groups 200 cs
-  as <- courseAndGroupAssignments 200 200 cs gs
-  ss <- submissions 1500 us as
-  feedbackList <- createListRef
-  quick 1000 $ do
-    ((_u,_ak),sk) <- pick $ elements ss
-    cks <- run $ listInRef feedbackList
-    case sk `elem` cks of
-      True  -> checkIfThereIsAFeedback sk
-      False -> checkIfCanBeCommented sk feedbackList
-  where
-    checkIfThereIsAFeedback sk =
-      join $ runPersistCmd $ do
-        cks <- map fst <$> testFeedbacks
-        return $ do
-          assertTrue (sk `elem` cks) "Test Feedback is not inserted"
-
-    checkIfCanBeCommented sk feedbackList = do
-      run $ insertListRef feedbackList sk
-      feedback <- pick $ Gen.testFeedbackInfo
-      join $ runPersistCmd $ do
-        insertAndFinalizeTestFeedback sk feedback
-        cks <- map fst <$> testFeedbacks
-        return $ do
-          assertTrue (sk `elem` cks) "Test Feedback is not inserted"
+        liftIO $ assertTrue (sk `elem` cks)
+                   "Test Finalized Feedback does not occur in the feedback list."
 
 unevaluatedScoresTests = test $ testCase "Unevaluated scores" $ do
   reinitPersistence
@@ -1507,34 +1553,46 @@ openSubmissionsTest = test $ testCase "Open submissions list" $ do
               , show a, " ", show ck, " student ", show u, " submission ", show sk
               ]
 
-deleteIncomingFeedbackTest = test $ testCase "Delete incoming feedbacks" $ do
+queuedForTestFeedbackTest :: TestSet ()
+queuedForTestFeedbackTest = test $ testCase "Insert Queued for test feedbacks" $ do
+  createInterpreter
   reinitPersistence
-  us <- users 400
-  cs <- courses 50
-  gs <- groups 200 cs
-  as <- courseAndGroupAssignments 200 200 cs gs
-  ss <- submissions 1500 us as
-  quick 1000 $ do
-    ((_u,_ak),sk) <- pick $ elements ss
-    sks <- runPersistCmd $ (map fst <$> testFeedbacks)
-    case sk `elem` sks of
-      True  -> checkIfCanBeDeleted   sk
-      False -> checkIfCanBeCommented sk
-  where
-    checkIfCanBeDeleted sk = do
-      join $ runPersistCmd $ do
-        deleteTestFeedbacks sk
-        cks <- map fst <$> testFeedbacks
-        return $ do
-          assertFalse (sk `elem` cks) ("Feedback was not deleted: " ++ show sk)
+  us <- users 100
+  cs <- courses 5
+  gs <- groups 40 cs
+  as <- courseAndGroupAssignments 10 10 cs gs
+  ss <- submissions 100 us as
+  ts <- testScripts 5 cs
+  tck <- testCases 30 ts as
+  let asWithTest = HashSet.fromList $ map fst3 tck
+      allSubms = map (fst . snd) ss
+  quick 500 $ do
+    ((_u, ak), (sk, _d)) <- pick $ elements ss
+    runPersistCmd $ do
+      unAffected <- mapM (\sk -> (,) sk <$> getFeedbacks sk) (delete sk allSubms)
+      fs <- getFeedbacks sk
+      now <- liftIO getCurrentTime
+      queueSubmissionForTest sk
+      fs' <- getFeedbacks sk
+      let fis = map info fs
+          fis' = map info fs'
+      if HashSet.member ak asWithTest
+        then do
+          assertEquals (QueuedForTest : fis) fis' "Queued for test feedback isn't inserted but assignment has test case."
+          let latest = maximumBy (compare `on` postDate) fs'
+          assertEquals QueuedForTest (info latest) "Latest feedback is not 'queued for test'."
+          assertTrue (postDate latest >= now) "Latest feedback is earlier than time of request for testing."
+        else assertEquals fis fis' "Queued for test feedback is inserted but assignment does not have test case."
+      assertUnchanged unAffected
+        where
+          getFeedbacks :: SubmissionKey -> Persist [Feedback]
+          getFeedbacks sk = sortOn postDate <$> (feedbacksOfSubmission sk >>= mapM loadFeedback)
 
-    checkIfCanBeCommented sk = do
-      feedback <- pick $ Gen.testFeedbackInfo
-      join $ runPersistCmd $ do
-        insertAndFinalizeTestFeedback sk feedback
-        cks <- map fst <$> testFeedbacks
-        return $ do
-          assertTrue (sk `elem` cks) "There was no feedback"
+          assertUnchanged :: [(SubmissionKey, [Feedback])] -> Persist ()
+          assertUnchanged unaffected = forM_ unaffected $ \(sk, fs) -> do
+            fs' <- getFeedbacks sk
+            assertEquals fs fs' "A submission got a new feedback but it shouldn't."
+
 {-
 -- All the notifications for comments returns the given comment key, and no feedback key
 saveCommentNotificationTest = test $ testCase "Comment notifications" $ do
@@ -1673,6 +1731,8 @@ startDate = read "2013-03-01 12:00:00"
 endDate :: UTCTime
 endDate = read "2013-03-30 12:00:00"
 
+dates :: [UTCTime]
+dates = map (\sec -> addUTCTime (fromIntegral sec) startDate) ([0..] :: [Int])
 
 tests = do
   ioTest "Init persist interpreter" createInterpreter
@@ -1728,13 +1788,13 @@ complexTests = group "Persistence Layer Complex tests" $ do
   unsubscribeFromSubscribedGroupsTest
   saveLoadAndModifyTestScriptsTest
   saveLoadAndModifyTestCasesTest
+  testCaseOfAssignmentTest
   userFileSaveTest
   userFileCopyTest
   userOverwriteFileTest
   testJobCreationTest
-  incomingFeedbacksTest
+  queuedForTestFeedbackTest
   finalizeFeedbacksTest
-  deleteIncomingFeedbackTest
   openSubmissionsTest
   assessmentTests
   unevaluatedScoresTests

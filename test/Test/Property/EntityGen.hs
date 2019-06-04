@@ -111,8 +111,6 @@ statusMessages = do
         s <- manyWords
         return $ T (n, s)
 
-courseCodes = liftM CourseCode word
-
 courseNames = word
 
 courseDescs = manyWords
@@ -224,13 +222,15 @@ testCases = oneof [
   , TestCase <$> word <*> manyWords <*> (ZippedTestCase . BS.pack <$> manyWords) <*> manyWords
   ]
 
-testFeedbackInfo = oneof
-  [ TestResult <$> arbitrary
-  , MessageForStudent <$> manyWords
-  , MessageForAdmin <$> manyWords
-  ]
+-- Ensure list of feedbacks contains a TestResult.
+testFeedbackInfo :: Gen [FeedbackInfo]
+testFeedbackInfo = do
+  result <- TestResult <$> arbitrary
+  msgForStudent <- MessageForStudent <$> manyWords
+  msgForAdmin <- MessageForAdmin <$> manyWords
+  (result :) <$> sublistOf [msgForStudent, msgForAdmin]
 
-feedbacks date = Feedback <$> testFeedbackInfo <*> (return date)
+feedbacks date = Feedback <$> (testFeedbackInfo >>= elements) <*> (return date)
 
 scores :: Gen Score
 scores = arbitrary

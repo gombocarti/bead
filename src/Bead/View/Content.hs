@@ -72,7 +72,6 @@ module Bead.View.Content (
   , module Bead.View.Translation
   , module Bead.View.BeadContext
   , module Bead.View.Pagelets
-  , module Bead.View.Style
   , module Bead.View.DataBridge
   , module Bead.View.TemplateAndComponentNames
   , module Bead.View.Fay.HookIds
@@ -107,7 +106,6 @@ import Bead.View.I18N
 import Bead.View.Translation
 import Bead.View.TemplateAndComponentNames hiding (tcName)
 import Bead.View.RouteOf
-import Bead.View.Style
 #ifdef TEST
 import Bead.View.Pagelets hiding (invariants)
 #else

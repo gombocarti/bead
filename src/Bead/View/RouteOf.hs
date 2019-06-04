@@ -53,6 +53,8 @@ module Bead.View.RouteOf (
 #endif
   , deleteUsersFromCoursePath
   , deleteUsersFromGroupPath
+  , queueSubmissionForTestPath
+  , queueAllSubmissionsForTestPath
   , unsubscribeFromCoursePath
   , pageRoutePath
   , exportEvaluationsScoresPath
@@ -216,6 +218,12 @@ deleteUsersFromCoursePath = "/delete-users-from-course"
 deleteUsersFromGroupPath :: RoutePath
 deleteUsersFromGroupPath = "/delete-users-from-group"
 
+queueSubmissionForTestPath :: RoutePath
+queueSubmissionForTestPath = "/queue-submission-for-test"
+
+queueAllSubmissionsForTestPath :: RoutePath
+queueAllSubmissionsForTestPath = "/queue-all-submissions-for-test"
+
 unsubscribeFromCoursePath :: RoutePath
 unsubscribeFromCoursePath = "/unsubscribe-from-course"
 
@@ -316,6 +324,8 @@ pageRoutePath = constantsP
 #endif
     deleteUsersFromCoursePath
     deleteUsersFromGroupPath
+    queueSubmissionForTestPath
+    queueAllSubmissionsForTestPath
     unsubscribeFromCoursePath
     exportEvaluationsScoresPath
     exportEvaluationsScoresAllGroupsPath
@@ -378,6 +388,8 @@ pageRequestParams = liftsP
 #endif
   (\ck _ -> [requestParam ck]) -- deleteUsersFromCourse
   (\gk _ -> [requestParam gk]) -- deleteUsersFromGroup
+  (\sk _ -> [requestParam sk]) -- queueSubmissionForTest
+  (\ak _ -> [requestParam ak]) -- queueAllSubmissionsForTest
   (\gk _ -> [requestParam gk]) -- unsubscribeFromCourse
   (\ck _ -> [requestParam ck]) -- exportEvaluationsScores
   (\ck _ -> [requestParam ck]) -- exportEvaluationsScoresAllGroups

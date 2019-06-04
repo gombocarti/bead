@@ -11,14 +11,14 @@ import           Bead.Persistence.SQL.TestScript
 -- * Test Jobs
 
 -- Saves the test job for the test daemon
-saveTestJob :: Domain.SubmissionKey -> Persist ()
+saveTestJob :: Domain.SubmissionKey -> Persist (Maybe FilePath)
 saveTestJob sk = do
   mTestCaseKey <- assignmentOfSubmission sk >>= testCaseOfAssignment
   case mTestCaseKey of
-    Nothing -> return ()
+    Nothing -> return Nothing
     Just tk -> do
       submission <- loadSubmission sk
       testCase <- loadTestCase tk
       testScript <- testScriptOfTestCase tk >>= loadTestScript
-      FS.saveTestJob sk submission testScript testCase
+      Just <$> FS.saveTestJob sk submission testScript testCase
 

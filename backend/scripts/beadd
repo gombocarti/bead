@@ -14,6 +14,8 @@ echo "Starting the BE-AD tester services: "
 
 test -z "${beadd_instances}" && usage
 
+export PATH=/home/builder/.opam/4.02.3/bin:/opt/ghc/bin:$PATH
+
 pids=""
 
 for i in ${beadd_instances}; do

@@ -112,6 +112,7 @@ stateOfSubmission sk = do
       mF <- testFeedback
       return $ case mF of
         Just (Domain.TestResult r) -> Domain.Submission_Tested r
+        Just Domain.QueuedForTest  -> Domain.Submission_QueuedForTest
         _                          -> Domain.Submission_Unevaluated
     Just (ek, evResult) -> return $ Domain.Submission_Result ek evResult
   where
@@ -131,7 +132,8 @@ stateOfSubmission sk = do
     testFeedback = do
       fs <- select $ from $ \(fs `InnerJoin` f) -> do
         on (fs ^. FeedbacksOfSubmissionFeedback Esq.==. f ^. FeedbackId)
-        where_ (fs ^. FeedbacksOfSubmissionSubmission Esq.==. val sk' &&. (f ^. FeedbackInfo `like` val "{\"TestResult\":%"))
+        where_ (fs ^. FeedbacksOfSubmissionSubmission Esq.==. val sk' &&.
+               ((f ^. FeedbackInfo `like` val "{\"TestResult\":%") Esq.||. (f ^. FeedbackInfo Esq.==. val "\"QueuedForTest\"")))
         orderBy [desc (f ^. FeedbackDate)]
         limit 1
         return (f ^. FeedbackInfo)

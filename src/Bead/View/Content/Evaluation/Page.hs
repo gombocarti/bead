@@ -21,7 +21,6 @@ import           Bead.Domain.Evaluation
 import           Bead.View.Content as C
 import           Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.Comments
-import           Bead.View.Content.SeeMore
 import qualified Bead.View.Content.SubmissionState as St
 import           Bead.View.Content.VisualConstants
 
@@ -43,6 +42,7 @@ data PageData = PageData {
     sbmDesc :: SubmissionDesc
   , sbmSubmissionKey :: SubmissionKey
   , sbmEvaluationKey :: Maybe EvaluationKey
+  , hasAssignmentTestCase :: HasTestCase
   , userTime :: UserTimeConverter
   , submissions :: [SubmissionInfo]
   , latestSubmission :: Maybe SubmissionInfo
@@ -53,13 +53,16 @@ evaluationPage = do
   sk <- getParameter submissionKeyPrm
   sd <- userStory (Story.submissionDescription sk)
   tc <- userTimeZoneToLocalTimeConverter
-  subms <- userStory $ do
+  (hasTestCase, subms) <- userStory $ do
     ak <- Story.assignmentOfSubmission sk
-    Story.submissionInfos (eUsername sd) ak
+    infos <- Story.submissionInfos (eUsername sd) ak
+    hasTestCase <- Story.hasAssignmentTestCase ak
+    return (hasTestCase, infos)
   let pageData = PageData {
       sbmDesc = sd
     , sbmSubmissionKey = sk
     , sbmEvaluationKey = Nothing
+    , hasAssignmentTestCase = hasTestCase
     , userTime = tc
     , submissions = subms
     , latestSubmission = listToMaybe subms
@@ -72,13 +75,16 @@ modifyEvaluationPage = do
   ek <- getParameter evaluationKeyPrm
   sd <- userStory (Story.submissionDescription sk)
   tc <- userTimeZoneToLocalTimeConverter
-  subms <- userStory $ do
+  (hasTestCase, subms) <- userStory $ do
     ak <- Story.assignmentOfSubmission sk
-    Story.submissionInfos (eUsername sd) ak
+    infos <- Story.submissionInfos (eUsername sd) ak
+    hasTestCase <- Story.hasAssignmentTestCase ak
+    return (hasTestCase, infos)
   let pageData = PageData {
     sbmDesc = sd
   , sbmSubmissionKey = sk
   , sbmEvaluationKey = Just ek
+  , hasAssignmentTestCase = hasTestCase
   , userTime = tc
   , submissions = subms
   , latestSubmission = listToMaybe subms
@@ -247,22 +253,22 @@ evaluationContent pd = do
       let downloadSubmissionButton =
             Bootstrap.buttonLink
               (routeOf $ Pages.getSubmission submissionKey ())
-              (msg $ msg_Evaluation_Submitted_Solution_Zip_Link "Download")
+              (msg $ msg_Evaluation_Submitted_Solution_Download "Download")
+
+          queueForTestButton =
+            let p = Pages.queueSubmissionForTest submissionKey ()
+            in case hasAssignmentTestCase pd of
+                 HasTestCase         -> Bootstrap.buttonLink (routeOf p) (msg $ linkText p)
+                 DoesNotHaveTestCase -> Bootstrap.disabledButton (msg $ linkText p) (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
 
       h2 $ fromString $ msg $ msg_Evaluation_Submitted_Solution "Submission"
+      Bootstrap.buttonGroup $ downloadSubmissionButton <> queueForTestButton
       if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ sd)
-        then do
-          H.p $ fromString . msg $ msg_Evaluation_Submitted_Solution_Zip_Info $ mconcat
-            [ "The submission was uploaded as a compressed file so it could not be displayed verbatim.  "
-            , "But it may be downloaded as a file by clicking on the link."
-            ]
-          downloadSubmissionButton
-        else do
-          H.p $ fromString . msg $ msg_Evaluation_Submitted_Solution_Text_Info $
-            "The submission may be downloaded as a plain text file by clicking on the link."
-          downloadSubmissionButton
-          H.br
-          H.div # submissionTextDiv $ seeMoreSubmission "submission-text-" msg (eSolution sd)
+        then
+          H.p $ fromString . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
+            "The submission was uploaded as a compressed file so it could not be displayed verbatim."
+        else
+          H.pre $ fromString $ eSolution sd
 
     Bootstrap.rowColMd12 $
       H.p $ fromString . msg $ msg_Evaluation_Info $ concat

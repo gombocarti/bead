@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 module Bead.Daemon.Email (
     EmailDaemon(..)
   , startEmailDaemon
@@ -18,7 +19,7 @@ import           Network.Mail.Mime
 import           Bead.Controller.Logging
 
 {-
-The email daemon recives email from the handlers and
+The email daemon receives email from the handlers and
 send them out with the SendMail client without blocking the
 main application.
 -}
@@ -31,6 +32,11 @@ data EmailDaemon = EmailDaemon {
 -- Starts the email daemon in a different thread and returns the enqueue function
 -- for the thread.
 startEmailDaemon :: Logger -> IO EmailDaemon
+#ifndef EmailEnabled
+startEmailDaemon _ = return mockDaemon
+  where
+    mockDaemon = EmailDaemon $ const (return ())
+#else
 startEmailDaemon logger = do
 
   -- Shared information between sendmail client and the server
@@ -82,7 +88,7 @@ startEmailDaemon logger = do
       let y = f x
       writeTVar t y
       return y
-
+#endif
 -- * Network.Mail.Mime helpers
 
 -- Returns the first address

@@ -27,8 +27,8 @@ submissionTablePage = do
   gk <- CH.getParameter $ Bridge.customGroupKeyPrm Params.groupKeyParamName
   table <- CH.userStory $ S.groupSubmissionTable gk
   return $ Aeson.pairs $ Rel.submissionTableInfoCata
-    (\_ _ _ _ _ _ -> mempty)
-    (\_ _ _ userLines _ _ _ -> Map.foldrWithKey (\ak sks acc -> rawAsgKey ak .= map rawSubmKey sks <> acc) mempty (collectSubmissions userLines))
+    (\_ _ _ _ _ -> mempty)
+    (\_ _ _ userLines _ _ -> Map.foldrWithKey (\ak sks acc -> rawAsgKey ak .= map rawSubmKey sks <> acc) mempty (collectSubmissions userLines))
     table
 
   where

@@ -1,59 +1,53 @@
 module Bead.Persistence.SQL.FileSystem where
 
 import           Control.Applicative ((<$>))
+import           Control.Exception (catch, catchJust, handleJust, SomeException, throwIO)
 import           Control.DeepSeq (deepseq)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           System.IO.Error (userError, isDoesNotExistError)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
-import           Data.List (isSuffixOf)
+import           Data.List (sortOn, isSuffixOf)
 import           Data.Maybe
 import           Data.Time (UTCTime)
 import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import           Data.UUID.V4 (nextRandom)
 import           System.Directory
 import qualified System.Directory as Dir
 import           System.FilePath
 import           System.IO
 import           System.Posix.Types (COff(..))
 import           System.Posix.Files (FileStatus, getFileStatus, fileSize, modificationTimeHiRes)
+import           Text.Read (readEither)
 
 import           Bead.Domain.Entities
 import           Bead.Domain.Relationships
 import           Bead.Domain.Types
 
-datadir = "data"
+data_ :: FilePath
+data_ = "data"
 
-testOutgoingDir = "test-outgoing"
-testIncomingDir = "test-incoming"
-userDir = "user"
+publicDir :: Username -> FilePath
+publicDir = usernameCata (\u -> user </> u </> "public-files")
 
-publicDir :: FilePath
-publicDir = "public-files"
+privateDir :: Username -> FilePath
+privateDir = usernameCata (\u -> user </> u </> "private-files")
 
-privateDir :: FilePath
-privateDir = "private-files"
+testOutgoing, testIncoming :: FilePath
+testOutgoing = joinPath [data_, "test-outgoing"]
+testIncoming = joinPath [data_, "test-incoming"]
+user = joinPath [data_, "user"]
 
-testOutgoingDataDir = joinPath [datadir, testOutgoingDir]
-testIncomingDataDir = joinPath [datadir, testIncomingDir]
-userDataDir = joinPath [datadir, userDir]
-
+fsDirs :: [FilePath]
 fsDirs = [
-    datadir
-  , testOutgoingDataDir
-  , testIncomingDataDir
-  , userDataDir
+    data_
+  , testOutgoing
+  , testIncoming
+  , user
   ]
-
-class DirName d where
-  dirName :: d -> FilePath
-
-instance DirName Username where
-  dirName = usernameCata ((datadir </> "user") </>)
-
-instance DirName TestJobKey where
-  dirName (TestJobKey k) = joinPath [datadir, testOutgoingDir, k]
 
 fileLoad :: (MonadIO io) => FilePath -> io String
 fileLoad fname = liftIO $ do
@@ -87,8 +81,8 @@ fileSaveBS fname s = liftIO $ do
 
 filterDirContents :: (MonadIO io) => (FilePath -> IO Bool) -> FilePath -> io [FilePath]
 filterDirContents f p = liftIO $ do
-  content <- liftM (filter (\d -> not $ or [d == ".", d == ".."])) $ getDirectoryContents p
-  filterM f $ map jp content
+  contents <- listDirectory p
+  filterM f $ map jp contents
     where
       jp x = joinPath [p, x]
 
@@ -101,16 +95,12 @@ getFilesInFolder = filterDirContents doesFileExist
 -- *
 
 initFS :: (MonadIO io) => io ()
-initFS = liftIO $ mapM_ createDirWhenDoesNotExist fsDirs
-  where
-    createDirWhenDoesNotExist d = do
-      existDir <- doesDirectoryExist d
-      unless existDir . createDirectory $ d
+initFS = liftIO $ mapM_ (createDirectoryIfMissing True) fsDirs
 
 removeFS :: (MonadIO io) => io ()
-removeFS = liftIO $ do
-  exists <- doesDirectoryExist datadir
-  when exists $ removeDirectoryRecursive datadir
+removeFS = liftIO $ catchJust (\e -> if isDoesNotExistError e then Just () else Nothing)
+                              (removeDirectoryRecursive data_)
+                              (const $ return ())
 
 isSetUpFS :: (MonadIO io) => io Bool
 isSetUpFS = liftIO . fmap and $ mapM doesDirectoryExist fsDirs
@@ -124,18 +114,12 @@ createDirectoryLocked d m = do
                   
 createUserFileDir :: (MonadIO io) => Username -> io ()
 createUserFileDir u = liftIO $
-  forM_ [privateDir, publicDir] $ \d -> do
-    let dir = dirName u </> d
-    exists <- doesDirectoryExist dir
-    unless exists $ createDirectoryIfMissing True dir
+  forM_ [privateDir u, publicDir u] $ createDirectoryIfMissing True
 
 withUsersDir :: (MonadIO io) => Username -> (FilePath -> FilePath -> io a) -> io a
 withUsersDir username action = do
   createUserFileDir username
-  let dirname = dirName username
-      public  = dirname </> publicDir
-      private = dirname </> privateDir
-  action public private
+  action (publicDir username) (privateDir username)
 
 copyUsersFile :: (MonadIO io) => Username -> FilePath -> UsersFile FilePath -> io ()
 copyUsersFile username tmpPath userfile = 
@@ -154,9 +138,8 @@ fileModificationInUTCTime = posixSecondsToUTCTime . modificationTimeHiRes
 listFiles :: (MonadIO io) => Username -> io [(UsersFile FilePath, FileInfo)]
 listFiles username = liftIO $ do
   createUserFileDir username
-  let dirname = dirName username
-  privateFiles <- f (dirname </> privateDir) UsersPrivateFile
-  publicFiles  <- f (dirname </> publicDir) UsersPublicFile
+  privateFiles <- f (privateDir username) UsersPrivateFile
+  publicFiles  <- f (publicDir username) UsersPublicFile
   return $ privateFiles ++ publicFiles
   where
     f dir typ = do
@@ -184,83 +167,91 @@ getFile username userfile =
         ]
       return fname
 
--- Collects the test script, test case and the submission and copies them to the
--- the directory named after the submission key placed in the test-outgoing directory
-saveTestJob :: (MonadIO io) => SubmissionKey -> Submission -> TestScript -> TestCase -> io ()
+-- Saves the test script, test case and the submission in a new
+-- directory in test-outgoing.
+saveTestJob :: (MonadIO io) => SubmissionKey -> Submission -> TestScript -> TestCase -> io FilePath
 saveTestJob sk submission testScript testCase = liftIO $ do
-  -- If there is a test case, we copy the information to the desired
-  let tjk = submissionKeyToTestJobKey sk
-      tjPath = dirName tjk
-  exists <- doesDirectoryExist tjPath
-  when exists $ error $ concat ["Test job directory already exist:", show tjk]
-  createDirectoryLocked tjPath $ \p -> do
-    fileSave (p </> "script") (tsScript testScript)
+  d <- (testOutgoing </>) . show <$> nextRandom
+  createDirectoryLocked d $ \d' -> do
+    withSubmissionKey sk (fileSave (d' </> "id"))
+    fileSave (d' </> "script") (tsScript testScript)
     -- Save Simple or Zipped Submission
-    withSubmissionValue (solution submission) (flip fileSave) (flip fileSaveBS) (p </> "submission")
+    withSubmissionValue (solution submission) (flip fileSave) (flip fileSaveBS) (d' </> "submission")
     -- Save Simple or Zipped Test Case
-    withTestCaseValue (tcValue testCase) (flip fileSave) (flip fileSaveBS) (p </> "tests")
+    withTestCaseValue (tcValue testCase) (flip fileSave) (flip fileSaveBS) (d' </> "tests")
+  return d
 
 -- Insert the feedback info for the file system part of the database. This method is
 -- used by the tests only, and serves as a model for interfacing with the outside world.
-insertTestFeedback :: (MonadIO io) => SubmissionKey -> FeedbackInfo -> io ()
-insertTestFeedback sk info = liftIO $ do
-  let sDir = submissionKeyMap (testIncomingDataDir </>) sk <.> "locked"
+insertTestFeedback :: (MonadIO io) => SubmissionKey -> [FeedbackInfo] -> io ()
+insertTestFeedback sk feedbacks = liftIO $ do
+  let sDir = submissionKeyMap (testIncoming </>) sk <.> "locked"
   createDirectoryIfMissing True sDir
+  fileSave (sDir </> "id") (submissionKeyMap id sk)
   let student comment = fileSave (sDir </> "public") comment
       admin   comment = fileSave (sDir </> "private") comment
       result  bool    = fileSave (sDir </> "result") (show bool)
-  feedbackInfo result student admin evaluated info
+  mapM_ (feedbackInfo queued result student admin evaluated) feedbacks
   where
     evaluated _ _ = error "insertTestComment: Evaluation should not be inserted by test."
+    queued = error "insertTestComment: QueuedForTest should not be inserted by tests."
 
 finalizeTestFeedback :: (MonadIO io) => SubmissionKey -> io ()
 finalizeTestFeedback sk = liftIO $ do
-  let sDir = submissionKeyMap (testIncomingDataDir </>) sk
+  let sDir = submissionKeyMap (testIncoming </>) sk
   renameDirectory (sDir <.> "locked") sDir
 
--- Test Feedbacks are stored in the persistence layer, in the test-incomming directory
--- each one in a file, named after an existing submission in the system
-testFeedbacks :: (MonadIO io) => io [(SubmissionKey, Feedback)]
-testFeedbacks = liftIO (createFeedbacks =<< processables)
+-- Test Feedbacks are stored in the persistence layer, in the
+-- test-incomming directory each one in a file in a test job
+-- subdirectory.
+testFeedbacks :: (MonadIO io) => io [(SubmissionKey, [Feedback])]
+testFeedbacks = liftIO (createFeedbacks =<< sortOnModificationTime =<< processables)
   where
-    processables = filter (not . (".locked" `isSuffixOf`)) <$>
-      getSubDirectories testIncomingDataDir
+    processables :: IO [FilePath]
+    processables = filter (\p -> not $ or [ ".locked" `isSuffixOf` p
+                                          , ".invalid" `isSuffixOf` p
+                                          ]) <$>
+      getSubDirectories testIncoming
+  
+    sortOnModificationTime :: [FilePath] -> IO [FilePath]
+    sortOnModificationTime dirs =
+      map fst . sortOn snd <$> mapM (\d -> (,) d . fileModificationInUTCTime <$> getFileStatus d) dirs
 
-    createFeedbacks = fmap join . mapM createFeedback
-
-    createFeedback path = do
-      let sk = SubmissionKey . last $ splitDirectories path
-          addKey x = (sk, x)
-
-      files <- getFilesInFolder path
-      fmap (map addKey . catMaybes) $
-        forM files $ \file -> do
-          fileDate <- fileModificationInUTCTime <$> getFileStatus file
-
-          let (_dir,fname) = splitFileName file
-              feedback f = Feedback f fileDate
-
-          case fname of
-            "private" -> Just . feedback . MessageForAdmin <$> fileLoad file
-            "public"  -> Just . feedback . MessageForStudent <$> fileLoad file
-            "result"  -> Just . feedback . TestResult . readMaybeErr file <$> fileLoad file
-            _         -> return Nothing
-
+    createFeedbacks :: [FilePath] -> IO [(SubmissionKey, [Feedback])]
+    createFeedbacks dirs = catMaybes <$> mapM
+      (\p -> (Just <$> createFeedback p <* removeDirectoryRecursive p) `catch` setAside p `catch` eliminateException) dirs
       where
-        readMaybeErr :: (Read a) => FilePath -> String -> a
-        readMaybeErr fp = fromMaybe (error $ "Non-parseable data in file: " ++ fp) . readMaybe
+        setAside :: FilePath -> SomeException -> IO (Maybe (SubmissionKey, [Feedback]))
+        setAside p exc = do
+          let invalid = p ++ ".invalid"
+          renameDirectory p invalid
+          fileSave (invalid </> "reason") (show exc)
+          return Nothing
 
--- Deletes the comments (test-agent and message as well)
--- contained file from the test-incomming directory, named after
--- an existing submission
-deleteTestFeedbacks :: (MonadIO io) => SubmissionKey -> io ()
-deleteTestFeedbacks = liftIO .
-  submissionKeyMap (removeDirectoryRecursive . (testIncomingDataDir </>))
+        eliminateException :: SomeException -> IO (Maybe (SubmissionKey, [Feedback]))
+        eliminateException _ = return Nothing
 
+    createFeedback :: FilePath -> IO (SubmissionKey, [Feedback])
+    createFeedback path = do
+      sk <- SubmissionKey <$> fileLoad (path </> "id")
+      msgForAdmin <- optional $ getFeedback (Right . MessageForAdmin) "private"
+      msgForStudent <- optional $ getFeedback (Right . MessageForStudent) "public"
+      testResult <- getFeedback (fmap TestResult . readEither) "result"
+      return (sk, testResult : catMaybes [msgForAdmin, msgForStudent])
+        where
+          optional :: IO a -> IO (Maybe a)
+          optional m =
+            handleJust
+              (\exc -> if isDoesNotExistError exc then Just () else Nothing)
+              (\_ -> return Nothing)
+              (Just <$> m)
 
--- Removes the file if exists, otherwise do nothing
-removeFileIfExists :: FilePath -> IO ()
-removeFileIfExists path = do
-  exists <- doesFileExist path
-  when exists $ removeFile path
-
+          getFeedback :: (String -> Either String FeedbackInfo) -> FilePath -> IO Feedback
+          getFeedback f file = do
+            contents <- fileLoad (path </> file)
+            case f contents of
+              Right info -> do
+                timestamp <- fileModificationInUTCTime <$> getFileStatus (path </> file)
+                return  $ Feedback info timestamp
+              Left err ->
+                throwIO $ userError $ concat ["Non-parseable data in file ", file, ": ", err]

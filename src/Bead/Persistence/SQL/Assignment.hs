@@ -151,8 +151,8 @@ assignmentCreatedTime key = do
 -- returns (Just key) if there is, otherwise Nothing
 testCaseOfAssignment :: Domain.AssignmentKey -> Persist (Maybe Domain.TestCaseKey)
 testCaseOfAssignment key = do
-  testCases <- selectList [TestCaseOfAssignmentAssignment ==. toEntityKey key] []
-  return $! fmap (toDomainKey . testCaseOfAssignmentTestCase . entityVal) (listToMaybe testCases)
+  testCase <- selectFirst [TestCaseOfAssignmentAssignment ==. toEntityKey key] []
+  return $! fmap (toDomainKey . testCaseOfAssignmentTestCase . entityVal) testCase
 
 #ifdef TEST
 

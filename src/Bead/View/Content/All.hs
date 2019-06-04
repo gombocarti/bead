@@ -18,6 +18,7 @@ import Bead.View.Content.Administration.Page
 import Bead.View.Content.EvaluationTable.Page
 import Bead.View.Content.Evaluation.Page
 import Bead.View.Content.Assignment.Page
+import Bead.View.Content.QueueSubmissionForTest (queueSubmissionForTest, queueAllSubmissionsForTest)
 import Bead.View.Content.Submission.Page
 import Bead.View.Content.SubmissionDetails.Page
 import Bead.View.Content.GroupRegistration.Page
@@ -82,6 +83,8 @@ pageContent = Pages.constantsP
 #endif
   deleteUsersFromCourse
   deleteUsersFromGroup
+  queueSubmissionForTest
+  queueAllSubmissionsForTest
   unsubscribeFromCourse
   exportEvaluationsScores
   exportEvaluationsScoresAllGroups

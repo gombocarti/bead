@@ -155,4 +155,3 @@ data ServiceContext = ServiceContext {
 
 serviceContext :: Logger -> Persist.Interpreter -> ServiceContext
 serviceContext = ServiceContext
-

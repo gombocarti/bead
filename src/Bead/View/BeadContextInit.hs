@@ -20,9 +20,7 @@ import           System.Directory
 
 import           Bead.Config
 import           Bead.Controller.ServiceContext as S hiding (serviceContext)
-#ifdef EmailEnabled
-import           Bead.Daemon.Email
-#endif
+import           Bead.Daemon.Email (EmailDaemon)
 #ifdef SSO
 import           Bead.Daemon.LDAP
 #endif
@@ -36,26 +34,16 @@ import           Bead.View.Dictionary (dictionaries, Language(..))
 import           Bead.View.Markdown (syntaxHighlightCss)
 import           Bead.View.Routing
 
-
-beadConfigFileName :: String
-beadConfigFileName = "bead.config"
-
 iconFileName :: String
 iconFileName = "icon.ico"
 
--- The collection of the daemons that are neccesary to create the
+-- The collection of the daemons that are necessary to create the
 -- application
 -- TODO: Use lenses for optional fields.
 data Daemons = Daemons {
-#ifdef EmailEnabled
     emailDaemon  :: EmailDaemon
-#endif
 #ifdef SSO
-#ifdef EmailEnabled
   , ldapDaemon   :: LDAPDaemon
-#else
-    ldapDaemon   :: LDAPDaemon
-#endif
 #endif
   }
 
@@ -92,12 +80,9 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
 
   tz <- nestSnaplet "timezoneconveter" timeZoneContext $ createTimeZoneContext timeZoneConverter
 
-  dl <- nestSnaplet "debuglogger" debugLoggerContext $ createDebugLogger
-
 #ifdef SSO
-  ldap <- do
-    nestSnaplet "ldap-config" ldapContext $
-      createLDAPContext (LDAP $ ldapDaemon daemons)
+  ldap <- nestSnaplet "ldap-config" ldapContext $
+            createLDAPContext (LDAP $ ldapDaemon daemons)
 #endif
 
   addRoutes (routes config)
@@ -107,15 +92,15 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
   return $
 #ifdef SSO
 #ifdef EmailEnabled
-    BeadContext auth ss ds se rp ts cs tz dl ldap
+    BeadContext auth ss ds se rp ts cs tz ldap
 #else
-    BeadContext auth ss ds rp ts cs tz dl ldap
+    BeadContext auth ss ds rp ts cs tz ldap
 #endif
 #else
 #ifdef EmailEnabled
-    BeadContext auth ss ds se rp ts cs un tz dl
+    BeadContext auth ss ds se rp ts cs un tz
 #else
-    BeadContext auth ss ds rp ts cs un tz dl
+    BeadContext auth ss ds rp ts cs un tz
 #endif
 #endif
   where

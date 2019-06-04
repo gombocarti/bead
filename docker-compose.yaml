@@ -3,6 +3,7 @@ services:
   bead-test:
     image: poora/bead-dev
     entrypoint: ["/development/bead/docker/travis-test.sh"]
+    working_dir: /bead-server
     depends_on:
       - mysql
     networks:
@@ -11,6 +12,8 @@ services:
       - type: bind
         source: ./
         target: /development/bead
+      - type: volume
+        target: /bead-server
     user: dev
 
   mysql:

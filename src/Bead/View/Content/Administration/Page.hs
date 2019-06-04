@@ -117,9 +117,6 @@ administrationContent info = do
     assignCourseAdmin = Pages.assignCourseAdmin ()
     userDetails       = Pages.userDetails ()
 
-    headerCell = H.th # (informationalCell <> grayBackground)
-    dataCell   = H.td # informationalCell
-
     testScriptTypes msg = [
         (TestScriptSimple, msg $ msg_Input_TestScriptSimple "Simple")
       , (TestScriptZipped, msg $ msg_Input_TestScriptZipped "Zipped")

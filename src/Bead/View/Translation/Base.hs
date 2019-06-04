@@ -108,6 +108,10 @@ labels =
  , "msg_Administration_CourseAdmins_Course"
  , "msg_Administration_CourseAdmins_Admins"
 
+ , "msg_AssignmentDoesntHaveSubmissions"
+ , "msg_AssignmentDoesntHaveTestCase"
+ , "msg_SubmissionWillBeTested"
+
  , "msg_NewAssignment_Title"
  , "msg_NewAssignment_Title_Default"
  , "msg_NewAssignment_SubmissionDeadline"
@@ -199,8 +203,8 @@ labels =
 
  , "msg_Submission_Course"
  , "msg_Submission_Assignment"
+ , "msg_Submission_Test"
  , "msg_Submission_Deadline"
- , "msg_Submission_Description"
  , "msg_Submission_Solution"
  , "msg_Submission_Submit"
  , "msg_Submission_TimeLeft"
@@ -222,7 +226,6 @@ labels =
  , "msg_Submission_NoTriesLeft"
  , "msg_Submission_LimitReached"
  , "msg_Submission_Large_Submission"
- , "msg_Submission_Collapse_Submission"
  , "msg_Submission_NoSubmittedSolutions"
  , "msg_Submission_NotFound"
  , "msg_Submission_NotEvaluatedYet"
@@ -237,6 +240,7 @@ labels =
  , "msg_Comments_SubmitButton"
  , "msg_Comments_AuthorTestScript_Public"
  , "msg_Comments_AuthorTestScript_Private"
+ , "msg_Comments_QueuedForTest"
  , "msg_Comments_TestPassed"
  , "msg_Comments_TestFailed"
  , "msg_Comments_BinaryResultPassed"
@@ -250,10 +254,8 @@ labels =
  , "msg_Evaluation_Student"
  , "msg_Evaluation_SaveButton"
  , "msg_Evaluation_Submitted_Solution"
- , "msg_Evaluation_Submitted_Solution_Text_Info"
- , "msg_Evaluation_Submitted_Solution_Text_Link"
+ , "msg_Evaluation_Submitted_Solution_Download"
  , "msg_Evaluation_Submitted_Solution_Zip_Info"
- , "msg_Evaluation_Submitted_Solution_Zip_Link"
  , "msg_Evaluation_Accepted"
  , "msg_Evaluation_Rejected"
  , "msg_Evaluation_New_Comment"
@@ -412,6 +414,7 @@ labels =
  , "msg_Home_SubmissionCell_NoSubmission"
 
  , "msg_SubmissionState_NonEvaluated"
+ , "msg_SubmissionState_QueuedForTest"
  , "msg_SubmissionState_Accepted"
  , "msg_SubmissionState_Rejected"
  , "msg_SubmissionState_Tests_Failed"
@@ -520,6 +523,7 @@ labels =
  , "msg_UserStoryError_EmptyAssignmentDescription"
  , "msg_UserStoryError_NonAdministratedCourse"
  , "msg_UserStoryError_NonAdministratedGroup"
+ , "msg_UserStoryError_NotCourseOrGroupAdmin"
  , "msg_UserStoryError_NonAdministratedAssignment"
  , "msg_UserStoryError_NonAdministratedAssessment"
  , "msg_UserStoryError_NonRelatedAssignment"
@@ -573,6 +577,8 @@ labels =
  , "msg_LinkText_SetUserPassword"
  , "msg_LinkText_DeleteUsersFromCourse"
  , "msg_LinkText_DeleteUsersFromGroup"
+ , "msg_LinkText_QueueSubmissionForTest"
+ , "msg_LinkText_QueueAllSubmissionsForTest"
  , "msg_LinkText_UnsubscribeFromCourse"
  , "msg_LinkText_ExportEvaluations"
  , "msg_LinkText_ExportEvaluationsAllGroups"
@@ -602,7 +608,6 @@ labels =
  , "msg_Domain_FreeForm"
 
  , "msg_SeeMore_SeeMore"
- , "msg_SeeMore_SeeLess"
 
  , "msg_Markdown_NotFound"
 

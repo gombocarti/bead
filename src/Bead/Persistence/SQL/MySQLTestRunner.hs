@@ -38,9 +38,9 @@ runSql :: Persist a -> IO a
 runSql p = do
   createInterpreter
   reinitPersistence
-  runPersistIOCmd $ do
-    p
+  runPersistIOCmd p
 
+reinitPersistence :: IO ()
 reinitPersistence = do
   init <- createPersistInit defaultConfig
   tearDown init

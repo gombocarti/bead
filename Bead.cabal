@@ -150,7 +150,6 @@ Library
       Bead.Persistence.SQL.Submission
       Bead.Persistence.SQL.TestCase
       Bead.Persistence.SQL.TestData
-      Bead.Persistence.SQL.TestFeedback
       Bead.Persistence.SQL.TestJob
       Bead.Persistence.SQL.TestScript
       Bead.Persistence.SQL.User
@@ -173,7 +172,6 @@ Library
     CPP-Options: -DEmailEnabled
 
     Exposed-Modules:
-      Bead.Daemon.Email
       Bead.View.EmailTemplate
       Bead.View.ResetPassword
 
@@ -200,6 +198,7 @@ Library
     monad-logger,
     mtl,
     pandoc,
+    pandoc-types,
     process,
     random,
     regex-tdfa,
@@ -241,6 +240,7 @@ Library
     Bead.Controller.Pages
     Bead.Controller.ServiceContext
     Bead.Controller.UserStories
+    Bead.Daemon.Email
     Bead.Daemon.TestAgent
     Bead.Domain.Entity.Assessment
     Bead.Domain.Entity.Assignment
@@ -287,6 +287,7 @@ Library
     Bead.View.Content.Public.Index
     Bead.View.Content.Public.Registration
     Bead.View.Content.Public.ResetPassword
+    Bead.View.Content.QueueSubmissionForTest
     Bead.View.Content.Rest.SubmissionTable.Page
     Bead.View.Content.Score.Page
     Bead.View.Content.Submission.Common
@@ -303,7 +304,6 @@ Library
     Bead.View.Content.GetSubmission
     Bead.View.Content.GetCsv
     Bead.View.Content.ScoreInfo
-    Bead.View.Content.SeeMore
     Bead.View.Content.SubmissionState
     Bead.View.Content.SubmissionTable
     Bead.View.Content.VisualConstants
@@ -324,7 +324,6 @@ Library
     Bead.View.RequestParams
     Bead.View.RouteOf
     Bead.View.Routing
-    Bead.View.Style
     Bead.View.TemplateAndComponentNames
     Bead.View.Translation.Base
     Bead.View.Translation.Entries
@@ -357,11 +356,13 @@ Executable BeadTest
   Build-Depends:
     base,
     Bead,
+    blaze-html,
     bytestring,
     containers,
     directory,
     filepath,
     HUnit,
+    MissingH,
     mtl,
     QuickCheck,
     snap,
@@ -374,7 +375,8 @@ Executable BeadTest
     time,
     transformers,
     unordered-containers,
-    uuid
+    uuid,
+    xmlhtml
   if flag(SSO)
     CPP-Options: -DSSO -DTEST
   else
@@ -396,6 +398,7 @@ Executable BeadTest
     Test.Unit.Module
     Test.Unit.Persistence
     Test.Unit.UserStory
+    Test.View
 
   if flag(Tests)
     Buildable:      True
