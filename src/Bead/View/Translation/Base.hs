@@ -205,7 +205,6 @@ labels =
  , "msg_Submission_Assignment"
  , "msg_Submission_Test"
  , "msg_Submission_Deadline"
- , "msg_Submission_Description"
  , "msg_Submission_Solution"
  , "msg_Submission_Submit"
  , "msg_Submission_TimeLeft"
@@ -227,7 +226,6 @@ labels =
  , "msg_Submission_NoTriesLeft"
  , "msg_Submission_LimitReached"
  , "msg_Submission_Large_Submission"
- , "msg_Submission_Collapse_Submission"
  , "msg_Submission_NoSubmittedSolutions"
  , "msg_Submission_NotFound"
  , "msg_Submission_NotEvaluatedYet"
@@ -610,7 +608,6 @@ labels =
  , "msg_Domain_FreeForm"
 
  , "msg_SeeMore_SeeMore"
- , "msg_SeeMore_SeeLess"
 
  , "msg_Markdown_NotFound"
 

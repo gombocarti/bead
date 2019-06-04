@@ -120,16 +120,7 @@ listGroupAlertLinkItem alert route text = H.a ! href (fromString route) ! class_
 -- | Creates a texted list group item
 listGroupTextItem text = H.li ! class_ "list-group-item" $ fromString text
 
--- | Creates a badge that can be displayed in the list group
-badgeColored :: ToMarkup a => Alert -> a -> H.Html
-badgeColored alert text = H.span
-                            ! class_ (toValue $ unwords ["badge", alertColor])
-                            $ toMarkup text
-    where
-      alertColor :: String
-      alertColor = alertAlgebra "success" "info" "warning" "danger" alert
-
--- | Creates a badge that can be displayed in the list group
+-- | Creates a badge that can be displayed in list group
 badge :: ToMarkup a => a -> H.Html
 badge text = H.span ! class_ "badge" $ toMarkup text
 
@@ -145,15 +136,20 @@ buttonGroupJustified = H.div ! class_ "btn-group btn-group-justified"
 -- | Creates a button group
 buttonGroup = H.div ! class_ "btn-group"
 
--- | Creates a button link with custom button attribute, a route to point
--- a title and a text to show
-customButtonLink :: ToMarkup a => [String] -> String -> String -> a -> Html
-customButtonLink custom ref ttl text =
+buttonOnClick :: ToMarkup a => String -> a -> String -> Html
+buttonOnClick ttl text onclick = customButton ["btn-default"] ttl text ! A.onclick (toValue onclick)
+
+customButton :: ToMarkup a => [String] -> String -> a -> Html
+customButton custom ttl text =
   a ! class_ (toValue ("btn " <> (unwords custom)))
     ! customAttribute "role" "button"
     ! A.title (toValue ttl)
-    ! href (toValue ref)
-    $ (toMarkup text)
+    $ toMarkup text
+
+-- | Creates a button link with custom button attribute, a route to point
+-- a title and a text to show
+customButtonLink :: ToMarkup a => [String] -> String -> String -> a -> Html
+customButtonLink custom ref ttl text = customButton custom ttl text ! href (toValue ref)
 
 -- | Creates a button styled link
 buttonLink :: ToMarkup a => String -> a -> Html
@@ -582,6 +578,15 @@ selectionOptionalPart :: (Show a, Data a) =>
 selectionOptionalPart name attrs def = foldl (!) (selectOptionalTag name) attrs . mapM_ option
   where
     option (v,t) = optionTag (encode "selection" v) t (def v)
+
+panel :: Maybe Html -> Html -> Html
+panel heading body = H.div
+                       ! class_ "panel panel-default"
+                       $ do maybe mempty (H.div ! class_ "panel-heading") heading
+                            H.div ! class_ "panel-body" $ body
+
+plainPre :: Html -> Html
+plainPre = H.pre ! A.style "background-color: unset; border: unset"
 
 -- Collapsible
 

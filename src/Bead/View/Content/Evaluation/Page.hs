@@ -21,7 +21,6 @@ import           Bead.Domain.Evaluation
 import           Bead.View.Content as C
 import           Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.Comments
-import           Bead.View.Content.SeeMore
 import qualified Bead.View.Content.SubmissionState as St
 import           Bead.View.Content.VisualConstants
 
@@ -269,7 +268,7 @@ evaluationContent pd = do
           H.p $ fromString . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
             "The submission was uploaded as a compressed file so it could not be displayed verbatim."
         else
-          H.div # submissionTextDiv $ seeMoreSubmission "submission-text-" msg (eSolution sd)
+          H.pre $ fromString $ eSolution sd
 
     Bootstrap.rowColMd12 $
       H.p $ fromString . msg $ msg_Evaluation_Info $ concat

@@ -378,11 +378,6 @@ managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
 courseButtonStyle = ("btn-hcao", "btn-hcac")
 groupButtonStyle  = ("btn-hgao", "btn-hgac")
 
-openCourseAssignmentStyle = backgroundColor "#52B017"
-openGroupAssignmentStyle  = backgroundColor "#00FF00"
-closedCourseAssignmentStyle = backgroundColor "#736F6E"
-closedGroupAssignmentStyle = backgroundColor "#A3AFAE"
-
 -- * Colors
 
 newtype RGB = RGB (Int, Int, Int)

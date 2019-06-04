@@ -28,7 +28,6 @@ import qualified Bead.View.I18N as I18N
 import           Bead.View.I18N (IHtml, translate, getI18N)
 import           Bead.View.Markdown (syntaxHighlightCss)
 import           Bead.View.RouteOf
-import           Bead.View.Style
 import           Bead.View.TemplateAndComponentNames
 import           Bead.View.Translation
 import qualified Bead.View.Content.Bootstrap as Bootstrap

@@ -198,6 +198,7 @@ Library
     monad-logger,
     mtl,
     pandoc,
+    pandoc-types,
     process,
     random,
     regex-tdfa,
@@ -303,7 +304,6 @@ Library
     Bead.View.Content.GetSubmission
     Bead.View.Content.GetCsv
     Bead.View.Content.ScoreInfo
-    Bead.View.Content.SeeMore
     Bead.View.Content.SubmissionState
     Bead.View.Content.SubmissionTable
     Bead.View.Content.VisualConstants
@@ -324,7 +324,6 @@ Library
     Bead.View.RequestParams
     Bead.View.RouteOf
     Bead.View.Routing
-    Bead.View.Style
     Bead.View.TemplateAndComponentNames
     Bead.View.Translation.Base
     Bead.View.Translation.Entries
@@ -357,6 +356,7 @@ Executable BeadTest
   Build-Depends:
     base,
     Bead,
+    blaze-html,
     bytestring,
     containers,
     directory,
@@ -375,7 +375,8 @@ Executable BeadTest
     time,
     transformers,
     unordered-containers,
-    uuid
+    uuid,
+    xmlhtml
   if flag(SSO)
     CPP-Options: -DSSO -DTEST
   else

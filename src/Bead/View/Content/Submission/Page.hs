@@ -31,7 +31,7 @@ import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import qualified Bead.View.Content.SubmissionState as St
 import           Bead.View.Content.Submission.Common
-import           Bead.View.Markdown (markdownToHtml)
+import           Bead.View.Markdown (markdownToHtml, minHeaderLevel)
 
 submission = ViewModifyHandler submissionPage submissionPostHandler
 
@@ -191,15 +191,14 @@ submissionContent p = do
         (const $ limitReached msg)
         (asLimit p)
 
-    Bootstrap.rowColMd12 H.hr
-
     Bootstrap.rowColMd12 $ do
       let submissions = asSubmissions p
       userSubmissionInfo msg submissions
- 
-    Bootstrap.rowColMd12 $ do
-      H.h2 $ fromString $ msg $ msg_Submission_Description "Description"
-      H.div # assignmentTextDiv $ markdownToHtml $ Assignment.desc $ asValue p
+
+    Bootstrap.rowColMd12 H.hr
+
+    Bootstrap.rowColMd12 $
+      minHeaderLevel 2 . markdownToHtml $ Assignment.desc $ asValue p
 
   where
     submission = Pages.submission (asKey p) ()

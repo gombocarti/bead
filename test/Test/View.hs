@@ -17,6 +17,7 @@ import           Bead.View.AuthToken (Cookie(..), AuthTokenManager(encryptCookie
 import           Bead.View.BeadContext (BeadContext)
 import           Bead.View.BeadContextInit (beadContextInit, Daemons(Daemons))
 import           Bead.View.Logger (createSnapLogger, snapLogger)
+import           Bead.View.Markdown (markdownToHtml, headersToDiv, minHeaderLevel)
 import           Bead.View.RequestParams (ReqParam(ReqParam))
 import           Bead.View.RouteOf (pageRoutePath, pageRequestParams, routeOf)
 import           Bead.View.Routing (pages)
@@ -30,6 +31,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Data.Bifunctor (bimap)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
+import           Data.ByteString.Lazy (toStrict)
 import           Data.Either.Utils (forceEitherMsg)
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet
@@ -39,6 +41,7 @@ import           Data.Maybe (catMaybes)
 import           Data.Ord (Down(Down))
 import           Data.UUID (UUID)
 import           Data.UUID.V4 (nextRandom)
+import qualified Data.Text as T
 import           Snap.Core (Response)
 import qualified Snap.Core as Snap
 import           Snap.Test (addHeader, assertRedirectTo, assertBodyContains, assertSuccess)
@@ -48,14 +51,18 @@ import           Snap.Snaplet.Test (InitializerState)
 import qualified Snap.Snaplet.Test as Snap
 import           System.Directory (getTemporaryDirectory)
 import           Test.QuickCheck (generate, elements, suchThat)
-import           Test.Tasty (TestTree)
+import           Text.Blaze.Html.Renderer.Utf8 (renderHtml)
+import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.TestSet (TestSet, test, ioTest, group)
-import           Test.Tasty.HUnit (testCase, assertEqual, Assertion)
+import           Test.Tasty.HUnit (testCase, assertEqual, assertBool, Assertion)
+import           Text.Blaze.Html5 (Html)
+import qualified Text.XmlHtml as Html
 
 tests :: TestSet ()
 tests = group "View tests" $ do
   ioTest "Init persist interpreter" Prop.createInterpreter
   test queueSubmissionsForTest
+  test markdown
 
 initBead :: IO (SnapletInit BeadContext BeadContext, P.Interpreter)
 initBead = do
@@ -487,3 +494,77 @@ queueSubmissionsForTest = testCase "Test queuing submissions for test" $ do
       ckGk <- P.courseOrGroupOfAssignment ak
       users <- either P.subscribedToCourse P.subscribedToGroup ckGk
       catMaybes <$> mapM (P.lastSubmission ak) users
+
+markdown :: TestTree
+markdown = testGroup "Markdown conversion and transformation tests"
+  [ testCase "headersToDiv tests" testHeadersToDiv
+  , testCase "minHeaderLevel tests" testMinHeaderLevel
+  ]
+
+  where
+    testHeadersToDiv :: IO ()
+    testHeadersToDiv = do
+      let html' = headersToDiv html
+          doc = Html.Element "root" [] $ Html.docContent $ forceEitherMsg "Error while parsing html'" $ Html.parseHTML "html'" . toStrict . renderHtml $ html'
+          [header1, header2, header3] = Html.childElementsTag "div" doc
+      assertBool "First div is not h1 header." $  "h1 header" `T.isSuffixOf` Html.nodeText header1
+      assertBool "H1 header class is not h1." $ Html.getAttribute "class" header1 == Just "h1"
+      assertBool "Second header is not h2 header." $  "h2 header" `T.isSuffixOf` Html.nodeText header2
+      assertBool "H2 header class is not h2." $ Html.getAttribute "class" header2 == Just "h2"
+      assertBool "Third header is not h5 header." $  "h5 header" `T.isSuffixOf` Html.nodeText header3
+      assertBool "H5 header class is not h5." $ Html.getAttribute "class" header3 == Just "h5"
+      let [p1, p2, p3] = Html.childElementsTag "p" doc
+      assertBool "Paragraph 1 changed." $ Html.nodeText p1 == "paragraph 1"
+      assertBool "Paragraph 2 changed." $ Html.nodeText p2 == "paragraph 2"
+
+      let Just a = Html.childElementTag "a" p3
+      assertBool "Tag 'a' does not refer to the specified url." $ Html.getAttribute "href" a == Just "http://example.com"
+      assertBool "Tag 'a' does not have the specified text." $ Html.nodeText a == "a link"
+      let Just ul = Html.childElementTag "ul" doc
+      case Html.childElements ul of
+        [_,_] -> return ()
+        _ -> fail "Tag 'ul' does not have two children."
+
+    testMinHeaderLevel :: IO ()
+    testMinHeaderLevel = do
+      let html' = minHeaderLevel 3 html
+          doc = Html.Element "root" [] $ Html.docContent $ forceEitherMsg "Error while parsing html'" $ Html.parseHTML "html'" . toStrict . renderHtml $ html'
+          Just header1 = Html.childElementTag "h3" doc
+          Just header2 = Html.childElementTag "h4" doc
+          Just header3 = Html.childElementTag "h6" doc
+      assertBool "First header is not h1 header." $  "h1 header" `T.isSuffixOf` Html.nodeText header1
+      assertBool "H1 header class is not empty." $ Html.getAttribute "class" header1 == Nothing
+      assertBool "Second header is not h2 header." $  "h2 header" `T.isSuffixOf` Html.nodeText header2
+      assertBool "H2 header class is not empty." $ Html.getAttribute "class" header2 == Nothing
+      assertBool "Third header is not h5 header." $  "h5 header" `T.isSuffixOf` Html.nodeText header3
+      assertBool "H5 header class is not empty." $ Html.getAttribute "class" header3 == Nothing
+      let [p1, p2, p3] = Html.childElementsTag "p" doc
+      assertBool "Paragraph 1 changed." $ Html.nodeText p1 == "paragraph 1"
+      assertBool "Paragraph 2 changed." $ Html.nodeText p2 == "paragraph 2"
+
+      let Just a = Html.childElementTag "a" p3
+      assertBool "Tag 'a' does not refer to the specified url." $ Html.getAttribute "href" a == Just "http://example.com"
+      assertBool "Tag 'a' does not have the specified text." $ Html.nodeText a == "a link"
+      let Just ul = Html.childElementTag "ul" doc
+      case Html.childElements ul of
+        [_,_] -> return ()
+        _ -> fail "Tag 'ul' does not have two children."
+
+    html :: Html
+    html = markdownToHtml md
+
+    md = unlines [ "# h1 header"
+                 , "paragraph 1"
+                 , ""
+                 , "## h2 header"
+                 , ""
+                 , "paragraph 2"
+                 , ""
+                 , "##### h5 header"
+                 , ""
+                 , "[a link](http://example.com)"
+                 , ""
+                 , "  - list item 1"
+                 , "  - list item 2"
+                 , ""
+                 ]
