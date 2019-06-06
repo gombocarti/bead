@@ -230,7 +230,8 @@ submissionContent p = do
                   fileInput (fieldName submissionFileField)
               else
                 Bootstrap.textArea (fieldName submissionTextField) "" Bootstrap.Medium ""
-            Bootstrap.submitButton (fieldName submitSolutionBtn) (fromString $ msg $ msg_Submission_Submit "Submit")
+            -- alert has 20px spacing at the bottom
+            Bootstrap.submitButton (fieldName submitSolutionBtn) (fromString $ msg $ msg_Submission_Submit "Submit") ! A.style "margin-bottom: 20px;"
         else
           Bootstrap.alert Bootstrap.Danger $ H.p $ fromString . msg $
             msg_Submission_SubmissionFormDeadlineReached "Deadline is reached."
