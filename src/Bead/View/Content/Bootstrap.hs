@@ -585,9 +585,6 @@ panel heading body = H.div
                        $ do maybe mempty (H.div ! class_ "panel-heading") heading
                             H.div ! class_ "panel-body" $ body
 
-plainPre :: Html -> Html
-plainPre = H.pre ! A.style "background-color: unset; border: unset"
-
 -- Collapsible
 
 -- | Creates a panel group
