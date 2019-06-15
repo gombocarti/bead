@@ -19,6 +19,7 @@ Data-Files:
 
   static/fonts/glyphicons-halflings-regular.woff,
   static/fonts/glyphicons-halflings-regular.ttf,
+  static/bead.css,
   static/bootstrap.custombutton.css,
   static/bootstrap.min.css,
   static/bootstrap.min.js,

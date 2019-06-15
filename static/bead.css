@@ -1,0 +1,11 @@
+.comment {
+    background-color: unset;
+    border: unset;
+    white-space: pre-wrap;
+    word-break: normal
+}
+
+.filename {
+    background-color: unset;
+    border: unset;
+}

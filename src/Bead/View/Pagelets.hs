@@ -60,6 +60,7 @@ bootStrapDocument settings body' = do
         css "/jquery-ui.css"
         js "/jquery-ui.js"
         js "/moment.js"
+        css "/bead.css"
         css "/bootstrap.min.css"
         css "/bootstrap.custombutton.css"
         js "/bootstrap.min.js"

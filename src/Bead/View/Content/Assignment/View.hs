@@ -561,7 +561,7 @@ newAssignmentContent pd = do
           testCaseText (Just (_,tc,_)) = withTestCaseValue (tcValue tc) Just (const Nothing)
 
           testCaseFileName Nothing = mempty
-          testCaseFileName (Just (_,tc',_)) = Bootstrap.plainPre $ fromString $ tcInfo tc'
+          testCaseFileName (Just (_,tc',_)) = H.pre ! A.class_ "filename" $ fromString $ tcInfo tc'
 
           viewTestCaseArea ts tc = maybe
             (return ())

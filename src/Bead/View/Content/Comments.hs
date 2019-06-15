@@ -118,7 +118,7 @@ seeMoreComment i18n id_ t (n, c) =
       in
         Bootstrap.panel Nothing $ do
           heading
-          Bootstrap.plainPre $ do
+          H.pre ! A.class_ "comment" $ do
             fromString preview
             when isLargeContent $ do
               H.span ! A.id (fromString dotsId) $ fromString " ..."
