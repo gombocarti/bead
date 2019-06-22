@@ -235,6 +235,7 @@ data SubmissionTableInfo
     , stiUsers       :: [Username]      -- Alphabetically ordered list of usernames
     , stiAssignments :: [(AssignmentKey, Assignment, HasTestCase)] -- Cronologically ordered list of assignments
     , stiUserLines   :: [(UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))]
+    , stiGroups :: Map Username (Group, [User])
     , stiCourseKey :: CourseKey
     }
   | GroupSubmissionTableInfo {
@@ -250,8 +251,8 @@ submissionTableInfoCata
   course
   group
   ti = case ti of
-    CourseSubmissionTableInfo crs users asgs lines key ->
-                       course crs users asgs lines key
+    CourseSubmissionTableInfo crs users asgs lines groups key ->
+                       course crs users asgs lines groups key
     GroupSubmissionTableInfo  crs users asgs lines ckey gkey ->
                        group  crs users asgs lines ckey gkey
 

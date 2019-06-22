@@ -446,15 +446,24 @@ mkCourseSubmissionTableInfo
 mkCourseSubmissionTableInfo courseName us as key = do
   assignments <- sortKeysByTime assignmentCreatedTime as
   assignmentInfos <- loadAssignmentInfos as
-  ulines <- forM us $ \u -> do
+  users <- subscribedToCourse key
+  ulines <- forM users $ \u -> do
     ud <- userDescription u
     sInfos <- mapM (lastSubmissionAsgKey u) as
     return (ud, Map.fromList . map (second submKeyAndState) . removeNotFound $ sInfos)
+  groups <- groupKeysOfCourse key
+  groupOfUser <- fmap (Map.fromList . concat) $ forM groups $ \gkey -> do
+    group_ <- loadGroup gkey
+    admins <- groupAdmins gkey
+    users <- subscribedToGroup gkey
+    return $ [(u, (group_, admins)) | u <- users]
+
   return CourseSubmissionTableInfo {
       stiCourse = courseName
     , stiUsers = us
     , stiAssignments = assignmentInfos
     , stiUserLines = ulines
+    , stiGroups = groupOfUser
     , stiCourseKey = key
     }
 

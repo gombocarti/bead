@@ -152,8 +152,8 @@ submissionTablePart tableId now ctx s = do
 
     -- HTML
     courseForm = submissionTableInfoCata course group s where
-      course _n _us _as _uls ck      = postForm (routeOf $ Pages.deleteUsersFromCourse ck ())
-      group _n _us _cgas _uls _ck gk = postForm (routeOf $ Pages.deleteUsersFromGroup gk ())
+      course _n _us _as _uls _grps ck = postForm (routeOf $ Pages.deleteUsersFromCourse ck ())
+      group _n _us _cgas _uls _ck gk  = postForm (routeOf $ Pages.deleteUsersFromGroup gk ())
 
     headerCell = H.th
 
@@ -161,11 +161,21 @@ submissionTablePart tableId now ctx s = do
       headerCell $ fromString $ msg $ msg_Home_SubmissionTable_StudentName "Name"
       headerCell $ fromString $ msg $ msg_Home_SubmissionTable_Username "Username"
       assignmentLinks
+      groupAndAdminHeader
       deleteHeaderCell msg
       where
+        groupAndAdminHeader :: H.Html
+        groupAndAdminHeader = submissionTableInfoCata course group s
+          where
+            course _name _users _as _ulines _grps _key = do
+              headerCell $ fromString $ msg $ msg_Home_SubmissionTable_Group "Group"
+              headerCell $ fromString $ msg $ msg_Home_SubmissionTable_Admins "Admins"
+
+            group  _name _users _cgas _ulines _ckey _gkey = mempty
+
         assignmentLinks = submissionTableInfoCata course group s
 
-        course _name _users as ulines _key =
+        course _name _users as ulines _grps _key =
           mapM_ (\(i, info@(ak, a, hasTestCase)) ->
                    let exportAdminedGroups = Pages.exportSubmissionsOfGroups ak (stcUsername ctx) ()
                        exportAll = Pages.exportSubmissions ak ()
@@ -260,19 +270,29 @@ submissionTablePart tableId now ctx s = do
         H.td . fromString $ ud_fullname u
         H.td . fromString $ uid id $ ud_uid u
         submissionCells msg username s
+        groupInfo username s
         deleteUserCheckbox u
       where
         submissionCells :: I18N -> Username -> SubmissionTableInfo -> H.Html
         submissionCells msg username = submissionTableInfoCata course group where
-          course _n _users as _ulines _key = mapM_ (submissionInfoCell msg username) as
+          course _n _users as _ulines _grps _key = mapM_ (submissionInfoCell msg username) as
 
           group _n _users as _ulines _ck _gk =
             mapM_ (cgInfoCata (submissionInfoCell msg username) (submissionInfoCell msg username)) as
 
         submissionInfoCell :: I18N -> Username -> (AssignmentKey, Assignment, HasTestCase) -> H.Html
         submissionInfoCell msg u (ak, _, _) = case Map.lookup ak submissionMap of
-          Nothing -> H.td $ mempty
+          Nothing -> H.td mempty
           Just ss -> submissionCell msg u ss
+
+        groupInfo :: Username -> SubmissionTableInfo -> H.Html
+        groupInfo u = submissionTableInfoCata course group where
+          course _n _users _as _ulines grps _key =
+            case Map.lookup u grps of
+              Nothing -> H.td mempty <> H.td mempty
+              Just (grp, admins) -> H.td (fromString $ groupName grp) <> H.td (fromString $ intercalate "," $ map u_name admins)
+
+          group _n _users _as _ulines _ck _gk = mempty
 
     submissionCell :: I18N -> Username -> (SubmissionKey, SubmissionState) -> H.Html
     submissionCell msg u (sKey, sState) =
@@ -285,7 +305,7 @@ submissionTablePart tableId now ctx s = do
                             Just ek -> Pages.modifyEvaluation sKey ek ()
 
     deleteHeaderCell msg = submissionTableInfoCata deleteForCourseButton deleteForGroupButton s where
-        deleteForCourseButton _n _us _as _uls _ck =
+        deleteForCourseButton _n _us _as _uls _grps _ck =
           headerCell $ submitButtonDanger
             removeButton
             (msg $ msg_Home_DeleteUsersFromCourse "Remove") ! A.disabled ""
@@ -296,7 +316,7 @@ submissionTablePart tableId now ctx s = do
             (msg $ msg_Home_DeleteUsersFromGroup "Remove") ! A.disabled ""
 
     deleteUserCheckbox u = submissionTableInfoCata deleteCourseCheckbox deleteGroupCheckbox s where
-        deleteCourseCheckbox _n _us _as _uls _ck =
+        deleteCourseCheckbox _n _us _as _uls _grps _ck =
           H.td $ checkBox
             (Param.name delUserFromCoursePrm)
             (encode delUserFromCoursePrm $ ud_username u)
@@ -311,7 +331,7 @@ submissionTablePart tableId now ctx s = do
 
 courseTestScriptTable :: CourseTestScriptInfos -> SubmissionTableInfo -> IHtml
 courseTestScriptTable cti = submissionTableInfoCata course group where
-  course _n _us _as _uls ck = testScriptTable cti ck
+  course _n _us _as _uls _grps ck = testScriptTable cti ck
   group _n _us _as _uls _ck _gk = (return (return ()))
 
 -- Renders a course test script modification table if the information is found in the
@@ -352,7 +372,7 @@ managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
                          ++ [dropdown msg [Pages.exportEvaluationsScores ck (), Pages.exportEvaluationsScoresAllGroups ck ()]])
       (Map.lookup gk groups)
 
-    courseMenu _n _us _as _uls ck = maybe
+    courseMenu _n _us _as _uls _grps ck = maybe
       (return (return ()))
       (const $ do
         msg <- getI18N
@@ -396,8 +416,8 @@ colorStyle (RGB (r,g,b)) = join ["background-color:#", hex r, hex g, hex b]
 -- * Tools
 
 sortUserLines = submissionTableInfoCata course group where
-  course name users assignments userlines key =
-      CourseSubmissionTableInfo name users assignments (sort userlines) key
+  course name users assignments userlines groups key =
+      CourseSubmissionTableInfo name users assignments (sort userlines) groups key
 
   group name users assignments userlines ckey gkey =
       GroupSubmissionTableInfo name users assignments (sort userlines) ckey gkey
@@ -406,7 +426,7 @@ sortUserLines = submissionTableInfoCata course group where
   sort = sortOn fst
 
 submissionTableInfoAssignments = submissionTableInfoCata course group where
-  course _n _us as _uls _ck = as
+  course _n _us as _uls _grps _ck = as
   group _n _us cgas _uls _ck _gk = map (cgInfoCata id id) cgas
 
 headLine = H.tr . H.th . fromString
