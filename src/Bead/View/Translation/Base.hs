@@ -424,6 +424,8 @@ labels =
  , "msg_Home_SubmissionTable_ExportEvaluations"
  , "msg_Home_SubmissionTable_StudentName"
  , "msg_Home_SubmissionTable_Username"
+ , "msg_Home_SubmissionTable_Group"
+ , "msg_Home_SubmissionTable_Admins"
  , "msg_Home_SubmissionTable_Summary"
  , "msg_Home_SubmissionTable_Students"
  , "msg_Home_SubmissionTable_Student"

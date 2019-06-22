@@ -83,5 +83,5 @@ navigation links = do
   return $ H.div ! A.id "menu" $ H.ul $ mapM_ (i18n msg . linkToPage) links
 
 submissionTableInfoAssignments = submissionTableInfoCata course group where
-  course _n _us as _uls _ans _ck = as
+  course _n _us as _uls _grps _ans _ck = as
   group _n _us cgas _uls _ans _ck _gk = map (cgInfoCata id id) cgas

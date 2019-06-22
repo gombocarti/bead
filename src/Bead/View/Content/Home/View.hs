@@ -124,7 +124,7 @@ homeContent d = do
 -- * Helpers
 
 submissionTableInfoAssignments = submissionTableInfoCata course group where
-  course _n _us as _uls _ck = as
+  course _n _us as _uls _grps _ck = as
   group _n _us cgas _uls _ck _gk = map (cgInfoCata id id) cgas
 
 htmlSubmissionTables :: HomePageData -> IHtml

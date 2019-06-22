@@ -78,7 +78,7 @@ evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter ha
   where
     hasAssignment :: SubmissionTableInfo -> Bool
     hasAssignment = submissionTableInfoCata
-                       (\_ _ assignments _ _ -> not . null $ assignments)
+                       (\_ _ assignments _ _ _ -> not . null $ assignments)
                        (\_ _ assignments _ _ _ -> not . null $ assignments)
 
     submissionTableToCsv :: SubmissionTableInfo -> (FilePath, Text)
@@ -87,7 +87,7 @@ evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter ha
         filename :: FilePath
         filename = concat
                      [ submissionTableInfoCata
-                         (\course _ _ _ _ -> replaceSlash course)
+                         (\course _ _ _ _ _ -> replaceSlash course)
                          (\course _ _ _ _ gk -> maybe
                                                     (replaceSlash course)
                                                     (\(_, grp, _) -> replaceSlash (E.groupName grp))
@@ -100,7 +100,7 @@ evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter ha
         as :: [(AssignmentKey, Assignment, HasTestCase)]
         as = submissionTableInfoCata course group submissionTable
           where
-            course _ _ as _ _ = as
+            course _ _ as _ _ _ = as
             group _ _ as _ _ _ = map (cgInfoCata id id) as
 
         header :: Text

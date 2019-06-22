@@ -415,6 +415,8 @@ dictionaryHu = DF.DictionaryFile {
     , msg_Home_SubmissionTable_ExportEvaluations <| "Értékelések exportálása"
     , msg_Home_SubmissionTable_StudentName <| "Név"
     , msg_Home_SubmissionTable_Username <| "Neptun"
+    , msg_Home_SubmissionTable_Group <| "Csoport"
+    , msg_Home_SubmissionTable_Admins <| "Oktatók"
     , msg_Home_SubmissionTable_Summary <| "Összesítés"
     , msg_Home_SubmissionTable_Students <| "hallgató"
     , msg_Home_SubmissionTable_Student <| "hallgató"
