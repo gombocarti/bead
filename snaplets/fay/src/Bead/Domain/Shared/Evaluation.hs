@@ -1,8 +1,15 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.Domain.Shared.Evaluation where
 
-import Prelude
-import Data.Data
+import           Data.Aeson (toJSON, toEncoding)
+import qualified Data.Aeson.Encoding as Enc
+import qualified Data.Aeson as Aeson
+import           Data.Data
+import           Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 {- Shared data structures between Client and Server -}
 
@@ -89,6 +96,14 @@ data EvResult = EvResult {
     evResult :: EvaluationData Binary Percentage FreeForm
   } deriving (Eq, Show, Read, Data, Typeable)
 
+instance Aeson.ToJSON EvResult where
+  toJSON evResult = toJSON (HashMap.fromList [("evaluation", evConfigIdentifier evResult), ("result", evResultText evResult)] :: HashMap Text Text)
+
+  toEncoding = Enc.dict Enc.text Enc.text encodeResult
+    where
+      encodeResult :: (Text -> Text -> a -> a) -> a -> EvResult -> a
+      encodeResult insert x evResult = insert (evConfigIdentifier evResult) (evResultText evResult) x
+
 evResultCata
   binary
   percentage
@@ -100,6 +115,22 @@ evResultCata
 
 withEvResult result binary percentage freeForm
   = evResultCata binary percentage freeForm result
+
+evConfigIdentifier :: EvResult -> Text
+evConfigIdentifier = evResultCata
+                       (const "binary")
+                       (const "percentage")
+                       (const "freeForm")
+
+evResultText :: EvResult -> Text
+evResultText = evResultCata
+                 (binaryCata (resultCata "Accepted" "Rejected"))
+                 percentage
+                 (freeForm T.pack)
+  where
+    percentage :: Percentage -> Text
+    percentage (Percentage (Scores [p])) = T.pack . show . round $ p * 100
+    percentage _                         = "???"
 
 percentageResult :: Double -> EvResult
 percentageResult d = EvResult (PctEval (Percentage (Scores { unScores = [ d ]})))

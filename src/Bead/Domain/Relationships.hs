@@ -2,13 +2,21 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.Domain.Relationships where
 
+import Data.Aeson (toJSON, toEncoding)
+import Data.Aeson.Encoding (text)
+import qualified Data.Aeson as Aeson
 import Data.Ord (Down(..))
 import Data.Data
 import Data.Hashable (Hashable)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
 import Data.List as List hiding (group)
 import Data.Map (Map)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Time (UTCTime(..))
 import Data.Tuple.Utils (fst3, snd3, thd3)
 import GHC.Generics (Generic)
@@ -198,6 +206,17 @@ data SubmissionState
   | Submission_Result EvaluationKey EvResult
     -- ^ Submission is evaluated.
   deriving (Eq, Show)
+
+instance Aeson.ToJSON SubmissionState where
+  toJSON Submission_Unevaluated = Aeson.String "Unevaluated"
+  toJSON Submission_QueuedForTest = Aeson.String "QueuedForTest"
+  toJSON (Submission_Tested passed) = Aeson.String (if passed then "TestsPassed" else "TestsFailed")
+  toJSON (Submission_Result _ result) = toJSON result
+
+  toEncoding Submission_Unevaluated = text "Unevaluated"
+  toEncoding Submission_QueuedForTest = text "QueuedForTest"
+  toEncoding (Submission_Tested passed) = text (if passed then "TestsPassed" else "TestsFailed")
+  toEncoding (Submission_Result _ result) = toEncoding result
 
 submissionStateCata :: a -> a -> (Bool -> a) -> (EvaluationKey -> EvResult -> a) -> SubmissionState -> a
 submissionStateCata
