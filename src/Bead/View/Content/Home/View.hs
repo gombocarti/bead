@@ -144,7 +144,7 @@ htmlSubmissionTables pd = do
 -- assessment table for teachers
 htmlAssessmentTable :: ScoreBoard -> IHtml
 htmlAssessmentTable board
-  | (null . sbAssessments $ board) = return mempty
+  | null assessments = return mempty
   | otherwise = do
       msg <- getI18N
       return $ do
@@ -153,7 +153,7 @@ htmlAssessmentTable board
           H.tr $ do
             H.th . fromString . msg $ msg_Home_AssessmentTable_StudentName "Name"
             H.th . fromString . msg $ msg_Home_AssessmentTable_Username "Username"
-            forM_ (zip sortedAssessments [1..]) (assessmentViewButton msg)
+            forM_ (zip assessments [1..]) (assessmentViewButton msg)
           forM_ (sortBy (compareHun `on` ud_fullname) (sbUsers board)) (userLine msg)
       where
         assessmentViewButton :: I18N -> ((AssessmentKey,Assessment),Int) -> Html
@@ -167,7 +167,7 @@ htmlAssessmentTable board
         userLine msg userDesc = H.tr $ do
           H.td . string . ud_fullname $ userDesc
           H.td . string . uid id . ud_uid $ userDesc
-          forM_ sortedAssessments (scoreIcon msg . ud_username $ userDesc)
+          forM_ assessments (scoreIcon msg . ud_username $ userDesc)
 
         scoreIcon :: I18N -> Username -> (AssessmentKey,Assessment) -> Html
         scoreIcon msg username (ak,_as) = H.td $ scoreInfoToIconLink msg (newScoreLink ak username) modifyLink scoreInfo
@@ -178,10 +178,8 @@ htmlAssessmentTable board
         newScoreLink ak u = routeOf $ Pages.newUserScore ak u ()
         modifyScoreLink sk = routeOf $ Pages.modifyUserScore sk ()
 
-        sortByCreationTime :: [(AssessmentKey,Assessment)] -> [(AssessmentKey,Assessment)]
-        sortByCreationTime = sortBy (compare `on` (created . snd))
-
-        sortedAssessments = sortByCreationTime (sbAssessments board)
+        assessments :: [(AssessmentKey,Assessment)]
+        assessments = sbAssessments board
 
 navigation :: [Pages.Page a b c d e f] -> IHtml
 navigation links = do
@@ -240,10 +238,7 @@ availableAssignmentsAssessments pd timeconverter groups
                         ]
                   Bootstrap.table $ do
                     thead $ headerLine msg isLimited
-                    -- Sort assignments by their end date time in reverse
-                    tbody $ mapM_ (assignmentLine msg isLimited)
-                      $ reverse $ sortBy (compare `on` (aEndDate . activeAsgDesc))
-                      $ visibleAsgs
+                    tbody $ mapM_ (assignmentLine msg isLimited) visibleAsgs
               -- Assessment table
               availableAssessments msg g
   where
@@ -305,8 +300,8 @@ availableAssessments msg (_, _, _, assessments) | null assessments = mempty
                                                 | otherwise = do
   Bootstrap.rowColMd12 . H.p . fromString . msg $ msg_Home_AssessmentTable_Assessments "Assessments"
   Bootstrap.rowColMd12 . Bootstrap.table $ do
-    H.tr (header sortedAssessments)
-    H.tr $ mapM_ evaluationViewButton (zip [(sk,si) | (_,_,sk,si) <- sortedAssessments] [1..])
+    H.tr (header assessments)
+    H.tr $ mapM_ evaluationViewButton (zip [(sk,si) | (_,_,sk,si) <- assessments] [1..])
   where
       header assessments = mapM_ (H.td . assessmentLabel) (zip [assessment | (_ak,assessment,_sk,_si) <- assessments] [1..])
           where
@@ -319,6 +314,3 @@ availableAssessments msg (_, _, _, assessments) | null assessments = mempty
       evaluationViewButton ((Just sk,info),n) = H.td $ scoreInfoToIconLink msg "" viewScoreLink info
           where viewScoreLink = routeOf $ Pages.viewUserScore sk ()
       evaluationViewButton ((Nothing,info),n) = H.td $ scoreInfoToIcon msg info
-
-      sortedAssessments = sortByCreationTime assessments
-      sortByCreationTime = sortBy (compare `on` (\(_ak,as,_sk,_si) -> created as))

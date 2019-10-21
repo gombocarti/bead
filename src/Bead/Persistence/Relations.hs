@@ -57,7 +57,7 @@ import qualified Data.HashSet as HashSet
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime, getCurrentTime)
-import           Data.Tuple.Utils (fst3)
+import           Data.Tuple.Utils (fst3, snd3)
 import           Data.Foldable (traverse_)
 
 import           Bead.Domain.Entities hiding (fullGroupName)
@@ -352,9 +352,14 @@ isAdminedSubmission u sk = do
 canUserCommentOn :: Username -> SubmissionKey -> Persist Bool
 canUserCommentOn _u _sk = return True
 
--- Produces assignments, information about the submissions for the
--- assignments and assessments which are associated with subscribed
--- groups of the user.
+-- Produces assignments, information about the submissions and
+-- assessments which are associated with subscribed groups of the
+-- user.
+--
+-- Assignments are sorted by deadline in descending order (from future to
+-- to the farthest back in time).
+--
+-- Assessments are sorted by creation time (from oldest to youngest).
 userAssignmentsAssessments :: Username -> Persist [(Group, Course, [(AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
 userAssignmentsAssessments u = do
   now <- liftIO getCurrentTime
@@ -363,9 +368,9 @@ userAssignmentsAssessments u = do
     gAsgs <- groupAssignments gk
     cAsgs <- courseAssignments ck
     let asgs = cAsgs ++ gAsgs
-    asgDescs <- catMaybes <$> mapM (createAssignmentDesc u now) asgs
+    asgDescs <- (sortAssignments . catMaybes) <$> mapM (createAssignmentDesc u now) asgs
     assmnts <- assessmentsOfGroup gk
-    assmntDescs <- catMaybes <$> mapM (createAssessmentDesc u) assmnts
+    assmntDescs <- (sortAssessments . catMaybes) <$> mapM (createAssessmentDesc u) assmnts
     return (grp, course, asgDescs, assmntDescs)
 
   where
@@ -393,6 +398,12 @@ userAssignmentsAssessments u = do
             Nothing         -> return $ Just (ak, assessment, Nothing, Score_Not_Found)
             Just (sk,sInfo) -> return $ Just (ak, assessment, sk, sInfo)
         else return Nothing
+
+    sortAssignments :: [(a, AssignmentDesc, b)] -> [(a, AssignmentDesc, b)]
+    sortAssignments = sortOn (Down . aEndDate . snd3)
+
+    sortAssessments :: [(a, Assessment, b, c)] -> [(a, Assessment, b, c)]
+    sortAssessments = sortOn (\(_, as, _, _) -> Assessment.created as)
 
 -- Returns all the submissions of the users for the groups that the
 -- user administrates
@@ -593,7 +604,7 @@ scoreBoard key = do
   assessments <- mapM loadAssessment assessmentKeys
   userDescriptions <- mapM userDescription users
   name <- loadName
-  return $ mkScoreBoard board name (zip assessmentKeys assessments) userDescriptions
+  return $ mkScoreBoard board name (sortByCreationTime (zip assessmentKeys assessments)) userDescriptions
   where
         mkScoreBoard (scores,infos) n as us =
           either (\k -> CourseScoreBoard scores infos k n as us)
@@ -613,6 +624,9 @@ scoreBoard key = do
                        user <- usernameOfScore scoreKey
                        info <- scoreInfo scoreKey
                        return (Map.insert (assessment,user) scoreKey scores,Map.insert scoreKey info infos)
+
+        sortByCreationTime :: [(AssessmentKey, Assessment)] -> [(AssessmentKey, Assessment)]
+        sortByCreationTime = sortOn (Assessment.created . snd)
 
 scoreDesc :: ScoreKey -> Persist ScoreDesc
 scoreDesc sk = do

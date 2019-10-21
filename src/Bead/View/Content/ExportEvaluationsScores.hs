@@ -70,6 +70,12 @@ exportEvaluationsScoresOfGroups course groups = do
 replaceSlash :: String -> String
 replaceSlash = replace "/" "_"
 
+quote :: Text -> Text
+quote t = T.cons '"' (T.snoc t '"')
+
+escapeQuotes :: Text -> Text
+escapeQuotes = T.replace "\"" "\"\""
+
 makeFilePath :: String -> String -> FilePath
 makeFilePath folder filename = replaceSlash folder </> replaceSlash filename
 
@@ -104,7 +110,7 @@ evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter ha
             group _ _ as _ _ _ = map (cgInfoCata id id) as
 
         header :: Text
-        header = T.intercalate "," ("" : "" : map (T.pack . A.name . snd3) as)
+        header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . A.name . snd3) as)
 
         userLine :: (UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState)) -> Text
         userLine (uDesc, evaluations) = T.intercalate "," (T.pack (ud_fullname uDesc) : uid : map getEvaluation as)
@@ -133,7 +139,7 @@ assessmentCsvs msg groups scoreBoards = map scoreBoardToCsv (filter (not . null 
                      ] <.> "csv"
 
         header :: Text
-        header = T.intercalate "," ("" : "" : map (T.pack . Assess.title . snd) (sbAssessments board))
+        header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . Assess.title . snd) (sbAssessments board))
 
     userLines :: ScoreBoard -> [Text]
     userLines board = map userLine (L.sortBy (compareHun `on` ud_fullname) (sbUsers board))
