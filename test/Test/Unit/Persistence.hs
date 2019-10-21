@@ -113,7 +113,6 @@ test_feedbacks = testCase "Create and delete test feedbacks" $ do
 
   -- Test order of feedbacks of the same submission
   dumpFeedback "8" skey Nothing Nothing (Just "True")
-  threadDelay (1 * 10^5) -- 0.1s
   dumpFeedback "7" skey Nothing Nothing (Just "False")
   rs <- fmap (map (\(sk, fs) -> (sk, map info fs))) $ liftE interp $ testFeedbacks
 
@@ -124,6 +123,11 @@ test_feedbacks = testCase "Create and delete test feedbacks" $ do
     "Wrong order of feedbacks"
 
   where
+    -- This is needed because Travis handles file IO too fast, which
+    -- makes output of testFeedbacks nondeterministic.
+    waitALittle :: IO ()
+    waitALittle = threadDelay (1 * 10^5) -- 0.1s
+    
     dumpFeedback :: String -> String -> Maybe String -> Maybe String -> Maybe String -> IO ()
     dumpFeedback d sk private public result = do
       let sdir = testIncoming </> d
@@ -132,6 +136,7 @@ test_feedbacks = testCase "Create and delete test feedbacks" $ do
       maybe (return ()) (writeFile (sdir </> "private")) private
       maybe (return ()) (writeFile (sdir </> "public")) public
       maybe (return ()) (writeFile (sdir </> "result")) result
+      waitALittle
 
 testStateOfSubmission :: TestTree
 testStateOfSubmission = testCase "stateOfSubmission tests" $ do
