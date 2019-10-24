@@ -400,7 +400,7 @@ userAssignmentsAssessments u = do
         else return Nothing
 
     sortAssignments :: [(a, AssignmentDesc, b)] -> [(a, AssignmentDesc, b)]
-    sortAssignments = sortOn (Down . aEndDate . snd3)
+    sortAssignments = reverse . sortOn (aEndDate . snd3)
 
     sortAssessments :: [(a, Assessment, b, c)] -> [(a, Assessment, b, c)]
     sortAssessments = sortOn (\(_, as, _, _) -> Assessment.created as)
