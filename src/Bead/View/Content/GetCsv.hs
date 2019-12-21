@@ -22,7 +22,7 @@ getGroupCsv :: DataHandler
 getGroupCsv = DataHandler $ do
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
   group <- userStory $ do
-    Story.isAdministratedGroup gk
+    Story.isAdminOfGroupOrCourse gk
     Story.loadGroup gk
   maybeAk  <- getOptionalParameter assessmentKeyPrm
   msg <- i18nE

@@ -488,7 +488,7 @@ deleteUsersFromGroup gk sts = logAction INFO ("delets users form group: " ++ sho
   authorize P_Modify P_Group
   join $ withUserAndPersist $ \u -> do
     let user = u_username u
-    admined <- Persist.isAdministratedGroup user gk
+    admined <- Persist.isAdminOfGroupOrCourse user gk
     if admined
       then do ck <- Persist.courseOfGroup gk
               mapM_ (\student -> Persist.unsubscribe student gk) sts
@@ -610,7 +610,7 @@ subscribedToCourse ck = logAction INFO ("lists all users in course " ++ show ck)
 subscribedToGroup :: GroupKey -> UserStory [Username]
 subscribedToGroup gk = logAction INFO ("lists all users in group " ++ show gk) $ do
   authorize P_Open P_Group
-  isAdministratedGroup gk
+  isAdminOfGroupOrCourse gk
   persistence $ Persist.subscribedToGroup gk
 
 
@@ -755,7 +755,7 @@ createGroupAssignment gk a tc = logAction INFO msg $ do
 
   join . withUserAndPersist $ \u -> do
     let user = u_username u
-    admined <- Persist.isAdministratedGroup user gk
+    admined <- Persist.isAdminOfGroupOrCourse user gk
     if admined
       then do ak <- Persist.saveGroupAssignment gk a
               testCaseCreationForAssignment user ak tc
@@ -842,7 +842,7 @@ createGroupAssessment :: GroupKey -> Assessment -> UserStory AssessmentKey
 createGroupAssessment gk a = logAction INFO ("creates assessment for group " ++ show gk) $ do
   authorize P_Open P_Group
   authorize P_Create P_Assessment
-  isAdministratedGroup gk
+  isAdminOfGroupOrCourse gk
   ak <- persistence (Persist.saveGroupAssessment gk a)
   withUserAndPersist $ \u -> do
     let user = u_username u
@@ -1042,7 +1042,7 @@ scoreInfoOfUser u ak = logAction INFO ("loads score info of user " ++ show u ++ 
 scoresOfGroup :: GroupKey -> AssessmentKey -> UserStory [(UserDesc, Maybe ScoreInfo)]
 scoresOfGroup gk ak = logAction INFO ("lists scores of group " ++ show gk ++ " and assessment " ++ show ak) $ do
   authorize P_Open P_Group
-  isAdministratedGroup gk
+  isAdminOfGroupOrCourse gk
   usernames <- subscribedToGroup gk
   forM usernames $ \u -> do
     mScoreInfo <- scoreInfoOfUser u ak
@@ -1071,7 +1071,7 @@ scoreBoards = logAction INFO "lists scoreboards" $ do
 scoreBoardOfGroup :: GroupKey -> UserStory ScoreBoard
 scoreBoardOfGroup gk = logAction INFO ("gets scoreboard of group " ++ show gk) $ do
   authPerms scoreBoardPermissions
-  isAdministratedGroup gk
+  isAdminOfGroupOrCourse gk
   persistence $ Persist.scoreBoardOfGroup gk
 
 -- Puts the given status message to the actual user state
@@ -1359,7 +1359,7 @@ courseSubmissionTable ck = logAction INFO ("gets submission table for course " +
 groupSubmissionTable :: GroupKey -> UserStory SubmissionTableInfo
 groupSubmissionTable gk = logAction INFO ("gets submission table for group " ++ show gk) $ do
   authPerms submissionTableInfoPermissions
-  isAdministratedGroup gk
+  isAdminOfGroupOrCourse gk
   persistence $ Persist.groupSubmissionTableInfo gk
 
 submissionTables :: UserStory [SubmissionTableInfo]
@@ -1675,9 +1675,9 @@ isAdministratedCourse = guard
 
 -- Checks if the given group is administrated by the actual user and
 -- throws redirects to the error page if not, otherwise do nothing
-isAdministratedGroup :: GroupKey -> UserStory ()
-isAdministratedGroup = guard
-  Persist.isAdministratedGroup
+isAdminOfGroupOrCourse :: GroupKey -> UserStory ()
+isAdminOfGroupOrCourse = guard
+  Persist.isAdminOfGroupOrCourse
   "The user tries to access a group (%s) which is not administrated by him."
   (userError nonAdministratedGroup)
 
@@ -1706,7 +1706,7 @@ administratedGroupsOfCourse ck = do
   authorize P_Open P_Course
   withUserAndPersist $ \u -> do
     gks <- Persist.groupKeysOfCourse ck
-    filterM (Persist.isAdministratedGroup (u_username u)) gks
+    filterM (Persist.isAdminOfGroup (u_username u)) gks
 
 -- Checks if the given assignment is administrated by the actual user and
 -- throws redirects to the error page if not, otherwise do nothing

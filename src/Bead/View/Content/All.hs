@@ -86,7 +86,7 @@ pageContent = Pages.constantsP
   queueSubmissionForTest
   queueAllSubmissionsForTest
   unsubscribeFromCourse
-  exportEvaluationsScores
+  exportEvaluationsScoresAdminedGroups
   exportEvaluationsScoresAllGroups
   exportSubmissions
   exportSubmissionsOfGroups

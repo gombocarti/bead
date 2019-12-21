@@ -8,6 +8,8 @@ import           Data.Maybe
 import qualified Data.Text as Text
 
 import           Database.Persist.Sql
+import           Database.Esqueleto (select, exists, from, on, where_, limit, InnerJoin(InnerJoin), val, (^.), Value(unValue))
+import qualified Database.Esqueleto as Esq
 
 import qualified Bead.Domain.Entities as Domain
 import qualified Bead.Domain.Relationships as Domain
@@ -116,6 +118,16 @@ administratedGroups username =
       mVal <- get k
       return $ fmap (\x -> (toDomainKey k,toDomainValue x)) mVal
 
+-- Returns True if the given user administrates the given group.
+isAdminOfGroup :: Domain.Username -> Domain.GroupKey -> Persist Bool
+isAdminOfGroup username groupKey = do
+  records <- select $ from $ \(ag `InnerJoin` u) -> do
+    on (ag ^. AdminsOfGroupAdmin Esq.==. u ^. UserId)
+    where_ (ag ^. AdminsOfGroupGroup Esq.==. val (fromDomainKey groupKey) Esq.&&.
+            u ^. UserUsername Esq.==. val (Domain.usernameCata Text.pack username))
+    limit 1
+  return $ not $ null records
+
 -- * Users file upload
 
 -- | Copies the given file with the given filename to the users data directory
@@ -143,5 +155,3 @@ usernames userIds = catMaybes <$> (mapM toUsername userIds)
       return $! (Domain.Username . Text.unpack . userUsername <$> mUser)
 
 -- TODO: Write user unit tests
-
-

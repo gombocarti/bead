@@ -27,7 +27,7 @@ import           System.FilePath ((</>), (<.>))
 
 import qualified Bead.Controller.UserStories as Story
 import qualified Bead.Domain.Entity.Assignment as Assignment
-import           Bead.Domain.String (removeAccents)
+import           Bead.Domain.String (removeAccents, replaceSlash)
 import           Bead.View.Content.GetSubmission (submissionFilename)
 import qualified Bead.View.Content.Comments as C
 import           Bead.View.Content
@@ -114,7 +114,7 @@ zipSubmission submission desc folder convertToLocalTime = submissionFile
   where
     fname, ext, path :: String
     (fname, ext) = submissionFilename desc
-    path = (folder </> removeAccents fname <.> ext)
+    path = (replaceSlash folder </> replaceSlash (removeAccents fname) <.> ext)
 
     submissionFile :: Zip.Entry
     submissionFile = 
@@ -130,7 +130,7 @@ zipFeedback desc folder now convertToLocalTime msg = feedbacksFile path
     where
       fname, path :: String
       (fname, _) = submissionFilename desc
-      path = folder </> removeAccents (concat [fname, "_", msg $ msg_ExportSubmissions_Comments "comments" ]) <.> "txt"
+      path = replaceSlash folder </> replaceSlash (removeAccents (concat [fname, "_", msg $ msg_ExportSubmissions_Comments "comments" ])) <.> "txt"
 
       feedbacksFile :: String -> Zip.Entry
       feedbacksFile path = Zip.toEntry path (localTimeInSeconds now) (LBsUTF8.fromString $ unlines $ intersperse (replicate 10 '#') feedbacks)

@@ -9,9 +9,11 @@ import Test.HUnit hiding (test)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (testCase)
 import Test.Tasty.TestSet
+import Test.QuickCheck.Gen (generate, sample')
 
 -- Bead imports
 import Bead.Domain.Entities
+import qualified Test.Property.EntityGen as EGen
 import Bead.Domain.TimeZone (utcZoneInfo)
 import Bead.Domain.Shared.Evaluation
 import Bead.Domain.Relationships
@@ -45,6 +47,7 @@ tests = group "Persistence tests" $ do
   test test_feedbacks
   test testStateOfSubmission
   test testIsolatedAssignmentBlocksView
+  test testIsGroupAdmin
   test clean_up
 
 -- Normal assignment is represented as empty aspects set
@@ -464,6 +467,46 @@ testHasLastSubmission ak u sk = do
   mKey <- liftE interp $ lastSubmission ak u
   assertBool "Submission was not found" (isJust mKey)
   assertBool "Submission was different" (sk == fromJust mKey)
+
+testIsGroupAdmin :: TestTree
+testIsGroupAdmin = testCase "Check group administratorship" $ do
+  interp <- createPersistInterpreter defaultConfig
+  c <- liftE interp $ saveCourse TestData.course
+  groups <- take 5 <$> liftIO (sample' EGen.groups)
+  gks@[g1, g2, g3, g4, g5] <- liftE interp (mapM (saveGroup c) groups)
+  student_ <- liftIO (generate $ EGen.users' Student)
+  gAdmin_ <- liftIO (generate $ EGen.users' GroupAdmin)
+  gAdmin2_ <- liftIO (generate $ EGen.users' GroupAdmin)
+  cAdmin_ <- liftIO (generate $ EGen.users' CourseAdmin)
+  let [student, gAdmin, gAdmin2, cAdmin] = map u_username [student_, gAdmin_, gAdmin2_, cAdmin_]
+  liftE interp $ do
+    saveUser student_
+    saveUser gAdmin_
+    saveUser gAdmin2_
+    saveUser cAdmin_
+    createGroupAdmin gAdmin g2
+    createGroupAdmin gAdmin g3
+    createGroupAdmin gAdmin2 g3
+    createGroupAdmin gAdmin2 g4
+    createCourseAdmin cAdmin c
+    createGroupAdmin cAdmin g4
+    createGroupAdmin cAdmin g5
+  isAdmin <- or <$> liftE interp (mapM (isAdminOfGroup student) gks)
+  assertBool "A user administrated a group but nobody has assigned a group to her." (not isAdmin)
+  isAdmin <- liftE interp $ isAdminOfGroup gAdmin g1
+  assertBool "Group admin administrates a group that nobody has assigned to her." (not isAdmin)
+  isAdmin <- liftE interp $ isAdminOfGroup gAdmin g2
+  assertBool "Group admin should administrate an assigned group." isAdmin
+  isAdmin <- liftE interp $ isAdminOfGroup gAdmin g3
+  assertBool "Group admin should administrate a shared assigned group." isAdmin
+  isAdmin <- liftE interp $ isAdminOfGroup gAdmin g5
+  assertBool "Group admin should not administrate a group of other admin." (not isAdmin)
+  isAdmin <- liftE interp $isAdminOfGroup cAdmin g3
+  assertBool "Course admin should not administrate a group of other admin." (not isAdmin)
+  isAdmin <- liftE interp $ isAdminOfGroup cAdmin g4
+  assertBool "Course admin should administrate a shared group of her." isAdmin
+  isAdmin <- liftE interp $ isAdminOfGroup cAdmin g5
+  assertBool "Course admin should administrate her only group." isAdmin
 
 -- Guard tests
 

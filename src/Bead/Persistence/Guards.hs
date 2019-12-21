@@ -8,7 +8,7 @@ module Bead.Persistence.Guards
   , isAdministratedCourse
   , isAdministratedCourseOfGroup
   , isAdministratedEvaluation
-  , isAdministratedGroup
+  , isAdminOfGroupOrCourse
   , isAdministratedSubmission
   , isAdministratedTestScript
   , isCourseOrGroupAdmin
@@ -56,8 +56,8 @@ isCourseOrGroupAdmin u ck = do
 
 -- Returns True if the given user administrates the given group or
 -- administrates the course of the group, otherwise False.
-isAdministratedGroup :: Username -> GroupKey -> Persist Bool
-isAdministratedGroup u gk = do
+isAdminOfGroupOrCourse :: Username -> GroupKey -> Persist Bool
+isAdminOfGroupOrCourse u gk = do
   ag <- adminGroup u
   adminedCourse <- isAdministratedCourseOfGroup u gk
   return (ag gk || adminedCourse)

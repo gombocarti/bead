@@ -484,7 +484,7 @@ routeToPageMap = Map.fromList [
   , (queueSubmissionForTestPath, \ps -> P.queueSubmissionForTest <$> submissionKey ps <*> unit)
   , (queueAllSubmissionsForTestPath, \ps -> P.queueAllSubmissionsForTest <$> assignmentKey ps <*> unit)
   , (unsubscribeFromCoursePath , \ps -> P.unsubscribeFromCourse <$> groupKey ps <*> unit)
-  , (exportEvaluationsScoresPath, \ps -> P.exportEvaluationsScores <$> courseKey ps <*> unit)
+  , (exportEvaluationsScoresAdminedGroupsPath, \ps -> P.exportEvaluationsScoresAdminedGroups <$> courseKey ps <*> unit)
   , (exportEvaluationsScoresAllGroupsPath, \ps -> P.exportEvaluationsScoresAllGroups <$> courseKey ps <*> unit)
   , (exportSubmissionsPath, \ps -> P.exportSubmissions <$> assignmentKey ps <*> unit)
   , (exportSubmissionsOfGroupsPath, \ps -> P.exportSubmissionsOfGroups <$> assignmentKey ps <*> username ps <*> unit)

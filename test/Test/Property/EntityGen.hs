@@ -52,14 +52,18 @@ familyNames = do
 
 languages = Language <$> word
 
-users = User
-  <$> roleGen
+users' :: Role -> Gen User
+users' r = User
+  <$> (return r)
   <*> usernames
   <*> emails
   <*> familyNames
   <*> (return utcZoneInfo)
   <*> languages
   <*> uids
+
+users :: Gen User
+users = roleGen >>= users'
 
 userAndEPwds = do
   user <- users
