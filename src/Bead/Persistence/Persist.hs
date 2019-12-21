@@ -19,6 +19,7 @@ module Bead.Persistence.Persist (
   , userSubmissions
   , administratedCourses
   , administratedGroups
+  , isAdminOfGroup
   , scoresOfUser
   , attachNotificationToUser
   , notificationsOfUser
@@ -253,6 +254,9 @@ administratedCourses = PersistImpl.administratedCourses
 -- Lists all the groups that are administrated by the user
 administratedGroups :: Username -> Persist [(GroupKey, Group)]
 administratedGroups = PersistImpl.administratedGroups
+
+isAdminOfGroup :: Username -> GroupKey -> Persist Bool
+isAdminOfGroup = PersistImpl.isAdminOfGroup
 
 attachNotificationToUser :: Username -> NotificationKey -> UTCTime -> Persist ()
 attachNotificationToUser = PersistImpl.attachNotificationToUser

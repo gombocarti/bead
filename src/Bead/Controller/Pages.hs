@@ -81,7 +81,7 @@ viewPageValue = viewPageCata
 -- and only the data will be rendered in the response
 -- (e.g. file download)
 data DataPage a
-  = ExportEvaluationsScores CourseKey a
+  = ExportEvaluationsScoresAdminedGroups CourseKey a
   | ExportEvaluationsScoresAllGroups CourseKey a
   | ExportSubmissions AssignmentKey a
   | ExportSubmissionsOfGroups AssignmentKey E.Username a
@@ -92,7 +92,7 @@ data DataPage a
   deriving (Eq, Ord, Show, Functor)
 
 dataPageCata
-  exportEvaluationsScores
+  exportEvaluationsScoresAdminedGroups
   exportEvaluationsScoresAllGroups
   exportSubmissions
   exportSubmissionsOfGroups
@@ -101,7 +101,7 @@ dataPageCata
   getCourseCsv
   getGroupCsv
   p = case p of
-    ExportEvaluationsScores ck a -> exportEvaluationsScores ck a
+    ExportEvaluationsScoresAdminedGroups ck a -> exportEvaluationsScoresAdminedGroups ck a
     ExportEvaluationsScoresAllGroups ck a -> exportEvaluationsScoresAllGroups ck a
     ExportSubmissions ak a -> exportSubmissions ak a
     ExportSubmissionsOfGroups ak u a -> exportSubmissionsOfGroups ak u a
@@ -112,14 +112,14 @@ dataPageCata
 
 dataPageValue :: DataPage a -> a
 dataPageValue = dataPageCata
-  cid  -- exportEvaluationsScores
+  cid  -- exportEvaluationsScoresAdminedGroups
   cid  -- exportEvaluationsScoresAllGroups
   cid  -- exportSubmissions
   c2id -- exportSubmissionsOfGroups
   c2id -- exportSubmissionsOfOneGroup
   cid  -- getSubmission
   cid  -- getCourseCsv
-  cid  -- getGropCsv
+  cid  -- getGroupCsv
   where
     cid :: b -> a -> a
     cid = const id
@@ -414,7 +414,7 @@ viewAssessment ak       = View . ViewAssessment ak
 viewUserScore sk        = View . ViewUserScore sk
 notifications           = View . Notifications
 
-exportEvaluationsScores ck          = Data . ExportEvaluationsScores ck
+exportEvaluationsScoresAdminedGroups ck          = Data . ExportEvaluationsScoresAdminedGroups ck
 exportEvaluationsScoresAllGroups ck = Data . ExportEvaluationsScoresAllGroups ck
 exportSubmissions ak                = Data . ExportSubmissions ak
 exportSubmissionsOfGroups ak u      = Data . ExportSubmissionsOfGroups ak u
@@ -509,7 +509,7 @@ pageCata
   queueSubmissionForTest
   queueAllSubmissionsForTest
   unsubscribeFromCourse
-  exportEvaluationsScores
+  exportEvaluationsScoresAdminedGroups
   exportEvaluationsScoresAllGroups
   exportSubmissions
   exportSubmissionsOfGroups
@@ -568,7 +568,7 @@ pageCata
     (Modify (QueueSubmissionForTest sk a)) -> queueSubmissionForTest sk a
     (Modify (QueueAllSubmissionsForTest ak a)) -> queueAllSubmissionsForTest ak a
     (Modify (UnsubscribeFromCourse gk a)) -> unsubscribeFromCourse gk a
-    (Data (ExportEvaluationsScores ck a)) -> exportEvaluationsScores ck a
+    (Data (ExportEvaluationsScoresAdminedGroups ck a)) -> exportEvaluationsScoresAdminedGroups ck a
     (Data (ExportEvaluationsScoresAllGroups ck a)) -> exportEvaluationsScoresAllGroups ck a
     (Data (ExportSubmissions ak a)) -> exportSubmissions ak a
     (Data (ExportSubmissionsOfGroups ak u a)) -> exportSubmissionsOfGroups ak u a
@@ -629,7 +629,7 @@ constantsP
   queueSubmissionForTest_
   queueAllSubmissionsForTest_
   unsubscribeFromCourse_
-  exportEvaluationsScores_
+  exportEvaluationsScoresAdminedGroups_
   exportEvaluationsScoresAllGroups_
   exportSubmissions_
   exportSubmissionsOfGroups_
@@ -688,7 +688,7 @@ constantsP
       (\sk _ -> queueSubmissionForTest sk queueSubmissionForTest_)
       (\ak _ -> queueAllSubmissionsForTest ak queueAllSubmissionsForTest_)
       (\gk _ -> unsubscribeFromCourse gk unsubscribeFromCourse_)
-      (\ck _ -> exportEvaluationsScores ck exportEvaluationsScores_)
+      (\ck _ -> exportEvaluationsScoresAdminedGroups ck exportEvaluationsScoresAdminedGroups_)
       (\ck _ -> exportEvaluationsScoresAllGroups ck exportEvaluationsScoresAllGroups_)
       (\ak _ -> exportSubmissions ak exportSubmissions_)
       (\ak u _ -> exportSubmissionsOfGroups ak u exportSubmissionsOfGroups_)
@@ -810,7 +810,7 @@ liftsP
       (\sk a -> queueSubmissionForTest sk (queueSubmissionForTest_ sk a))
       (\ak a -> queueAllSubmissionsForTest ak (queueAllSubmissionsForTest_ ak a))
       (\gk a -> unsubscribeFromCourse gk (unsubscribeFromCourse_ gk a))
-      (\ck a -> exportEvaluationsScores ck (exportEvaluationsScores_ ck a))
+      (\ck a -> exportEvaluationsScoresAdminedGroups ck (exportEvaluationsScores_ ck a))
       (\ck a -> exportEvaluationsScoresAllGroups ck (exportEvaluationsScoresAllGroups_ ck a))
       (\ak a -> exportSubmissions ak (exportSubmissions_ ak a))
       (\ak u a -> exportSubmissionsOfGroups ak u (exportSubmissionsOfGroups_ ak u a))
@@ -947,8 +947,8 @@ isQueueAllSubmissionsForTest _ = False
 isUnsubscribeFromCourse (Modify (UnsubscribeFromCourse _ _)) = True
 isUnsubscribeFromCourse _ = False
 
-isExportEvaluationsScores (Data (ExportEvaluationsScores _ _)) = True
-isExportEvaluationsScores _ = False
+isExportEvaluationsScoresAdminedGroups (Data (ExportEvaluationsScoresAdminedGroups _ _)) = True
+isExportEvaluationsScoresAdminedGroups _ = False
 
 isExportEvaluationsScoresAllGroups (Data (ExportEvaluationsScoresAllGroups _ _)) = True
 isExportEvaluationsScoresAllGroups _ = False
@@ -1043,7 +1043,7 @@ groupAdminPages = [
   , isFillNewGroupAssessmentPreview
   , isModifyAssessment
   , isModifyAssessmentPreview
-  , isExportEvaluationsScores
+  , isExportEvaluationsScoresAdminedGroups
   , isExportSubmissions
   , isExportSubmissionsOfGroups
   , isExportSubmissionsOfOneGroup
@@ -1086,7 +1086,7 @@ courseAdminPages = [
   , isFillNewGroupAssessmentPreview
   , isModifyAssessment
   , isModifyAssessmentPreview
-  , isExportEvaluationsScores
+  , isExportEvaluationsScoresAdminedGroups
   , isExportEvaluationsScoresAllGroups
   , isExportSubmissions
   , isExportSubmissionsOfGroups
@@ -1285,7 +1285,7 @@ pageGen = oneof [
         , newGroupAssignmentPreview <$> groupKey <*> unit
         , modifyAssignmentPreview <$> assignmentKey <*> unit
         , getSubmission <$> submissionKey <*> unit
-        , exportEvaluationsScores <$> courseKey <*> unit
+        , exportEvaluationsScoresAdminedGroups <$> courseKey <*> unit
         , exportEvaluationsScoresAllGroups <$> courseKey <*> unit
         , exportSubmissions <$> assignmentKey <*> unit
         , exportSubmissionsOfGroups <$> assignmentKey <*> username <*> unit

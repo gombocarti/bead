@@ -3,7 +3,7 @@ module Test.Unit.Module (
     tests
   ) where
 
-import Test.Unit.AuthToken (encryptioDecryptionIsomorphism)
+import Test.Unit.AuthToken (encryptionDecryptionIsomorphism)
 
 import Test.Tasty.TestSet (group)
 
@@ -30,7 +30,7 @@ import Bead.View.Validators (emailAddressTests)
 #endif
 
 tests = do
-  group "Authentication" encryptioDecryptionIsomorphism
+  group "Authentication" encryptionDecryptionIsomorphism
   group "Page description" pageDescTest
   group "Route of" routeOfTest
   group "Routing" routingTest

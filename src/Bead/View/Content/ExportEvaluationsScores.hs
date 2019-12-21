@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Bead.View.Content.ExportEvaluationsScores
-  ( exportEvaluationsScores
+  ( exportEvaluationsScoresAdminedGroups
   , exportEvaluationsScoresAllGroups
   ) where
 
@@ -14,7 +14,6 @@ import qualified Data.List as L
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (listToMaybe)
-import           Data.String.Utils (replace)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -26,7 +25,7 @@ import qualified Bead.Controller.UserStories as S
 import qualified Bead.Domain.Entity.Assessment as Assess
 import qualified Bead.Domain.Entity.Assignment as A
 import qualified Bead.Domain.Entities as E
-import           Bead.Domain.String (removeAccents)
+import           Bead.Domain.String (removeAccents, replaceSlash)
 import           Bead.View.Content
 import           Bead.View.ContentHandler (Mime(MimeZip))
 import qualified Bead.View.Content.ScoreInfo as ScoreI
@@ -37,24 +36,23 @@ import           Bead.View.RequestParams
 exportEvaluationsScoresAllGroups :: DataHandler
 exportEvaluationsScoresAllGroups = DataHandler $ do
   ck <- getParameter (customCourseKeyPrm courseKeyParamName)
+  gks <- userStory $ S.groupsOfCourse ck
+  exportEvaluationsScoresOfGroups ck gks
+
+exportEvaluationsScoresAdminedGroups :: DataHandler
+exportEvaluationsScoresAdminedGroups = DataHandler $ do
+  ck <- getParameter (customCourseKeyPrm courseKeyParamName)
+  gks <- userStory $ S.administratedGroupsOfCourse ck
+  exportEvaluationsScoresOfGroups ck gks
+
+exportEvaluationsScoresOfGroups :: CourseKey -> [GroupKey] -> ContentHandler File
+exportEvaluationsScoresOfGroups ck gks = do
   (course, groups) <- userStory $ do
     crs <- fst <$> S.loadCourse ck
-    gks <- S.groupsOfCourse ck
     grps <- forM gks $ \gk -> do
-              grp <- S.loadGroup gk
-              return (gk, grp, groupName grp)
+      grp <- S.loadGroup gk
+      return (gk, grp, groupName grp)
     return (crs, grps)
-  exportEvaluationsScoresOfGroups course groups
-
-exportEvaluationsScores :: DataHandler
-exportEvaluationsScores = DataHandler $ do
-  ck <- getParameter (customCourseKeyPrm courseKeyParamName)
-  (course, groups) <- userStory $
-    (,) <$> (fst <$> S.loadCourse ck) <*> S.administratedGroups
-  exportEvaluationsScoresOfGroups course groups
-
-exportEvaluationsScoresOfGroups :: Course -> [(GroupKey, Group, String)] -> ContentHandler File
-exportEvaluationsScoresOfGroups course groups = do
   msg <- i18nE
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ convertToLocalTime <$> getCurrentTime
@@ -66,9 +64,6 @@ exportEvaluationsScoresOfGroups course groups = do
     (removeAccents (courseName course) <.> "zip")
     now
     (map (first (removeAccents)) (evaluationCsvs msg groups evaluations ++ assessmentCsvs msg groups scoreBoards))
-
-replaceSlash :: String -> String
-replaceSlash = replace "/" "_"
 
 quote :: Text -> Text
 quote t = T.cons '"' (T.snoc t '"')

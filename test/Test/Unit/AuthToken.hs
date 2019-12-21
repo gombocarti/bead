@@ -1,5 +1,5 @@
 module Test.Unit.AuthToken (
-    encryptioDecryptionIsomorphism
+    encryptionDecryptionIsomorphism
   ) where
 
 import qualified Bead.View.AuthToken as Auth
@@ -16,8 +16,8 @@ import           Test.QuickCheck (quickCheckResult)
 import           Test.QuickCheck.Monadic (monadicIO, pick, assert, PropertyM)
 import           Test.QuickCheck.Test (isSuccess)
 
-encryptioDecryptionIsomorphism :: TestSet ()
-encryptioDecryptionIsomorphism = test $ testCase "Encryption and decryption do not change cookie contents" $ do
+encryptionDecryptionIsomorphism :: TestSet ()
+encryptionDecryptionIsomorphism = test $ testCase "Encryption and decryption do not change cookie contents" $ do
   auth <- Auth.createAuthTokenManager
   result <- quickCheckResult $ monadicIO $ do
     c <- pick cookies

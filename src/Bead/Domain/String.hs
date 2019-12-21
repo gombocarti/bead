@@ -1,9 +1,11 @@
 module Bead.Domain.String
   ( removeAccents
+  , replaceSlash
   ) where
 
 import           Data.Char (toUpper)
 import qualified Data.Map as Map
+import           Data.String.Utils (replace)
 
 -- | Converts hungarian accute accented letters into ones without accents,
 -- in order to be compatible with zip managers and to avoid errors and
@@ -33,3 +35,8 @@ removeAccents = map removeAccent
 
           upperCaseMatching :: [(Char, Char)]
           upperCaseMatching = map (\(c1, c2) -> (toUpper c1, toUpper c2)) matching
+
+-- | Replaces slashes with underscores. Useful in creating zip
+-- archives, making filenames zip-friendly.
+replaceSlash :: String -> String
+replaceSlash = replace "/" "_"

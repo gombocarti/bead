@@ -57,7 +57,7 @@ module Bead.View.RouteOf (
   , queueAllSubmissionsForTestPath
   , unsubscribeFromCoursePath
   , pageRoutePath
-  , exportEvaluationsScoresPath
+  , exportEvaluationsScoresAdminedGroupsPath
   , exportEvaluationsScoresAllGroupsPath
   , exportSubmissionsPath
   , exportSubmissionsOfGroupsPath
@@ -227,8 +227,8 @@ queueAllSubmissionsForTestPath = "/queue-all-submissions-for-test"
 unsubscribeFromCoursePath :: RoutePath
 unsubscribeFromCoursePath = "/unsubscribe-from-course"
 
-exportEvaluationsScoresPath :: RoutePath
-exportEvaluationsScoresPath = "/export-evaluations-scores"
+exportEvaluationsScoresAdminedGroupsPath :: RoutePath
+exportEvaluationsScoresAdminedGroupsPath = "/export-evaluations-scores-admined-groups"
 
 exportEvaluationsScoresAllGroupsPath :: RoutePath
 exportEvaluationsScoresAllGroupsPath = "/export-evaluations-scores-all-groups"
@@ -327,7 +327,7 @@ pageRoutePath = constantsP
     queueSubmissionForTestPath
     queueAllSubmissionsForTestPath
     unsubscribeFromCoursePath
-    exportEvaluationsScoresPath
+    exportEvaluationsScoresAdminedGroupsPath
     exportEvaluationsScoresAllGroupsPath
     exportSubmissionsPath
     exportSubmissionsOfGroupsPath
@@ -391,7 +391,7 @@ pageRequestParams = liftsP
   (\sk _ -> [requestParam sk]) -- queueSubmissionForTest
   (\ak _ -> [requestParam ak]) -- queueAllSubmissionsForTest
   (\gk _ -> [requestParam gk]) -- unsubscribeFromCourse
-  (\ck _ -> [requestParam ck]) -- exportEvaluationsScores
+  (\ck _ -> [requestParam ck]) -- exportEvaluationsScoresAdminedGroups
   (\ck _ -> [requestParam ck]) -- exportEvaluationsScoresAllGroups
   (\ak _ -> [requestParam ak]) -- exportSubmissions
   (\ak u _ -> [requestParam ak, requestParam u])   -- exportSubmissionsOfGroups

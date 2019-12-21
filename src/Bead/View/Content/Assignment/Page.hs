@@ -127,7 +127,7 @@ newGroupAssignmentPage = do
   now <- liftIO $ getCurrentTime
   gk <- getParameter (customGroupKeyPrm groupKeyParamName)
   (g,tss,ufs) <- userStory $ do
-    S.isAdministratedGroup gk
+    S.isAdminOfGroupOrCourse gk
     group <- S.loadGroup gk
     tss' <- S.testScriptInfosOfGroup gk
     ufs  <- map fst <$> S.listUsersFiles
@@ -148,7 +148,7 @@ newGroupAssignmentPreviewPage = do
   assignment <- getAssignment
   tc <- readTCCreationParameters
   (g,tss,ufs) <- userStory $ do
-    S.isAdministratedGroup gk
+    S.isAdminOfGroupOrCourse gk
     group <- S.loadGroup gk
     tss' <- S.testScriptInfosOfGroup gk
     ufs  <- map fst <$> S.listUsersFiles

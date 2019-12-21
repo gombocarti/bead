@@ -367,9 +367,9 @@ managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
         msg <- getI18N
         return . navigationWithRoute $
           case Map.lookup ck courses of
-            Nothing -> map (button msg) [Pages.newGroupAssignment gk (), Pages.newGroupAssessment gk (), Pages.exportEvaluationsScores ck ()]
+            Nothing -> map (button msg) [Pages.newGroupAssignment gk (), Pages.newGroupAssessment gk (), Pages.exportEvaluationsScoresAdminedGroups ck ()]
             Just _  -> map (button msg) [Pages.newGroupAssignment gk (), Pages.newCourseAssignment ck (), Pages.newGroupAssessment gk ()]
-                         ++ [dropdown msg [Pages.exportEvaluationsScores ck (), Pages.exportEvaluationsScoresAllGroups ck ()]])
+                         ++ [dropdown msg [Pages.exportEvaluationsScoresAdminedGroups ck (), Pages.exportEvaluationsScoresAllGroups ck ()]])
       (Map.lookup gk groups)
 
     courseMenu _n _us _as _uls _grps ck = maybe
@@ -378,7 +378,7 @@ managementMenu courses groups = submissionTableInfoCata courseMenu groupMenu
         msg <- getI18N
         return (navigationWithRoute $
                   [button msg $ Pages.newCourseAssignment ck ()]
-                   ++ [dropdown msg [Pages.exportEvaluationsScores ck (), Pages.exportEvaluationsScoresAllGroups ck ()]]))
+                   ++ [dropdown msg [Pages.exportEvaluationsScoresAdminedGroups ck (), Pages.exportEvaluationsScoresAllGroups ck ()]]))
       (Map.lookup ck courses)
 
     navigationWithRoute :: [H.Html] -> H.Html
