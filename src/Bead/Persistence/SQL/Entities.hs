@@ -137,13 +137,6 @@ FeedbacksOfSubmission
   UniqueSubmisisonFeedback feedback
   deriving Show
 
--- Assignment -> [Submission]
-SubmissionsOfAssignment
-  assignment AssignmentId
-  submission SubmissionId
-  UniqueSubmissionsOfAssignmentPair assignment submission
-  deriving Show
-
 -- Assignment -> TestCase
 -- Only one assignment is allowed for the test case
 TestCaseOfAssignment
@@ -255,13 +248,6 @@ CommentsOfSubmission
   comment    CommentId
   UniqueCommentsOfSubmissionPair submission comment
   UniqueCommentsOfSubmissionComment comment
-  deriving Show
-
--- Submission -> User
-UserOfSubmission
-  submission SubmissionId
-  user       UserId
-  UniqueUserOfSubmission user submission
   deriving Show
 
 -- Assignment -> User -> [Submission]

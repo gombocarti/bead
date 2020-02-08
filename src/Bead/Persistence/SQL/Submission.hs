@@ -48,8 +48,6 @@ saveSubmission assignmentKey username submission =
        key <- insert (fromDomainValue submission)
        let assignmentKey' = toEntityKey assignmentKey
            userKey        = entityKey userEnt
-       insertUnique (SubmissionsOfAssignment assignmentKey' key)
-       insertUnique (UserOfSubmission key userKey)
        insert (UserSubmissionOfAssignment key assignmentKey' userKey)
        insert (OpenedSubmission key assignmentKey' userKey)
        return $! toDomainKey key)
@@ -67,21 +65,21 @@ loadSubmission key = do
 -- Returns the assignment for the submission
 assignmentOfSubmission :: Domain.SubmissionKey -> Persist Domain.AssignmentKey
 assignmentOfSubmission key = do
-  assignments <- selectList [SubmissionsOfAssignmentSubmission ==. toEntityKey key] []
+  assignments <- selectList [UserSubmissionOfAssignmentSubmission ==. toEntityKey key] []
   return $!
     maybe
       (persistError "assignmentOfSubmission" $ "no submission was found " ++ show key)
-      (toDomainKey . submissionsOfAssignmentAssignment . entityVal)
+      (toDomainKey . userSubmissionOfAssignmentAssignment . entityVal)
       (listToMaybe assignments)
 
 -- Returns the username for the submission
 usernameOfSubmission :: Domain.SubmissionKey -> Persist Domain.Username
 usernameOfSubmission key = do
-  usersOfSub <- selectList [UserOfSubmissionSubmission ==. toEntityKey key] []
+  usersOfSub <- selectList [UserSubmissionOfAssignmentSubmission ==. toEntityKey key] []
   maybe
     (persistError "usernameOfSubmission" $ "No submission was found " ++ show key)
     (\userOfSub -> do
-        let userId = userOfSubmissionUser $ entityVal userOfSub
+        let userId = userSubmissionOfAssignmentUser $ entityVal userOfSub
         mUser <- get userId
         maybe
           (persistError "usernameOfSubmission" $ "No user us found " ++ show userId)

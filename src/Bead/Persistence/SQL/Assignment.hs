@@ -134,8 +134,8 @@ groupOfAssignment key = do
 -- TODO: Test
 submissionsForAssignment :: Domain.AssignmentKey -> Persist [Domain.SubmissionKey]
 submissionsForAssignment key = do
-  submissions <- selectList [SubmissionsOfAssignmentAssignment ==. toEntityKey key] []
-  return $! map (toDomainKey . submissionsOfAssignmentSubmission . entityVal) submissions
+  submissions <- selectList [UserSubmissionOfAssignmentAssignment ==. toEntityKey key] []
+  return $! map (toDomainKey . userSubmissionOfAssignmentSubmission . entityVal) submissions
 
 -- Returns when the assignment was saved first, the modification of an assignment
 -- does not change the time stamp
