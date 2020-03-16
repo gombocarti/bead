@@ -118,9 +118,8 @@ submissionPostHandler = do
         else
           case uploadedFile of
             Just (File name contents) -> do
-              let extension = ".zip"
-                  signature = B.pack "PK"
-              if (takeExtension name == extension || signature `B.isPrefixOf` contents)
+              let zipSignature = B.pack "PK"
+              if (zipSignature `B.isPrefixOf` contents)
                 then submit $ return $ ZippedSubmission contents
                 else return $
                   ErrorMessage $ msg_Submission_File_InvalidFile

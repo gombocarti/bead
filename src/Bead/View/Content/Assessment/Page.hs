@@ -256,7 +256,7 @@ fillAssessmentTemplate pdata = do
         if readOnlyEvType
           then showEvaluationType msg selectedEvType
           else evTypeSelection msg selectedEvType
-        Bootstrap.formGroup $ fileInput "csv"
+        Bootstrap.formGroup $ optionalFileInput "csv"
         Bootstrap.row $ do
           Bootstrap.colMd4 (previewButton msg ! A.disabled "")
           Bootstrap.colMd4 (downloadCsvButton msg)

@@ -164,11 +164,14 @@ hiddenInput name value =
 hiddenInputWithId :: String -> String -> Html
 hiddenInputWithId n v = hiddenInput n v ! A.id (fromString n)
 
-fileInput :: String -> Html
-fileInput name =
+optionalFileInput :: String -> Html
+optionalFileInput name =
   H.input ! A.type_ "file"
           ! A.id (fromString name)
           ! A.name (fromString name)
+
+fileInput :: String -> Html
+fileInput name = optionalFileInput name ! A.required ""
 
 -- Creates a number input with the given minimum and maximum, if the value is given
 -- set as the default value
