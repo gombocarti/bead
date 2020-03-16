@@ -342,16 +342,11 @@ Executable Bead
   Build-Depends:    base, Bead
   Main-is:          Main.hs
   HS-Source-Dirs:   main
-  Buildable:        True
 
 Executable BeadAdmin
   Build-Depends:    base, Bead
   Main-is:          Admin.hs
   HS-Source-Dirs:   main
-  if flag(Tests)
-    Buildable:      False
-  else
-    Buildable:      True
 
 Executable BeadTest
   Build-Depends:
