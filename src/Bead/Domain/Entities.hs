@@ -9,6 +9,7 @@ module Bead.Domain.Entities (
   , SubmissionValue(..)
   , submissionValue
   , withSubmissionValue
+  , submissionValueToByteString
   , evaluationResultCata
   , Evaluation(..)
   , evaluationCata
@@ -99,6 +100,8 @@ module Bead.Domain.Entities (
 import           Control.Applicative
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.UTF8 as BLUTF8
 import           Data.Data
 import           Data.Hashable (Hashable)
 import           Data.List (findIndex, sortBy)
@@ -145,6 +148,9 @@ submissionCata f (Submission sub subPostDate) = f sub subPostDate
 
 -- | Template function for submission with flipped arguments
 withSubmission s f = submissionCata f s
+
+submissionValueToByteString :: SubmissionValue -> BL.ByteString
+submissionValueToByteString = submissionValue BLUTF8.fromString BL.fromStrict
 
 evaluationResultCata
   binary

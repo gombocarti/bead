@@ -173,7 +173,7 @@ readUserRegInfo = do
   persist <- getPersist
   config <- getConfig
   join $ lift $ do
-    putStrLn "Creating admin user, all characters are converted to lower case."
+    putStrLn "Note: all characters will be converted to lower case."
     putStrLn "Username must be in the defined format, which is given in the config."
     usr <- readUsername config
     exists <- Persist.runPersist persist $ Persist.doesUserExist (Username usr)

@@ -74,6 +74,17 @@ userDescription username = do
   return $! Domain.withUser user $ \_role username _email name _timezone _language ->
     Domain.UserDesc username name
 
+uidToUsername :: Domain.Uid -> Persist Domain.Username
+uidToUsername uid = do
+  users <- select $ from $ \u -> do
+    where_ (u ^. UserUid Esq.==. val (Domain.uid Text.pack uid))
+    limit 1
+    return $ u ^. UserUsername
+  case users of
+    [] -> persistError "uidToUsername" $ "user is not found: " ++ show uid
+    [user] -> return . Domain.Username . Text.unpack . unValue $ user
+    _ -> persistError "uidToUsername" $ "impossible: multiple users are found: " ++ show uid
+
 -- Lists all the submission keys for the submissions that submitted by the user
 -- for the given assignment
 userSubmissions :: Domain.Username -> Domain.AssignmentKey -> Persist [Domain.SubmissionKey]

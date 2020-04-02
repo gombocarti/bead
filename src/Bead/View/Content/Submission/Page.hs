@@ -38,13 +38,14 @@ submission = ViewModifyHandler submissionPage submissionPostHandler
 data PageData = PageData {
     asKey   :: AssignmentKey
   , asValue :: Assignment
-  , asDesc  :: AssignmentDesc
   , asHasTestCase :: HasTestCase
   , asTimeConv :: UserTimeConverter
   , asNow :: UTCTime
   , asMaxFileSize :: Int
   , asLimit :: SubmissionLimit
   , asSubmissions :: [SubmissionInfo]
+  , asCourse  :: Course
+  , asGroup :: Maybe Group
   }
 
 data UploadResult
@@ -59,14 +60,15 @@ submissionPage = do
   ut <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ getCurrentTime
   size <- fmap maxUploadSizeInKb $ beadHandler getConfiguration
-  (limit, aDesc, asg, submissions, hasTest) <- userStory $ do
+  (asg, (course, grp), limit, submissions, hasTest) <- userStory $ do
     Story.doesBlockAssignmentView ak
     Story.isUsersAssignment ak
-    (aDesc, asg) <- Story.userAssignmentForSubmission ak
+    asg <- Story.loadAssignment ak
+    courseAndGroup <- Story.courseAndGroupOfAssignment ak
     lmt <- Story.assignmentSubmissionLimit ak
     submissions <- Story.userSubmissionInfos ak
     hasTest <- Story.hasAssignmentTestCase ak
-    return $! (lmt, aDesc, asg, submissions, hasTest)
+    return $! (asg, courseAndGroup, lmt, submissions, hasTest)
 
   if (now < Assignment.start asg)
     then setPageContents assignmentNotAvailableYetContent
@@ -76,13 +78,14 @@ submissionPage = do
         PageData {
             asKey = ak
           , asValue = asg
-          , asDesc = aDesc
           , asHasTestCase = hasTest
           , asTimeConv = ut
           , asNow = now
           , asMaxFileSize = size
           , asLimit = limit
           , asSubmissions = submissions
+          , asCourse = course
+          , asGroup = grp
           }
 
 submissionPostHandler :: POSTContentHandler
@@ -98,7 +101,7 @@ submissionPostHandler = do
     let uploadPolicy = setMaximumFormInputSize maxSize defaultUploadPolicy
     let perPartUploadPolicy = const $ allowWithMaximumSize maxSize
     handleFileUploads tmpDir uploadPolicy perPartUploadPolicy handlePart
-  (_desc,asg) <- userStory $ Story.userAssignmentForSubmission ak
+  asg <- userStory $ Story.loadAssignment ak
   -- Assignment is for the user
   let aspects = Assignment.aspects asg
   if Assignment.isPasswordProtected aspects
@@ -118,9 +121,8 @@ submissionPostHandler = do
         else
           case uploadedFile of
             Just (File name contents) -> do
-              let extension = ".zip"
-                  signature = B.pack "PK"
-              if (takeExtension name == extension || signature `B.isPrefixOf` contents)
+              let zipSignature = B.pack "PK"
+              if (zipSignature `B.isPrefixOf` contents)
                 then submit $ return $ ZippedSubmission contents
                 else return $
                   ErrorMessage $ msg_Submission_File_InvalidFile
@@ -170,8 +172,9 @@ submissionContent p = do
     -- Informational table on the page
     Bootstrap.rowColMd12 $ Bootstrap.table $
       H.tbody $ do
-        let a = asDesc p
-          in (msg $ msg_Submission_Course "Course:") .|. maybe (courseName $ aCourse a) (fullGroupName (aCourse a)) (aGroup a)
+        let course = asCourse p
+            grp = asGroup p
+          in (msg $ msg_Submission_Course "Course:") .|. maybe (courseName course) (fullGroupName course) grp
         (msg $ msg_Submission_Assignment "Assignment:") .|. (Assignment.name $ asValue p)
         when (Assignment.isActive (asValue p) (asNow p)) $
           (msg $ msg_Submission_Test "Test:") .|. (msg $ infoOnTestCase)

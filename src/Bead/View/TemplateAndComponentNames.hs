@@ -188,6 +188,8 @@ menuId = P.pageCata
   (c3 "link-export-submissions-of-groups")
   (c3 "link-export-submissions-of-one-group")
   (c2 "link-get-submission")
+  (c3 "link-get-submissions-of-user-in-group")
+  (c3 "link-get-submissions-of-assignment-in-group")
   (c2 "link-get-course-csv")
   (c2 "link-get-group-csv")
   (c2 "link-new-group-assessment")
@@ -199,6 +201,7 @@ menuId = P.pageCata
   (c2 "link-view-asssessment")
   (c "link-notifications")
   (c2 "link-rest-submission-table")
+  (c2 "link-rest-users-in-group")
     where
       c = const
       c2 = c . const

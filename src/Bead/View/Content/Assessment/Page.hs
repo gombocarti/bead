@@ -30,7 +30,7 @@ import qualified Data.ByteString.UTF8 as BsUTF8 (toString)
 import           Data.Function (on)
 import qualified Data.Map as M
 import           Data.List (sortBy,intercalate)
-import           Data.String.Utils (strip)
+import           Data.String.Utils as S (strip)
 import           Data.Time (getCurrentTime)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
@@ -180,7 +180,7 @@ parseEvaluation msg evalConfig s = evConfigCata
               where
                 isAccepted = normalized `elem` [accepted,"+","1"]
                 isRejected = normalized `elem` [rejected,"-","0"]
-                normalized = map toUpper (strip s)
+                normalized = map toUpper (S.strip s)
                 accepted   = map toUpper (msg . msg_NewAssessment_Accepted $ "Accepted")
                 rejected   = map toUpper (msg . msg_NewAssessment_Rejected $ "Rejected")
 
@@ -256,7 +256,7 @@ fillAssessmentTemplate pdata = do
         if readOnlyEvType
           then showEvaluationType msg selectedEvType
           else evTypeSelection msg selectedEvType
-        Bootstrap.formGroup $ fileInput "csv"
+        Bootstrap.formGroup $ optionalFileInput "csv"
         Bootstrap.row $ do
           Bootstrap.colMd4 (previewButton msg ! A.disabled "")
           Bootstrap.colMd4 (downloadCsvButton msg)

@@ -9,12 +9,12 @@ import           Data.Tuple.Utils (snd3)
 import           Bead.View.Content hiding (userState)
 import           Bead.View.Content.SubmissionTable
 
-type ActiveAssignment = (AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))
+type ActiveAssignment = (AssignmentKey, Assignment, Maybe (SubmissionKey, SubmissionState), SubmissionLimit)
 
 type ActiveAssessment = (AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)
 
-activeAsgDesc :: ActiveAssignment -> AssignmentDesc
-activeAsgDesc = snd3
+activeAsg :: ActiveAssignment -> Assignment
+activeAsg (_, a, _, _) = a
 
 hasAssessments :: (Group, Course, [ActiveAssignment], [ActiveAssessment]) -> Bool
 hasAssessments (_, _, _, assmnts) = not . null $ assmnts

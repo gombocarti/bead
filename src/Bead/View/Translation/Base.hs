@@ -588,6 +588,8 @@ labels =
  , "msg_LinkText_ExportSubmissionsOfGroups"
  , "msg_LinkText_ExportSubmissionsOfOneGroup"
  , "msg_LinkText_GetSubmission"
+ , "msg_LinkText_GetSubmissionsOfUserInGroup"
+ , "msg_LinkText_GetSubmissionsOfAssignmentInGroup"
  , "msg_LinkText_GetCourseCsv"
  , "msg_LinkText_GetGroupCsv"
  , "msg_LinkText_NewGroupAssessment"
@@ -599,6 +601,7 @@ labels =
  , "msg_LinkText_ViewAssessment"
  , "msg_LinkText_Notifications"
  , "msg_LinkText_SubmissionTable"
+ , "msg_LinkText_UsersInGroup"
 
  , "msg_TestScriptTypeSimple"
  , "msg_TestScriptTypeZipped"

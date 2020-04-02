@@ -164,11 +164,14 @@ hiddenInput name value =
 hiddenInputWithId :: String -> String -> Html
 hiddenInputWithId n v = hiddenInput n v ! A.id (fromString n)
 
-fileInput :: String -> Html
-fileInput name =
+optionalFileInput :: String -> Html
+optionalFileInput name =
   H.input ! A.type_ "file"
           ! A.id (fromString name)
           ! A.name (fromString name)
+
+fileInput :: String -> Html
+fileInput name = optionalFileInput name ! A.required ""
 
 -- Creates a number input with the given minimum and maximum, if the value is given
 -- set as the default value
@@ -384,6 +387,8 @@ linkText = P.pageCata
   (c3 $ msg_LinkText_ExportSubmissionsOfGroups "Export Admined Groups")
   (c3 $ msg_LinkText_ExportSubmissionsOfOneGroup "Export This Group")
   (c2 $ msg_LinkText_GetSubmission "Download Submission")
+  (c3 $ msg_LinkText_GetSubmissionsOfUserInGroup "Download Submissions of a User in Group")
+  (c3 $ msg_LinkText_GetSubmissionsOfAssignmentInGroup "Download Submissions of Assignment in Group")
   (c2 $ msg_LinkText_GetCourseCsv "Download Course Csv")
   (c2 $ msg_LinkText_GetGroupCsv "Download Group Csv")
   (c2 $ msg_LinkText_NewGroupAssessment "New Group Assessment")
@@ -394,7 +399,8 @@ linkText = P.pageCata
   (c2 $ msg_LinkText_ModifyAssessmentPreview "Modify Assessment")
   (c2 $ msg_LinkText_ViewAssessment "View Assessment")
   (c $ msg_LinkText_Notifications "Notifications")
-  (c2 $ msg_LinkText_SubmissionTable "Submission table")
+  (c2 $ msg_LinkText_SubmissionTable "Submission Table")
+  (c2 $ msg_LinkText_UsersInGroup "Users in Group")
   where
     c = const
     c2 = c . const

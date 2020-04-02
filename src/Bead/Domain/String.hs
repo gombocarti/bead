@@ -1,9 +1,10 @@
 module Bead.Domain.String
   ( removeAccents
   , replaceSlash
+  , porcelain
   ) where
 
-import           Data.Char (toUpper)
+import           Data.Char (toUpper, toLower, isSpace, isLetter, isAscii, isDigit)
 import qualified Data.Map as Map
 import           Data.String.Utils (replace)
 
@@ -40,3 +41,17 @@ removeAccents = map removeAccent
 -- archives, making filenames zip-friendly.
 replaceSlash :: String -> String
 replaceSlash = replace "/" "_"
+
+porcelain :: String -> String
+porcelain = map toLower . keepWhiteListChars . map replaceSpaces . removeAccents
+  where
+    keepWhiteListChars :: String -> String
+    keepWhiteListChars = filter isWhiteListChar
+
+    isWhiteListChar :: Char -> Bool
+    isWhiteListChar c = isAscii c && (isDigit c || isLetter c || c `elem` ("_-()" :: String))
+
+    replaceSpaces :: Char -> Char
+    replaceSpaces c
+      | isSpace c = '_'
+      | otherwise = c

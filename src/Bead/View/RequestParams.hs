@@ -3,7 +3,7 @@ module Bead.View.RequestParams where
 import Control.Monad (join)
 import Data.String (IsString(..))
 
-import Bead.Domain.Entities (Username(..))
+import Bead.Domain.Entities (Username(Username), Uid(Uid))
 import Bead.Domain.Relationships
 import Bead.View.Dictionary (Language, languageCata)
 import Bead.View.Fay.HookIds
@@ -113,9 +113,14 @@ instance ReqParamValue Username where
 instance RequestParam Username where
   requestParam u = ReqParam (fieldName usernameField, paramValue u)
 
+instance ReqParamValue Uid where
+  paramValue (Uid u) = fromString u
+
+instance RequestParam Uid where
+  requestParam u = ReqParam (fieldName userUidField, paramValue u)
+
 instance ReqParamValue Language where
   paramValue = languageCata fromString
 
 instance RequestParam Language where
   requestParam l = ReqParam (languageParamName, paramValue l)
-

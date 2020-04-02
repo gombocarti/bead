@@ -5,13 +5,12 @@ module Bead.View.Content.GetSubmission (
   ) where
 
 import           Control.Monad.Trans (lift)
-import           Data.String (fromString)
 import qualified Data.ByteString.UTF8 as BsUTF8 (fromString)
+import           Data.String (fromString)
 import           System.FilePath ((<.>))
 
-import           Bead.Domain.Entities (usernameCata)
-import qualified Bead.Domain.Entity.Assignment as Assignment
 import qualified Bead.Controller.UserStories as Story
+import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Content
 import qualified Bead.View.ContentHandler as CH
 
@@ -36,4 +35,3 @@ submissionFilename desc = (basename, ext)
     where
       basename = concat [eStudent desc, " (", uid id $ eUid desc, ")"]
       ext = if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ desc) then "zip" else "txt"
-

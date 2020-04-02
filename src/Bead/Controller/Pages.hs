@@ -4,6 +4,7 @@ module Bead.Controller.Pages where
 
 import           Control.Monad (join)
 
+import           Bead.Domain.Entities (Uid)
 import qualified Bead.Domain.Entities      as E
 import           Bead.Domain.Relationships as R
 
@@ -87,6 +88,8 @@ data DataPage a
   | ExportSubmissionsOfGroups AssignmentKey E.Username a
   | ExportSubmissionsOfOneGroup AssignmentKey GroupKey a
   | GetSubmission SubmissionKey a
+  | GetSubmissionsOfUserInGroup GroupKey Uid a
+  | GetSubmissionsOfAssignmentInGroup GroupKey AssignmentKey a
   | GetCourseCsv CourseKey a
   | GetGroupCsv GroupKey a
   deriving (Eq, Ord, Show, Functor)
@@ -98,6 +101,8 @@ dataPageCata
   exportSubmissionsOfGroups
   exportSubmissionsOfOneGroup
   getSubmission
+  getSubmissionsOfUserInGroup
+  getSubmissionsOfAssignmentInGroup
   getCourseCsv
   getGroupCsv
   p = case p of
@@ -107,6 +112,8 @@ dataPageCata
     ExportSubmissionsOfGroups ak u a -> exportSubmissionsOfGroups ak u a
     ExportSubmissionsOfOneGroup ak gk a -> exportSubmissionsOfOneGroup ak gk a
     GetSubmission sk a -> getSubmission sk a
+    GetSubmissionsOfUserInGroup gk uid a -> getSubmissionsOfUserInGroup gk uid a
+    GetSubmissionsOfAssignmentInGroup gk ak a -> getSubmissionsOfAssignmentInGroup gk ak a
     GetCourseCsv ck a -> getCourseCsv ck a
     GetGroupCsv gk a -> getGroupCsv gk a
 
@@ -118,6 +125,8 @@ dataPageValue = dataPageCata
   c2id -- exportSubmissionsOfGroups
   c2id -- exportSubmissionsOfOneGroup
   cid  -- getSubmission
+  c2id -- getSubmissionsOfUserInGroup
+  c2id -- getSubmissionsOfAssignmentInGroup
   cid  -- getCourseCsv
   cid  -- getGroupCsv
   where
@@ -333,14 +342,24 @@ modifyPageValue = modifyPageCata
 
 data RestViewPage a
   = SubmissionTable GroupKey a
+  | UsersInGroup GroupKey a
   deriving (Eq, Ord, Show, Functor)
 
-restViewPageCata :: (GroupKey -> a -> b) -> RestViewPage a -> b
-restViewPageCata submissionTable p = case p of
-  SubmissionTable gk a -> submissionTable gk a
+restViewPageCata :: (GroupKey -> a -> b)
+                 -> (GroupKey -> a -> b)
+                 -> RestViewPage a -> b
+restViewPageCata
+  submissionTable
+  usersInGroup
+  p = case p of
+    SubmissionTable gk a -> submissionTable gk a
+    UsersInGroup gk a -> usersInGroup gk a
 
 restViewPageValue :: RestViewPage a -> a
-restViewPageValue = restViewPageCata (const id)
+restViewPageValue = restViewPageCata (c id) (c id)
+  where
+    c = const
+    c2 = const . c
 
 -- The kind of the possible page types
 data Page a b c d e f
@@ -420,6 +439,8 @@ exportSubmissions ak                = Data . ExportSubmissions ak
 exportSubmissionsOfGroups ak u      = Data . ExportSubmissionsOfGroups ak u
 exportSubmissionsOfOneGroup ak gk   = Data . ExportSubmissionsOfOneGroup ak gk
 getSubmission sk                    = Data . GetSubmission sk
+getSubmissionsOfUserInGroup gk uid  = Data . GetSubmissionsOfUserInGroup gk uid
+getSubmissionsOfAssignmentInGroup gk ak = Data . GetSubmissionsOfAssignmentInGroup gk ak
 getCourseCsv ck                     = Data . GetCourseCsv ck
 getGroupCsv gk                      = Data . GetGroupCsv gk
 
@@ -465,6 +486,7 @@ queueAllSubmissionsForTest ak     = Modify . QueueAllSubmissionsForTest ak
 unsubscribeFromCourse gk          = Modify . UnsubscribeFromCourse gk
 
 submissionTable gk = RestView . SubmissionTable gk
+usersInGroup gk = RestView . UsersInGroup gk
 
 -- Template method for the page data structure
 pageCata
@@ -515,6 +537,8 @@ pageCata
   exportSubmissionsOfGroups
   exportSubmissionsOfOneGroup
   getSubmission
+  getSubmissionsOfUserInGroup
+  getSubmissionsOfAssignmentInGroup
   getCourseCsv
   getGroupCsv
   newGroupAssessment
@@ -526,6 +550,7 @@ pageCata
   viewAssessment
   notifications
   submissionTable
+  usersInGroup
   p = case p of
     (View (Index a)) -> index a
     (View (Login a)) -> login a
@@ -574,6 +599,8 @@ pageCata
     (Data (ExportSubmissionsOfGroups ak u a)) -> exportSubmissionsOfGroups ak u a
     (Data (ExportSubmissionsOfOneGroup ak gk a)) -> exportSubmissionsOfOneGroup ak gk a
     (Data (GetSubmission sk a)) -> getSubmission sk a
+    (Data (GetSubmissionsOfUserInGroup gk uid a)) -> getSubmissionsOfUserInGroup gk uid a
+    (Data (GetSubmissionsOfAssignmentInGroup gk ak a)) -> getSubmissionsOfAssignmentInGroup gk ak a
     (Data (GetCourseCsv ck a)) -> getCourseCsv ck a
     (Data (GetGroupCsv gk a)) -> getGroupCsv gk a
     (ViewModify (NewGroupAssessment gk a)) -> newGroupAssessment gk a
@@ -585,6 +612,7 @@ pageCata
     (View (ViewAssessment ak a)) -> viewAssessment ak a
     (View (Notifications a)) -> notifications a
     (RestView (SubmissionTable gk a)) -> submissionTable gk a
+    (RestView (UsersInGroup gk a)) -> usersInGroup gk a
 
 -- Constants that attached each of the page constructor
 constantsP
@@ -635,6 +663,8 @@ constantsP
   exportSubmissionsOfGroups_
   exportSubmissionsOfOneGroup_
   getSubmission_
+  getSubmissionsOfUserInGroup_
+  getSubmissionsOfAssignmentInGroup_
   getCourseCsv_
   getGroupCsv_
   newGroupAssessment_
@@ -646,6 +676,7 @@ constantsP
   viewAssessment_
   notifications_
   submissionTable_
+  usersInGroup_
   = pageCata
       (c $ index index_)
       (c $ login login_)
@@ -694,6 +725,8 @@ constantsP
       (\ak u _ -> exportSubmissionsOfGroups ak u exportSubmissionsOfGroups_)
       (\ak gk _ -> exportSubmissionsOfOneGroup ak gk exportSubmissionsOfOneGroup_)
       (\sk _ -> getSubmission sk getSubmission_)
+      (\gk uid _ -> getSubmissionsOfUserInGroup gk uid getSubmissionsOfUserInGroup_)
+      (\gk ak _ -> getSubmissionsOfAssignmentInGroup gk ak getSubmissionsOfAssignmentInGroup_)
       (\ck _ -> getCourseCsv ck getCourseCsv_)
       (\gk _ -> getGroupCsv gk getGroupCsv_)
       (\gk _ -> newGroupAssessment gk newGroupAssessment_)
@@ -705,6 +738,7 @@ constantsP
       (\ak _ -> viewAssessment ak viewAssessment_)
       (c $ notifications notifications_)
       (\gk _ -> submissionTable gk submissionTable_)
+      (\gk _ -> usersInGroup gk usersInGroup_)
   where
     c = const
 
@@ -757,6 +791,8 @@ liftsP
   exportSubmissionsOfGroups_
   exportSubmissionsOfOneGroup_
   getSubmission_
+  getSubmissionsOfUserInGroup_
+  getSubmissionsOfAssignmentInGroup_
   getCourseCsv_
   getGroupCsv_
   newGroupAssessment_
@@ -768,6 +804,7 @@ liftsP
   viewAssessment_
   notifications_
   submissionTable_
+  usersInGroup_
   = pageCata
       (index . index_)
       (login . login_)
@@ -816,6 +853,8 @@ liftsP
       (\ak u a -> exportSubmissionsOfGroups ak u (exportSubmissionsOfGroups_ ak u a))
       (\ak gk a -> exportSubmissionsOfOneGroup ak gk (exportSubmissionsOfOneGroup_ ak gk a))
       (\sk a -> getSubmission sk (getSubmission_ sk a))
+      (\gk uid a -> getSubmissionsOfUserInGroup gk uid (getSubmissionsOfUserInGroup_ gk uid a))
+      (\gk ak a -> getSubmissionsOfAssignmentInGroup gk ak (getSubmissionsOfAssignmentInGroup_ gk ak a))
       (\ck a -> getCourseCsv ck (getCourseCsv_ ck a))
       (\gk a -> getGroupCsv gk (getGroupCsv_ gk a))
       (\gk a -> newGroupAssessment gk (newGroupAssessment_ gk a))
@@ -827,6 +866,7 @@ liftsP
       (\ak a -> viewAssessment ak (viewAssessment_ ak a))
       (notifications . notifications_)
       (\gk a -> submissionTable gk (submissionTable_ gk a))
+      (\gk a -> usersInGroup gk (usersInGroup_ gk a))
 
 isIndex (View (Index _)) = True
 isIndex _ = False
@@ -965,6 +1005,12 @@ isExportSubmissionsOfOneGroup _ = False
 isGetSubmission (Data (GetSubmission _ _)) = True
 isGetSubmission _ = False
 
+isGetSubmissionsOfUserInGroup (Data (GetSubmissionsOfUserInGroup _ _ _)) = True
+isGetSubmissionsOfUserInGroup _ = False
+
+isGetSubmissionsOfAssignmentInGroup (Data (GetSubmissionsOfAssignmentInGroup _ _ _)) = True
+isGetSubmissionsOfAssignmentInGroup _ = False
+
 isGetCourseCsv (Data (GetCourseCsv _ _)) = True
 isGetCourseCsv _ = False
 
@@ -997,6 +1043,9 @@ isNotifications _ = False
 
 isSubmissionTable (RestView (SubmissionTable _ _)) = True
 isSubmissionTable _ = False
+
+isUsersInGroup (RestView (UsersInGroup _ _)) = True
+isUsersInGroup _ = False
 
 -- Returns True if the given page satisfies one of the given predicates in the page predicate
 -- list
@@ -1055,6 +1104,9 @@ groupAdminPages = [
   , isQueueSubmissionForTest
   , isQueueAllSubmissionsForTest
   , isSubmissionTable
+  , isGetSubmissionsOfUserInGroup
+  , isGetSubmissionsOfAssignmentInGroup
+  , isUsersInGroup
   ]
 
 courseAdminPages = [
@@ -1100,6 +1152,9 @@ courseAdminPages = [
   , isQueueSubmissionForTest
   , isQueueAllSubmissionsForTest
   , isSubmissionTable
+  , isGetSubmissionsOfUserInGroup
+  , isGetSubmissionsOfAssignmentInGroup
+  , isUsersInGroup
   ]
 
 adminPages = [
@@ -1237,6 +1292,7 @@ pageGen = oneof [
       groupKey      = GroupKey . showInt      <$> choose (1,5000)
       testScriptKey = TestScriptKey . showInt <$> choose (1,5000)
       username      = E.Username <$> vectorOf 6 alphaNum
+      uid           = E.Uid <$> vectorOf 6 alphaNum
 
       nonParametricPages = elements [
           index ()
@@ -1300,6 +1356,9 @@ pageGen = oneof [
         , modifyAssessmentPreview <$> assessmentKey <*> unit
         , viewAssessment <$> assessmentKey <*> unit
         , submissionTable <$> groupKey <*> unit
+        , getSubmissionsOfUserInGroup <$> groupKey <*> uid <*> unit
+        , getSubmissionsOfAssignmentInGroup <$> groupKey <*> assignmentKey <*> unit
+        , usersInGroup <$> groupKey <*> unit
         ]
 
       unit = return ()

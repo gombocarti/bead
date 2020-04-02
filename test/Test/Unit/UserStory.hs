@@ -119,7 +119,7 @@ courseAndGroupAssignmentTest = testCase "Course and group assignments" $ do
       subscribeToGroup gk2
       as <- userAssignmentsAssessments
       return (a1,as)
-    let as1 = [ ak | (_, _, asgs, _) <- as, (ak, _, _) <- asgs ]
+    let as1 = [ ak | (_, _, asgs, _) <- as, (ak, _, _, _) <- asgs ]
     lift $ assertBool "Assignment cannot be not found in the assignment list" ([a1,a2] == as1 || [a2,a1] == as1)
 
     (uc,ug) <- userStory student2Username $ do

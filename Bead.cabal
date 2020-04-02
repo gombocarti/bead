@@ -289,6 +289,7 @@ Library
     Bead.View.Content.Public.Registration
     Bead.View.Content.Public.ResetPassword
     Bead.View.Content.QueueSubmissionForTest
+    Bead.View.Content.Rest.Group
     Bead.View.Content.Rest.SubmissionTable.Page
     Bead.View.Content.Score.Page
     Bead.View.Content.Submission.Common
@@ -342,16 +343,11 @@ Executable Bead
   Build-Depends:    base, Bead
   Main-is:          Main.hs
   HS-Source-Dirs:   main
-  Buildable:        True
 
 Executable BeadAdmin
   Build-Depends:    base, Bead
   Main-is:          Admin.hs
   HS-Source-Dirs:   main
-  if flag(Tests)
-    Buildable:      False
-  else
-    Buildable:      True
 
 Executable BeadTest
   Build-Depends:

@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 module Bead.Persistence.Relations (
-    assignmentDesc
-  , submissionDesc
+    submissionDesc
   , submissionDetailsDesc
   , isAdminedSubmission
   , canUserCommentOn
@@ -9,6 +8,7 @@ module Bead.Persistence.Relations (
   , courseSubmissionTableInfo
   , groupSubmissionTableInfo
   , userAssignmentsAssessments
+  , allAssignmentsOfGroup
   , userSubmissionInfos
   , userLastSubmission
   , courseAndGroupOfAssignment
@@ -159,22 +159,6 @@ courseOrGroupOfAssignment ak = do
       case mCk of
         Just ck -> return . Left $ ck
         Nothing -> error $ "Impossible: No course or groupkey was found for the assignment:" ++ show ak
-
-assignmentDesc :: UTCTime -> Username -> AssignmentKey -> Persist AssignmentDesc
-assignmentDesc now user key = do
-  a <- loadAssignment key
-  limit <- submissionLimitOfAssignment user key
-  let aspects = Assignment.aspects a
-  (c, g) <- courseAndGroupOfAssignment key
-  return $! AssignmentDesc {
-      aActive = Assignment.isActive a now
-    , aIsolated = Assignment.isIsolated aspects
-    , aLimit = limit
-    , aTitle  = Assignment.name a
-    , aCourse = c
-    , aGroup  = g
-    , aEndDate = Assignment.end a
-    }
 
 administratedGroupsWithCourseName :: Username -> Persist [(GroupKey, Group, String)]
 administratedGroupsWithCourseName u = do
@@ -347,44 +331,45 @@ isAdminedSubmission u sk = do
 
   return $ elem ack allCourses
 
-
 -- TODO
 canUserCommentOn :: Username -> SubmissionKey -> Persist Bool
 canUserCommentOn _u _sk = return True
+
+-- Lists course and group assignments for a group.
+--
+-- Assignments are sorted by creation time in descending order (from
+-- oldest to most recent).
+allAssignmentsOfGroup :: GroupKey -> Persist [(AssignmentKey, Assignment)]
+allAssignmentsOfGroup gk = do
+  now <- liftIO getCurrentTime
+  asgs <- (++) <$> groupAssignments gk <*> courseAssignmentsOfGroup gk
+  asgsByCreationTime <- sortKeysBy (fmap Down . assignmentCreatedTime) asgs
+  mapM (\ak -> (,) ak <$> loadAssignment ak) asgsByCreationTime
 
 -- Produces assignments, information about the submissions and
 -- assessments which are associated with subscribed groups of the
 -- user.
 --
--- Assignments are sorted by deadline in descending order (from future to
--- to the farthest back in time).
+-- Assignments are sorted as in allAssignmentsOfGroup.
 --
 -- Assessments are sorted by creation time (from oldest to youngest).
-userAssignmentsAssessments :: Username -> Persist [(Group, Course, [(AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
+userAssignmentsAssessments :: Username -> Persist [(Group, Course, [(AssignmentKey, Assignment, Maybe (SubmissionKey, SubmissionState), SubmissionLimit)], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
 userAssignmentsAssessments u = do
   now <- liftIO getCurrentTime
   groups <- userGroups u
   forM groups $ \(ck, course, gk, grp) -> do
-    gAsgs <- groupAssignments gk
-    cAsgs <- courseAssignments ck
-    let asgs = cAsgs ++ gAsgs
-    asgDescs <- (sortAssignments . catMaybes) <$> mapM (createAssignmentDesc u now) asgs
+    asgs <- sortOn (Down . Assignment.end . snd) . filter (isVisible now . snd) <$> allAssignmentsOfGroup gk
+    asgAndSubmission <- forM asgs $ \(ak, a) -> do
+      info <- userLastSubmission u ak
+      limit <- submissionLimitOfAssignment u ak
+      return (ak, a, submKeyAndState <$> info, limit)
     assmnts <- assessmentsOfGroup gk
-    assmntDescs <- (sortAssessments . catMaybes) <$> mapM (createAssessmentDesc u) assmnts
-    return (grp, course, asgDescs, assmntDescs)
-
+    assmntDescs <- (sortAssessments . catMaybes) <$> mapM (createAssessmentDesc u) assmnts    
+    return (grp, course, asgAndSubmission, assmntDescs)
   where
-    -- Produces the assignment description if the assignment is active
-    -- Returns Nothing if the assignment is not visible for the user
-    createAssignmentDesc :: Username -> UTCTime -> AssignmentKey -> Persist (Maybe (AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState)))
-    createAssignmentDesc u now ak = do
-      a <- loadAssignment ak
-      case (now < Assignment.start a) of
-        True -> return Nothing
-        False -> do
-          desc <- assignmentDesc now u ak
-          info <- userLastSubmission u ak
-          return $ (Just (ak, desc, submKeyAndState <$> info))
+    -- Returns True if the assignment is visible to students, otherwise False.
+    isVisible :: UTCTime -> Assignment -> Bool
+    isVisible now a = now > Assignment.start a
 
     -- Produces an assessment and information about the evaluations for the
     -- assessments.
@@ -398,9 +383,6 @@ userAssignmentsAssessments u = do
             Nothing         -> return $ Just (ak, assessment, Nothing, Score_Not_Found)
             Just (sk,sInfo) -> return $ Just (ak, assessment, sk, sInfo)
         else return Nothing
-
-    sortAssignments :: [(a, AssignmentDesc, b)] -> [(a, AssignmentDesc, b)]
-    sortAssignments = reverse . sortOn (aEndDate . snd3)
 
     sortAssessments :: [(a, Assessment, b, c)] -> [(a, Assessment, b, c)]
     sortAssessments = sortOn (\(_, as, _, _) -> Assessment.created as)
@@ -417,8 +399,8 @@ groupSubmissionTableInfo :: GroupKey -> Persist SubmissionTableInfo
 groupSubmissionTableInfo gk = do
   ck <- courseOfGroup gk
   gassignments <- groupAssignments gk
-  cassignments <- courseAssignments ck
-  usernames   <- subscribedToGroup gk
+  cassignments <- courseAssignmentsOfGroup gk
+  usernames <- subscribedToGroup gk
   name <- fullGroupName gk
   mkGroupSubmissionTableInfo name usernames cassignments gassignments ck gk
 
@@ -430,13 +412,13 @@ courseSubmissionTableInfo ck = do
   name        <- courseName <$> loadCourse ck
   mkCourseSubmissionTableInfo name usernames assignments ck
 
--- Sort the given keys into an ordered list based on the time function
-sortKeysByTime :: (key -> Persist UTCTime) -> [key] -> Persist [key]
-sortKeysByTime time keys = map snd . sortOn fst <$> mapM getTime keys
+-- Sort the given keys into an ordered list based on some data
+sortKeysBy :: Ord a => (key -> Persist a) -> [key] -> Persist [key]
+sortKeysBy f keys = map snd . sortOn fst <$> mapM attach keys
   where
-    getTime k = do
-      t <- time k
-      return (t,k)
+    attach key = do
+      a <- f key
+      return (a, key)
 
 loadAssignmentInfos :: [AssignmentKey] -> Persist [(AssignmentKey, Assignment, HasTestCase)]
 loadAssignmentInfos as = mapM loadAssignmentInfo as
@@ -455,7 +437,7 @@ mkCourseSubmissionTableInfo
   :: String -> [Username] -> [AssignmentKey] -> CourseKey
   -> Persist SubmissionTableInfo
 mkCourseSubmissionTableInfo courseName us as key = do
-  assignments <- sortKeysByTime assignmentCreatedTime as
+  assignments <- sortKeysBy assignmentCreatedTime as
   assignmentInfos <- loadAssignmentInfos as
   users <- subscribedToCourse key
   ulines <- forM users $ \u -> do
@@ -486,7 +468,7 @@ mkGroupSubmissionTableInfo
 mkGroupSubmissionTableInfo courseName us cas gas ckey gkey = do
   cAssignmentInfos <- loadAssignmentInfos cas
   gAssignmentInfos <- loadAssignmentInfos gas
-  cgAssignments <- sortKeysByTime createdTime (map CourseInfo cAssignmentInfos ++ map GroupInfo gAssignmentInfos)
+  cgAssignments <- sortKeysBy createdTime (map CourseInfo cAssignmentInfos ++ map GroupInfo gAssignmentInfos)
   ulines <- forM us $ \u -> do
     ud <- userDescription u
     casInfos <- mapM (lastSubmissionAsgKey u) cas

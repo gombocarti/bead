@@ -292,10 +292,10 @@ customUsernamePrm field = Parameter {
 
 transformUsername :: String -> Username
 transformUsername = Username . map toUpper . strip
-  where
-    strip :: String -> String
-    strip = reverse . dropWhiteSpace . reverse . dropWhiteSpace
 
+strip :: String -> String
+strip = reverse . dropWhiteSpace . reverse . dropWhiteSpace
+  where
     dropWhiteSpace :: String -> String
     dropWhiteSpace = dropWhile isSpace
 
@@ -304,6 +304,22 @@ usernamePrm = customUsernamePrm (fieldName usernameField)
 
 loginUsernamePrm :: Parameter Username
 loginUsernamePrm = customUsernamePrm (fieldName loginUsername)
+
+uidPrm' :: Parameter Uid
+uidPrm' = Parameter {
+    encode = uid id
+  , decode = decodeUid
+  , name = fieldName userUidField
+  , decodeError = \m -> printf "%s: %s" (message isUid) m
+  , notFound = "Uid could not be found."
+  }
+
+  where
+    decodeUid s
+      | validator isUid s' = Just $ Uid s'
+      | otherwise = Nothing
+      where
+        s' = strip s
 
 emailPrm :: String -> Parameter Email
 emailPrm field = validateBy isEmailAddress $ Parameter {
