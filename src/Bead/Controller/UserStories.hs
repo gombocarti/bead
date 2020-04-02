@@ -177,6 +177,11 @@ loadUser u = logAction INFO "Loading user information" $ do
 loadUserDesc :: Username -> UserStory UserDesc
 loadUserDesc u = mkUserDescription <$> loadUser u
 
+uidToUsername :: Uid -> UserStory Username
+uidToUsername uid = logAction INFO ("Loads username of uid " ++ show uid) $ do
+  authorize P_Open P_User
+  persistence $ Persist.uidToUsername uid
+
 -- Returns the username who is active in the current userstory
 username :: UserStory Username
 username = CMS.gets SC.usernameInState
@@ -613,7 +618,6 @@ subscribedToGroup gk = logAction INFO ("lists all users in group " ++ show gk) $
   isAdminOfGroupOrCourse gk
   persistence $ Persist.subscribedToGroup gk
 
-
 -- | Regsiter the user in the group, if the user does not submitted
 -- any solutions for the other groups of the actual course, otherwise
 -- puts a message on the UI, indicating that the course change is
@@ -837,6 +841,10 @@ loadAssignment k = logAction INFO ("loads assignment " ++ show k) $ do
 courseOrGroupOfAssignment :: AssignmentKey -> UserStory (Either CourseKey GroupKey)
 courseOrGroupOfAssignment ak = logAction INFO ("gets course key or group key of assignment " ++ show ak) $
   persistence (Persist.courseOrGroupOfAssignment ak)
+
+courseAndGroupOfAssignment :: AssignmentKey -> UserStory (Course, Maybe Group)
+courseAndGroupOfAssignment ak = logAction INFO ("gets course and group of assignment " ++ show ak) $
+  persistence (Persist.courseAndGroupOfAssignment ak)
 
 createGroupAssessment :: GroupKey -> Assessment -> UserStory AssessmentKey
 createGroupAssessment gk a = logAction INFO ("creates assessment for group " ++ show gk) $ do
@@ -1317,24 +1325,18 @@ assignmentSubmissionLimit key = logAction INFO msg $ do
   where
     msg = "user assignments submission Limit"
 
--- Loads the assignment and the assignment description if the given assignment key
--- refers an assignment accessible by the user for submission
-userAssignmentForSubmission :: AssignmentKey -> UserStory (AssignmentDesc, Assignment)
-userAssignmentForSubmission key = logAction INFO "check user assignment for submission" $ do
-  authorize P_Open P_Assignment
-  authorize P_Open P_Submission
-  isUsersAssignment key
-  now <- liftIO getCurrentTime
-  withUserAndPersist $ \u ->
-    (,) <$> (Persist.assignmentDesc now (u_username u) key) <*> (Persist.loadAssignment key)
-
-userAssignmentsAssessments :: UserStory [(Group, Course, [(AssignmentKey, AssignmentDesc, Maybe (SubmissionKey, SubmissionState))], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
+userAssignmentsAssessments :: UserStory [(Group, Course, [(AssignmentKey, Assignment, Maybe (SubmissionKey, SubmissionState), SubmissionLimit)], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
 userAssignmentsAssessments = logAction INFO "lists assignments and assessments" $ do
   authorize P_Open P_Assignment
   authorize P_Open P_Assessment
   authorize P_Open P_Course
   authorize P_Open P_Group
   withUserAndPersist (Persist.userAssignmentsAssessments . u_username)
+
+allAssignmentsOfGroup :: GroupKey -> UserStory [(AssignmentKey, Assignment)]
+allAssignmentsOfGroup gk = logAction INFO ("lists all assignments of group" ++ show gk) $ do
+  isAdminOfGroupOrCourse gk
+  persistence $ Persist.allAssignmentsOfGroup gk
 
 submissionDescription :: SubmissionKey -> UserStory SubmissionDesc
 submissionDescription sk = logAction INFO msg $ do

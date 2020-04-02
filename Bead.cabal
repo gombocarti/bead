@@ -289,6 +289,7 @@ Library
     Bead.View.Content.Public.Registration
     Bead.View.Content.Public.ResetPassword
     Bead.View.Content.QueueSubmissionForTest
+    Bead.View.Content.Rest.Group
     Bead.View.Content.Rest.SubmissionTable.Page
     Bead.View.Content.Score.Page
     Bead.View.Content.Submission.Common

@@ -650,7 +650,7 @@ userAssignmentKeyTest = test $ testCase "User assignment tests" $ do
       Nothing -> fail "User is subscribed to a group and she does not see it."
       Just (g, c, as, _assessments) -> do
         assertTrue
-          (HashSet.fromList uas == HashSet.fromList [ ak | (ak, _, _) <- as])
+          (HashSet.fromList uas == HashSet.fromList [ ak | (ak, _, _, _) <- as])
           (unlines [
               "User assignment for a given course and group does not match the expected. User:", show u
             , " Group and course assignments: ", show uas, " User assignments:", show as
@@ -1928,6 +1928,6 @@ createTestData n = do
   where
     userAssignmentKeyList :: Username -> Persist [AssignmentKey]
     userAssignmentKeyList u =
-      (\asgsOfGroups -> [ ak | (_, _, asgs, _) <- asgsOfGroups, (ak, _, _) <- asgs]) <$>
+      (\asgsOfGroups -> [ ak | (_, _, asgs, _) <- asgsOfGroups, (ak, _, _, _) <- asgs ]) <$>
         userAssignmentsAssessments u
 

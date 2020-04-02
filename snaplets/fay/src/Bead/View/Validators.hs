@@ -24,25 +24,31 @@ validate f v onValid onFail
 isUsername :: FieldValidator
 isUsername = FieldValidator {
     validator = not . null
-  , message   = "Usernames cannot be empty."
+  , message   = "Usernames cannot be empty"
+  }
+
+isUid :: FieldValidator
+isUid = FieldValidator {
+    validator = \s -> not (null s) && all isAlphaNum s
+  , message = "Invalid uid: either empty or contains non-alphanumeric characters"
   }
 
 isPassword :: FieldValidator
 isPassword = FieldValidator {
     validator = (>=4) . length
-  , message   = "Passwords must be at least 4 characters long."
+  , message   = "Passwords must be at least 4 characters long"
   }
 
 isEmailAddress :: FieldValidator
 isEmailAddress = FieldValidator {
     validator = emailAddress
-  , message   = "Invalid email address."
+  , message   = "Invalid email address"
   }
 
 isDateTime :: FieldValidator
 isDateTime = FieldValidator {
     validator = dateTime
-  , message   = "Invalid date or time."
+  , message   = "Invalid date or time"
   }
 
 isDigit :: Char -> Bool

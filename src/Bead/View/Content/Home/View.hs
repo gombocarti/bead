@@ -16,6 +16,7 @@ import           Text.Blaze.Html5.Attributes as A hiding (id)
 
 import qualified Bead.Controller.Pages as Pages
 import           Bead.Domain.Entities as E (Role(..))
+import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.Domain.Evaluation
 import           Bead.View.Markdown (markdownToHtml)
 import           Bead.View.Content as Content hiding (userState, table, assessments)
@@ -244,13 +245,13 @@ availableAssignmentsAssessments pd timeconverter groups
   where
     isLimitedAssignments = isJust . find limited
 
-    limited = submissionLimit (const False) (\_ _ -> True) (const True) . (\(_a,ad,_si) -> aLimit ad)
+    limited = submissionLimit (const False) (\_ _ -> True) (const True) . (\(_ak,_a,_si, limit) -> limit)
 
-    isOpenAndIsolated a = and [aIsolated a, aActive a]
+    isOpenAndIsolated a = Assignment.isIsolated (Assignment.aspects a) && Assignment.isActive a (now pd)
 
-    areOpenAndIsolatedAssignments = isJust . find (isOpenAndIsolated . activeAsgDesc)
+    areOpenAndIsolatedAssignments = isJust . find (isOpenAndIsolated . activeAsg)
 
-    isolatedAssignments = filter (isOpenAndIsolated . activeAsgDesc)
+    isolatedAssignments = filter (isOpenAndIsolated . activeAsg)
 
     groupRegistration = Pages.groupRegistration ()
 
@@ -263,8 +264,8 @@ availableAssignmentsAssessments pd timeconverter groups
       th (fromString $ msg $ msg_Home_Evaluation "Evaluation")
 
     assignmentLine :: I18N -> Bool -> ActiveAssignment -> H.Html
-    assignmentLine msg isLimited (a, aDesc, subm) = H.tr $ do
-      case and [aActive aDesc, noLimitIsReached aDesc] of
+    assignmentLine msg isLimited (ak, a, subm, limit) = H.tr $ do
+      case and [Assignment.isActive a (now pd), noLimitIsReached limit] of
         True ->
           td $ H.span
                  ! A.class_ "glyphicon glyphicon-lock"
@@ -274,17 +275,17 @@ availableAssignmentsAssessments pd timeconverter groups
           td $ H.span
                  ! A.class_ "glyphicon glyphicon-lock"
                  $ mempty
-      td $ Bootstrap.link (routeOf (Pages.submission a ())) (aTitle aDesc)
-      when isLimited $ td (fromString . limit $ aLimit aDesc)
-      td (fromString . showDate . timeconverter $ aEndDate aDesc)
+      td $ Bootstrap.link (routeOf (Pages.submission ak ())) (Assignment.name a)
+      when isLimited $ td (fromString . showLimit $ limit)
+      td (fromString . showDate . timeconverter $ Assignment.end a)
       H.td submissionStateLabel
       where
-        noLimitIsReached = submissionLimit (const True) (\n _ -> n > 0) (const False) . aLimit
-        limit = fromString . submissionLimit
+        noLimitIsReached = submissionLimit (const True) (\n _ -> n > 0) (const False)
+        showLimit = fromString . submissionLimit
           (const "") (\n _ -> unwords [msg $ msg_Home_Remains "Remains:", show n]) (const $ msg $ msg_Home_Reached "Reached")
 
         submissionDetails :: SubmissionKey -> Pages.Page () () () () () ()
-        submissionDetails key = Pages.submissionDetails a key ()
+        submissionDetails key = Pages.submissionDetails ak key ()
 
         submissionStateLabel :: Html
         submissionStateLabel = 

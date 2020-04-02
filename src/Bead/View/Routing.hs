@@ -490,6 +490,8 @@ routeToPageMap = Map.fromList [
   , (exportSubmissionsOfGroupsPath, \ps -> P.exportSubmissionsOfGroups <$> assignmentKey ps <*> username ps <*> unit)
   , (exportSubmissionsOfOneGroupPath, \ps -> P.exportSubmissionsOfOneGroup <$> assignmentKey ps <*> groupKey ps <*> unit)
   , (getSubmissionPath, \ps -> P.getSubmission <$> submissionKey ps <*> unit)
+  , (getSubmissionsOfUserInGroupPath, \ps -> P.getSubmissionsOfUserInGroup <$> groupKey ps <*> uid ps <*> unit)
+  , (getSubmissionsOfAssignmentInGroupPath, \ps -> P.getSubmissionsOfAssignmentInGroup <$> groupKey ps <*> assignmentKey ps <*> unit)
   , (getCourseCsvPath, \ps -> P.getCourseCsv <$> courseKey ps <*> unit)
   , (getGroupCsvPath, \ps -> P.getGroupCsv <$> groupKey ps <*> unit)
   , (newGroupAssessmentPath, \ps -> P.newGroupAssessment <$> groupKey ps <*> unit)
@@ -501,6 +503,7 @@ routeToPageMap = Map.fromList [
   , (viewAssessmentPath, \ps -> P.viewAssessment <$> assessmentKey ps <*> unit)
   , (notificationsPath, j $ P.notifications ())
   , (submissionTablePath, \ps -> P.submissionTable <$> groupKey ps <*> unit)
+  , (usersInGroupPath, \ps -> P.usersInGroup <$> groupKey ps <*> unit)
   ] where
       j = const . Just
       unit = return ()
@@ -514,6 +517,7 @@ routeToPageMap = Map.fromList [
       assessmentKey = fmap (AssessmentKey . unpack) . value assessmentKeyParamName
       scoreKey      = fmap (ScoreKey . unpack) . value scoreKeyParamName
       username      = fmap (Username . unpack) . value (fieldName usernameField)
+      uid           = fmap (Uid . unpack) . value (fieldName userUidField)
 
       -- Returns Just x if only one x corresponds to the key in the request params
       -- otherwise Nothing

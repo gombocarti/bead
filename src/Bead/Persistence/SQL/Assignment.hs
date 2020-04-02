@@ -8,6 +8,8 @@ import           Data.Maybe
 import qualified Data.Text as Text
 import           Data.Time hiding (TimeZone)
 
+import           Database.Esqueleto (select, from, on, where_, InnerJoin(InnerJoin), val, (^.), Value(unValue))
+import qualified Database.Esqueleto as Esq
 import           Database.Persist.Sql
 
 import qualified Bead.Domain.Entities as Domain
@@ -87,14 +89,30 @@ modifyAssignment key assignment = do
 -- Lists all assignments that are created for the given course
 courseAssignments :: Domain.CourseKey -> Persist [Domain.AssignmentKey]
 courseAssignments courseKey = do
-  assignments <- selectList [AssignmentsOfCourseCourse ==. toEntityKey courseKey] []
-  return $! map (toDomainKey . assignmentsOfCourseAssignment . entityVal) assignments
+  assignments <- select $ from $ \(ac `InnerJoin` a) -> do
+    on (ac ^. AssignmentsOfCourseAssignment Esq.==. a ^. AssignmentId)
+    where_ (ac ^. AssignmentsOfCourseCourse Esq.==. val (toEntityKey courseKey))
+    return $ a ^. AssignmentId
+  return $! map (toDomainKey . unValue) assignments
 
--- Lists all assignments that are created for the given group
+-- Lists all assignments of the course of the group.
+courseAssignmentsOfGroup :: Domain.GroupKey -> Persist [Domain.AssignmentKey]
+courseAssignmentsOfGroup groupKey = do
+  assignments <- select $ from $ \(gc `InnerJoin` ac `InnerJoin` a) -> do
+    on (gc ^. GroupsOfCourseCourse Esq.==. ac ^. AssignmentsOfCourseCourse Esq.&&.
+        ac ^. AssignmentsOfCourseAssignment Esq.==. a ^. AssignmentId)
+    where_ (gc ^. GroupsOfCourseGroup Esq.==. val (toEntityKey groupKey))
+    return $ a ^. AssignmentId
+  return $! map (toDomainKey . unValue) assignments
+
+  -- Lists all assignments that are created for the given group
 groupAssignments :: Domain.GroupKey -> Persist [Domain.AssignmentKey]
 groupAssignments groupKey = do
-  assignments <- selectList [AssignmentsOfGroupGroup ==. toEntityKey groupKey] []
-  return $! map (toDomainKey . assignmentsOfGroupAssignment . entityVal) assignments
+  assignments <- select $ from $ \(ag `InnerJoin` a) -> do
+    on (ag ^. AssignmentsOfGroupAssignment Esq.==. a ^. AssignmentId)
+    where_ (ag ^. AssignmentsOfGroupGroup Esq.==. val (toEntityKey groupKey))
+    return $ a ^. AssignmentId
+  return $! map (toDomainKey . unValue) assignments
 
 -- Save the assignment for the given course
 saveCourseAssignment :: Domain.CourseKey -> Domain.Assignment -> Persist Domain.AssignmentKey

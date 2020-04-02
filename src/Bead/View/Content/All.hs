@@ -35,7 +35,9 @@ import Bead.View.Content.GetSubmission
 import Bead.View.Content.GetCsv
 import Bead.View.Content.Assessment.Page
 import Bead.View.Content.Score.Page
+import Bead.View.Content.Rest.Group (usersInGroup)
 import Bead.View.Content.Rest.SubmissionTable.Page (submissionTable)
+
 
 import Data.Monoid (mempty)
 
@@ -92,6 +94,8 @@ pageContent = Pages.constantsP
   exportSubmissionsOfGroups
   exportSubmissionsOfOneGroup
   getSubmission
+  getSubmissionsOfUserInGroup
+  getSubmissionsOfAssignmentInGroup
   getCourseCsv
   getGroupCsv
   newGroupAssessment
@@ -103,6 +107,7 @@ pageContent = Pages.constantsP
   viewAssessment
   notifications
   submissionTable
+  usersInGroup
   where
     logout :: ViewHandler
     logout = ViewHandler (ContentHandler.logout >> redirectTo (Pages.index ()))

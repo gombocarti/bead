@@ -91,34 +91,6 @@ calcSubLimitTests = group "calcSubLimit" $ do
     set n a = a {aspects = setNoOfTries n (aspects a)}
 #endif
 
-data AssignmentDesc = AssignmentDesc {
-    aActive   :: Bool
-  , aIsolated :: Bool
-  , aLimit    :: SubmissionLimit
-  , aTitle    :: String
-  , aCourse   :: Course
-  , aGroup    :: Maybe Group
-  -- DeadLine for the assignment in UTC
-  , aEndDate  :: UTCTime
-  } deriving (Eq, Ord, Show)
-
-assignmentDescPermissions = ObjectPermissions [
-    (P_Open, P_Assignment), (P_Open, P_Course)
-  , (P_Open, P_Course)
-  ]
-
-data GroupDesc = GroupDesc {
-    gName   :: String
-  , gAdmins :: [String]
-  } deriving (Show)
-
-groupDescFold :: (String -> [String] -> a) -> GroupDesc -> a
-groupDescFold f (GroupDesc n a) = f n a
-
-groupDescPermissions = ObjectPermissions [
-    (P_Open, P_Group)
-  ]
-
 data SubmissionDesc = SubmissionDesc {
     eCourse   :: String
   , eGroup    :: Maybe String

@@ -5,13 +5,16 @@ module Bead.View.Content.ExportSubmissions (
     exportSubmissions
   , exportSubmissionsOfGroups
   , exportSubmissionsOfOneGroup
+  , getSubmissionsOfAssignmentInGroup
+  , getSubmissionsOfUserInGroup
   , localTimeInSeconds
   ) where
 
 import qualified Codec.Archive.Zip as Zip
 import           Control.Applicative ((<$>))
-import           Data.Char (toUpper)
-import           Control.Monad (forM, mapM)
+import           Data.Char (toLower)
+import           Data.Foldable (foldrM)
+import           Control.Monad (foldM, forM, mapM)
 import           Control.Monad.Trans (lift)
 import           Control.Monad.IO.Class (liftIO)
 import           Data.List (intersperse)
@@ -25,9 +28,11 @@ import qualified Data.ByteString.Lazy as LBs
 import           Prelude hiding (zip)
 import           System.FilePath ((</>), (<.>))
 
+import           Bead.Controller.UserStories (UserStory)
 import qualified Bead.Controller.UserStories as Story
+import qualified Bead.Domain.Entities as E
 import qualified Bead.Domain.Entity.Assignment as Assignment
-import           Bead.Domain.String (removeAccents, replaceSlash)
+import           Bead.Domain.String (removeAccents, replaceSlash, porcelain)
 import           Bead.View.Content.GetSubmission (submissionFilename)
 import qualified Bead.View.Content.Comments as C
 import           Bead.View.Content
@@ -66,6 +71,77 @@ exportSubmissionsOfOneGroup = DataHandler $ do
     catMaybes <$> mapM (Story.lastSubmission ak) usernames
   zipAssignmentAndSubmissions ak sks
 
+getSubmissionsOfUserInGroup :: DataHandler
+getSubmissionsOfUserInGroup = DataHandler $ do
+  gk <- getParameter (customGroupKeyPrm groupKeyParamName)
+  uid <- getParameter uidPrm'
+  subms <- userStory $ do
+    asgs <- Story.allAssignmentsOfGroup gk
+    username <- Story.uidToUsername uid
+    foldrM (loadLastSubmission username) [] asgs
+  convertToLocalTime <- userTimeZoneToLocalTimeConverter
+  downloadZip (zipFileName uid) (zipSubmissions convertToLocalTime subms)
+    where
+      loadLastSubmission :: Username -> (AssignmentKey, Assignment) -> [(Submission, Assignment)] -> UserStory [(Submission, Assignment)]
+      loadLastSubmission u (ak, a) acc = do
+        lastSk <- Story.lastSubmission ak u
+        case lastSk of
+          Just sk -> do
+            subm <- Story.loadSubmission sk
+            return $ (subm, a) : acc
+          Nothing ->
+            return acc
+
+      zipFileName :: Uid -> String
+      zipFileName = E.uid (map toLower)
+
+      zipSubmissions :: UserTimeConverter -> [(Submission, Assignment)] -> Zip.Archive
+      zipSubmissions convertToLocalTime = foldr (zipSubmission convertToLocalTime) Zip.emptyArchive
+
+      zipSubmission :: UserTimeConverter -> (Submission, Assignment) -> Zip.Archive -> Zip.Archive
+      zipSubmission convertToLocalTime (s, a) archive = addSubmissionToArchive fileName convertToLocalTime s archive
+        where
+          fileName :: String
+          fileName = porcelain (Assignment.name a) <.> submissionExtension s
+
+getSubmissionsOfAssignmentInGroup :: DataHandler
+getSubmissionsOfAssignmentInGroup = DataHandler $ do
+  ak <- getParameter assignmentKeyPrm
+  gk <- getParameter (customGroupKeyPrm groupKeyParamName)
+  (userSubmissions, asg) <- userStory $ do
+    Story.isAdminOfGroupOrCourse gk
+    asg <- Story.loadAssignment ak
+    usernames <- Story.subscribedToGroup gk
+    userSubmissions <- foldM
+          (\acc uname -> do
+              mSubmKey <- Story.lastSubmission ak uname
+              case mSubmKey of
+                Just sk -> do
+                  u <- Story.loadUser uname
+                  subm <- Story.loadSubmission sk
+                  return ((u, subm) : acc)
+                Nothing ->
+                  return acc
+          )
+          []
+          usernames
+    return (userSubmissions, asg)
+  convertToLocalTime <- userTimeZoneToLocalTimeConverter
+  downloadZip (porcelain (Assignment.name asg)) (zipSubmissions convertToLocalTime userSubmissions)
+
+  where
+    zipSubmissions :: UserTimeConverter -> [(User, Submission)] -> Zip.Archive
+    zipSubmissions convertToLocalTime = foldr (zipSubmission convertToLocalTime) Zip.emptyArchive
+
+    zipSubmission :: UserTimeConverter -> (User, Submission) -> Zip.Archive -> Zip.Archive
+    zipSubmission convertToLocalTime (u, s) archive = addSubmissionToArchive fileName convertToLocalTime s archive
+      where
+        fileName :: String
+        fileName = E.uid porcelain (E.u_uid u) <.> submissionExtension s
+
+submissionExtension :: Submission -> String
+submissionExtension = E.submissionValue (const "txt") (const "zip") . solution
+
 zipAssignmentText :: Assignment -> LocalTime.LocalTime -> Zip.Entry
 zipAssignmentText assignment now =
   Zip.toEntry (title ++ ".txt") (localTimeInSeconds now) (LBsUTF8.fromString exercise)
@@ -75,14 +151,6 @@ zipAssignmentText assignment now =
                             (\name desc _type _start _end _evtype -> (removeAccents name, desc))
                             assignment
 
-zip :: [(Zip.Entry, Zip.Entry)] -> Zip.Archive
-zip = foldr step Zip.emptyArchive
-    where
-      step (subm, feedback) archive = add feedback (add subm archive)
-
-add :: Zip.Entry -> Zip.Archive -> Zip.Archive
-add = Zip.addEntryToArchive
-
 zipAssignmentAndSubmissions :: AssignmentKey -> [SubmissionKey] -> ContentHandler File
 zipAssignmentAndSubmissions ak sks = do
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
@@ -90,43 +158,48 @@ zipAssignmentAndSubmissions ak sks = do
   assignment <- userStory (Story.loadAssignment ak)
   let exerciseFile = zipAssignmentText assignment now
       atitle = Assignment.name assignment
-      exportedFName = atitle ++ ".zip"
       submissionFolder = removeAccents atitle
   submissions <- zipSubmissions sks submissionFolder now
-  downloadZip exportedFName (add exerciseFile submissions)
+  downloadZip atitle (Zip.addEntryToArchive exerciseFile submissions)
 
 downloadZip :: String -> Zip.Archive -> ContentHandler File
-downloadZip filename zip = downloadLazy filename MimeZip (Zip.fromArchive zip)
+downloadZip filename archive = downloadLazy (filename <.> "zip") MimeZip (Zip.fromArchive archive)
 
 zipSubmissions :: [SubmissionKey] -> String -> LocalTime.LocalTime -> ContentHandler Zip.Archive
 zipSubmissions sks folder now = do
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
   msg <- i18nE
-  files <- forM sks $ \sk -> do
-    (submission, desc) <- userStory (Story.getSubmission sk)
-    let subm     = zipSubmission submission desc folder convertToLocalTime
-        feedback = zipFeedback desc folder now convertToLocalTime msg
-    return (subm, feedback)
-  return $ zip files
+  foldM
+    (\archive sk -> do
+        (submission, desc) <- userStory (Story.getSubmission sk)
+        let addSubmission = zipSubmission submission desc folder convertToLocalTime
+            addFeedback = zipFeedback desc folder now convertToLocalTime msg
+        return (addSubmission (addFeedback archive)))
+    Zip.emptyArchive
+    sks
 
-zipSubmission :: Submission -> SubmissionDesc -> String -> UserTimeConverter -> Zip.Entry
-zipSubmission submission desc folder convertToLocalTime = submissionFile
-  where
-    fname, ext, path :: String
-    (fname, ext) = submissionFilename desc
-    path = (replaceSlash folder </> replaceSlash (removeAccents fname) <.> ext)
+zipSubmission :: Submission -> SubmissionDesc -> String -> UserTimeConverter -> Zip.Archive -> Zip.Archive
+zipSubmission submission desc folder convertToLocalTime archive =
+  addSubmissionToArchive path convertToLocalTime submission archive
+    where
+      fname, ext, path :: String
+      (fname, ext) = submissionFilename desc
+      path = (replaceSlash folder </> replaceSlash (removeAccents fname) <.> ext)
 
-    submissionFile :: Zip.Entry
-    submissionFile = 
-      submissionCata
-        (\contents postTime -> Zip.toEntry path (localTimeInSeconds . convertToLocalTime $ postTime) (toByteString contents))
-        submission
+addSubmissionToArchive :: String -> UserTimeConverter -> Submission -> Zip.Archive -> Zip.Archive
+addSubmissionToArchive path convertToLocalTime submission archive =
+  Zip.addEntryToArchive
+    (submissionCata
+      (\solution postTime ->
+          let timeStamp = localTimeInSeconds . convertToLocalTime $ postTime
+              contents = E.submissionValueToByteString solution
+          in Zip.toEntry path timeStamp contents)
+      submission)
+    archive
 
-    toByteString :: SubmissionValue -> LBs.ByteString
-    toByteString solution = submissionValue LBsUTF8.fromString LBs.fromStrict solution
-
-zipFeedback :: SubmissionDesc -> String -> LocalTime.LocalTime -> UserTimeConverter -> I18N -> Zip.Entry
-zipFeedback desc folder now convertToLocalTime msg = feedbacksFile path
+zipFeedback :: SubmissionDesc -> String -> LocalTime.LocalTime -> UserTimeConverter -> I18N -> Zip.Archive -> Zip.Archive
+zipFeedback desc folder now convertToLocalTime msg archive =
+  Zip.addEntryToArchive (feedbacksFile path) archive
     where
       fname, path :: String
       (fname, _) = submissionFilename desc

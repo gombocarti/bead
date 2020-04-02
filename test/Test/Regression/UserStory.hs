@@ -79,7 +79,7 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
       return $ case find (\(grp, _, _, _) -> grp == g1) ua of
                  Nothing -> fail "Group cannot be found"
                  Just (grp, _, asgs, _) -> do
-                   (_, _, submState) <- find (\(ak, _, _) -> ak == ak1) asgs
+                   (_, _, submState, _) <- find (\(ak, _, _, _) -> ak == ak1) asgs
                    submState
 
     lift $ assertBool "Submission test information didn't change" (si == Just (sk1, Submission_Tested True))

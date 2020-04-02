@@ -33,6 +33,9 @@ module Bead.View.RouteOf (
   , markdownPath
   , submissionDetailsPath
   , submissionTablePath
+  , getSubmissionsOfUserInGroupPath
+  , getSubmissionsOfAssignmentInGroupPath
+  , usersInGroupPath
   , administrationPath
   , groupRegistrationPath
   , createCoursePath
@@ -245,6 +248,12 @@ exportSubmissionsOfOneGroupPath = "/export-submissions-of-one-group"
 getSubmissionPath :: RoutePath
 getSubmissionPath = "/get-submission"
 
+getSubmissionsOfUserInGroupPath :: RoutePath
+getSubmissionsOfUserInGroupPath = "/get-submissions-of-user-in-group"
+
+getSubmissionsOfAssignmentInGroupPath :: RoutePath
+getSubmissionsOfAssignmentInGroupPath = "/get-submissions-of-assignment-in-group"
+
 getCourseCsvPath :: RoutePath
 getCourseCsvPath = "/get-course-csv"
 
@@ -277,6 +286,9 @@ notificationsPath = "/notifications"
 
 submissionTablePath :: RoutePath
 submissionTablePath = "/rest/submission-table"
+
+usersInGroupPath :: RoutePath
+usersInGroupPath = "/rest/users-in-group"
 
 staticPath :: RoutePath
 staticPath = ""
@@ -333,6 +345,8 @@ pageRoutePath = constantsP
     exportSubmissionsOfGroupsPath
     exportSubmissionsOfOneGroupPath
     getSubmissionPath
+    getSubmissionsOfUserInGroupPath
+    getSubmissionsOfAssignmentInGroupPath
     getCourseCsvPath
     getGroupCsvPath
     newGroupAssessmentPath
@@ -344,6 +358,7 @@ pageRoutePath = constantsP
     viewAssessmentPath
     notificationsPath
     submissionTablePath
+    usersInGroupPath
 
 type PageReqParams = Page [ReqParam] [ReqParam] [ReqParam] [ReqParam] [ReqParam] [ReqParam]
 
@@ -397,6 +412,8 @@ pageRequestParams = liftsP
   (\ak u _ -> [requestParam ak, requestParam u])   -- exportSubmissionsOfGroups
   (\ak gk _ -> [requestParam ak, requestParam gk]) -- exportSubmissionsOfOneGroup
   (\sk _ -> [requestParam sk]) -- getSubmission
+  (\gk uid _ -> [requestParam gk, requestParam uid]) -- getSubmissionsOfUserInGroup
+  (\gk ak _ -> [requestParam gk, requestParam ak]) -- getSubmissionsOfAssignmentInGroup
   (\ck _ -> [requestParam ck]) -- getCourseCsv
   (\gk _ -> [requestParam gk]) -- getGroupCsv
   (\gk _ -> [requestParam gk]) -- newGroupAssessment
@@ -407,7 +424,8 @@ pageRequestParams = liftsP
   (\ak _ -> [requestParam ak]) -- modifyAssessmentPreview
   (\ak _ -> [requestParam ak]) -- viewAssessment
   (c []) -- notifications
-  (\gk _ -> [requestParam gk]) -- submission table
+  (\gk _ -> [requestParam gk]) -- submissionTable
+  (\gk _ -> [requestParam gk]) -- usersInGroup
     where
       c = const
 

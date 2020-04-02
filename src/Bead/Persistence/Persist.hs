@@ -16,6 +16,7 @@ module Bead.Persistence.Persist (
   , updateUser
   , doesUserExist
   , userDescription
+  , uidToUsername
   , userSubmissions
   , administratedCourses
   , administratedGroups
@@ -102,6 +103,7 @@ module Bead.Persistence.Persist (
   , modifyAssignment
   , courseAssignments
   , groupAssignments
+  , courseAssignmentsOfGroup
   , saveCourseAssignment
   , saveGroupAssignment
   , courseOfAssignment
@@ -241,6 +243,9 @@ doesUserExist = PersistImpl.doesUserExist
 -- Creates a description for the given username
 userDescription :: Username -> Persist UserDesc
 userDescription = PersistImpl.userDescription
+
+uidToUsername :: Uid -> Persist Username
+uidToUsername = PersistImpl.uidToUsername
 
 -- Lists all the submission keys for the submissions that submitted by the user
 -- for the given assignment
@@ -517,6 +522,10 @@ modifyAssignment = PersistImpl.modifyAssignment
 -- Lists all the assignment that are created for the given course
 courseAssignments :: CourseKey -> Persist [AssignmentKey]
 courseAssignments = PersistImpl.courseAssignments
+
+-- Lists all assignments of the course of the group.
+courseAssignmentsOfGroup :: GroupKey -> Persist [AssignmentKey]
+courseAssignmentsOfGroup = PersistImpl.courseAssignmentsOfGroup
 
 -- Lists all the assignment that are created for the given group
 groupAssignments :: GroupKey -> Persist [AssignmentKey]
