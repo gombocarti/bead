@@ -302,8 +302,8 @@ strip = reverse . dropWhiteSpace . reverse . dropWhiteSpace
 usernamePrm :: Parameter Username
 usernamePrm = customUsernamePrm (fieldName usernameField)
 
-loginUsernamePrm :: Parameter Username
-loginUsernamePrm = customUsernamePrm (fieldName loginUsername)
+principalPrm :: Parameter String
+principalPrm = stringParameter (fieldName loginUsername) "Username"
 
 uidPrm' :: Parameter Uid
 uidPrm' = Parameter {

@@ -42,17 +42,18 @@ import           Bead.View.ErrorPage
 loginSubmit :: ContentHandler (PageContents IHtml)
 loginSubmit = do
   cfg <- beadHandler getConfiguration
-  username <- getParameter loginUsernamePrm
-  correctCredentials <- 
+  principal <- getParameter principalPrm
+  correctCredentials <-
     if (Config.sSODeveloperMode $ Config.loginConfig cfg)
       then return True
       else do
         password <- getParameter loginPasswordPrm
         let encodeUtf8 = TE.encodeUtf8 . T.pack
-            login  = krb5Login (usernameCata encodeUtf8 username) (encodeUtf8 password)
-        liftIO (E.try login) >>= either (\exception -> logLoginError username exception >> return False) (const $ return True) 
+            login = krb5Login (encodeUtf8 principal) (encodeUtf8 password)
+        liftIO (E.try login) >>= either (\exception -> logLoginError principal exception >> return False) (const $ return True) 
   if correctCredentials
     then do
+      let username = usernameFromPrincipal principal
       lResult <- beadHandler $ ldapQuery username
       ldapResult
         (ldapError username)
@@ -63,9 +64,18 @@ loginSubmit = do
     else
       beadHandler (I.index (Just IncorrectUserOrPassword)) >>= setPageContents
   where
-    logLoginError :: Username -> KrbException -> ContentHandler ()
-    logLoginError username (KrbException code errorMessage) = beadHandler $
-      logMessage INFO $ join ["[Login] Login as ", show username, " failed. Code: ", show (fromIntegral code :: Int), ", reason: ", B.unpack errorMessage]
+    usernameFromPrincipal :: String -> Username
+    usernameFromPrincipal = Username . nameComponents
+     where
+       nameComponents :: String -> String
+       nameComponents "" = ""
+       nameComponents ('\\':c:cs) = '\\' : c : nameComponents cs
+       nameComponents ('@':_) = ""
+       nameComponents (c:cs) = c : nameComponents cs
+
+    logLoginError :: String -> KrbException -> ContentHandler ()
+    logLoginError principal (KrbException code errorMessage) = beadHandler $
+      logMessage INFO $ join ["[Login] Login with principal ", principal, " failed. Code: ", show (fromIntegral code :: Int), ", reason: ", B.unpack errorMessage]
 
     -- Falls back to local credentials
     ldapError :: Username -> String -> ContentHandler (PageContents IHtml)
