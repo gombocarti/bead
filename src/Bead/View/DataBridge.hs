@@ -303,7 +303,9 @@ usernamePrm :: Parameter Username
 usernamePrm = customUsernamePrm (fieldName usernameField)
 
 principalPrm :: Parameter String
-principalPrm = stringParameter (fieldName loginUsername) "Username"
+principalPrm = mapParameter id (map toUpper . strip) p
+  where p :: Parameter String
+        p = stringParameter (fieldName loginUsername) "Username"
 
 uidPrm' :: Parameter Uid
 uidPrm' = Parameter {
