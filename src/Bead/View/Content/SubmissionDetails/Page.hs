@@ -21,6 +21,7 @@ import           Bead.View.Content.Comments
 import           Bead.View.Content.Submission.Common
 import           Bead.View.Markdown
 
+import           Text.Blaze (toValue)
 import           Text.Blaze.Html5 as H
 import           Text.Blaze.Html5.Attributes as A
 
@@ -124,9 +125,9 @@ submissionDetailsContent p = do
             else do
               H.p $ fromString . msg $ msg_SubmissionDetails_Solution_Text_Info $
                 "The submission may be downloaded as a plain text file by clicking on the link."
-              downloadSubmissionButton
+              Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> downloadSubmissionButton
               H.br
-              H.pre $ fromString $ sdSubmission info
+              H.pre ! A.id (toValue submissionIdent) $ fromString $ sdSubmission info
     Bootstrap.rowColMd12 $ do
       H.a ! A.name (anchor SubmissionDetailsEvaluationDiv) $ mempty
       h2 $ fromString $ msg $ msg_SubmissionDetails_Evaluation "Evaluation"
@@ -148,6 +149,7 @@ submissionDetailsContent p = do
 
   where
     submissionDetails ak sk = Pages.submissionDetails ak sk ()
+    submissionIdent = "code"
 
     resolveStatus :: I18N -> Maybe String -> H.Html
     resolveStatus msg Nothing     = fromString . msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet"

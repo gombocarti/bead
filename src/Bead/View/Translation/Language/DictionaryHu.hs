@@ -79,6 +79,8 @@ dictionaryHu = DF.DictionaryFile {
     , msg_AssignmentDoesntHaveTestCase <| "A feladathoz nem tartozik teszteset."
     , msg_SubmissionWillBeTested <| "A megoldás automatikusan tesztelve lesz."
 
+    , msg_CopyToClipboard <| "Másolás vágólapra"
+
     , msg_NewAssignment_Title <| "Cím"
     , msg_NewAssignment_Title_Default <| "Névtelen feladat"
     , msg_NewAssignment_SubmissionDeadline <| "Beadás ideje"

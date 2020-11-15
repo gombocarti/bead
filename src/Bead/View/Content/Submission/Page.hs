@@ -201,7 +201,7 @@ submissionContent p = do
     Bootstrap.rowColMd12 H.hr
 
     Bootstrap.rowColMd12 $
-      minHeaderLevel 2 . markdownToHtml $ Assignment.desc $ asValue p
+      minHeaderLevel 2 . markdownToHtml msg $ Assignment.desc $ asValue p
 
   where
     submission = Pages.submission (asKey p) ()

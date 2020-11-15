@@ -31,7 +31,7 @@ import qualified Bead.View.AuthToken as Auth
 import           Bead.View.BeadContext hiding (ldapDaemon)
 import           Bead.View.DataDir
 import           Bead.View.Dictionary (dictionaries, Language(..))
-import           Bead.View.Markdown (syntaxHighlightCss)
+import           Bead.View.Pagelets (syntaxHighlightCss)
 import           Bead.View.Routing
 
 iconFileName :: String

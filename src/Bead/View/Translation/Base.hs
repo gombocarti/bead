@@ -112,6 +112,8 @@ labels =
  , "msg_AssignmentDoesntHaveTestCase"
  , "msg_SubmissionWillBeTested"
 
+ , "msg_CopyToClipboard"
+
  , "msg_NewAssignment_Title"
  , "msg_NewAssignment_Title_Default"
  , "msg_NewAssignment_SubmissionDeadline"

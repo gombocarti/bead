@@ -24,6 +24,7 @@ import           Bead.View.Content.Comments
 import qualified Bead.View.Content.SubmissionState as St
 import           Bead.View.Content.VisualConstants
 
+import           Text.Blaze (toValue)
 import           Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 
@@ -262,13 +263,13 @@ evaluationContent pd = do
                  DoesNotHaveTestCase -> Bootstrap.disabledButton (msg $ linkText p) (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
 
       h2 $ fromString $ msg $ msg_Evaluation_Submitted_Solution "Submission"
-      Bootstrap.buttonGroup $ downloadSubmissionButton <> queueForTestButton
+      Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> downloadSubmissionButton <> queueForTestButton
       if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ sd)
         then
           H.p $ fromString . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
             "The submission was uploaded as a compressed file so it could not be displayed verbatim."
         else
-          H.pre $ fromString $ eSolution sd
+          H.pre ! A.id (toValue submissionIdent) $ fromString $ eSolution sd
 
     Bootstrap.rowColMd12 $
       H.p $ fromString . msg $ msg_Evaluation_Info $ concat
@@ -307,8 +308,9 @@ evaluationContent pd = do
       -- Renders the comment area where the user can place a comment
       i18n msg $ commentsDiv "evaluation-comments-" tc comments
   where
-    submissionKey = sbmSubmissionKey pd
-    maybeEvalKey  = sbmEvaluationKey pd
+    submissionKey   = sbmSubmissionKey pd
+    submissionIdent = "code"
+    maybeEvalKey    = sbmEvaluationKey pd
 
     evPage (Just ek) = Pages.modifyEvaluation submissionKey ek ()
     evPage Nothing   = Pages.evaluation submissionKey ()
