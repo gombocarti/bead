@@ -214,7 +214,7 @@ availableAssignmentsAssessments pd timeconverter groups
 
           Bootstrap.rowColMd12 $
             Bootstrap.alert Bootstrap.Info $
-            markdownToHtml . msg $ msg_Home_EvaluationLink_Hint $
+            markdownToHtml msg . msg $ msg_Home_EvaluationLink_Hint $
             "**Hint**: You can go straight to your submission by clicking on a link in the Evaluation column."
 
         forM_ groups $ \g@(grp, course, assignments, assessments) -> do
@@ -233,7 +233,7 @@ availableAssignmentsAssessments pd timeconverter groups
                   let isLimited = isLimitedAssignments visibleAsgs
                   when areIsolateds $
                     Bootstrap.alert Bootstrap.Warning $
-                      markdownToHtml . msg $ msg_Home_ThereIsIsolatedAssignment $ concat
+                      markdownToHtml msg . msg $ msg_Home_ThereIsIsolatedAssignment $ concat
                         [ "**Isolated mode**: There is at least one assignment which hides the normal assignments for "
                         , "this course."
                         ]

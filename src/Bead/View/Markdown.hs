@@ -3,40 +3,42 @@ module Bead.View.Markdown (
     headersToDiv
   , minHeaderLevel
   , markdownToHtml
-  , syntaxHighlightCss
   ) where
 
 {- A markdown to HTML conversion. -}
 
+import           Bead.View.Pagelets (copyToClipboardButton)
+import           Bead.View.Translation (I18N)
+
 import           Control.Monad ((<=<))
 import           Data.Char (intToDigit)
 import           Data.String (fromString)
-import           Data.String.Utils (replace)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           System.FilePath (FilePath)
 
 import           Text.Pandoc.Class (PandocPure, runPure)
-import           Text.Pandoc.Definition (Pandoc, Block(Header, Div, Plain))
+import           Text.Pandoc.Definition (Pandoc, Block(Header, Div, Plain, CodeBlock, RawBlock))
 import           Text.Pandoc.Extensions (pandocExtensions)
-import           Text.Pandoc.Highlighting (styleToCss, pygments)
 import           Text.Pandoc.Options
 import           Text.Pandoc.Readers.Markdown (readMarkdown)
+import           Text.Pandoc.Walk (walk)
 import           Text.Pandoc.Writers.HTML (writeHtml5)
 import           Text.Blaze (string)
 import           Text.Blaze.Html5 (Html)
 import           Text.Blaze.Internal (MarkupM(..), getText, ChoiceString(Static))
+import           Text.Blaze.Renderer.String (renderMarkup)
 
 -- Produces HTML from the given markdown formatted string what
--- comes from a text area field, crlf endings must be replaced with lf in the string
-markdownToHtml :: String -> Html
-markdownToHtml = either (string . show) id . runPure . (wrt <=< rd)
+-- comes from a text area field.
+markdownToHtml :: I18N -> String -> Html
+markdownToHtml msg = either (string . show) id . runPure . (wrt . walk (copyToClipboardForCodeBlocks msg) <=< rd)
   where
     wrt :: Pandoc -> PandocPure Html
     wrt = writeHtml5 writerOpts
 
     rd :: String -> PandocPure Pandoc
-    rd = readMarkdown readerOpts . T.pack . replaceCrlf
+    rd = readMarkdown readerOpts . T.pack
 
     readerOpts :: ReaderOptions
     readerOpts = def { readerExtensions = enableExtension Ext_tex_math_single_backslash pandocExtensions }
@@ -44,8 +46,15 @@ markdownToHtml = either (string . show) id . runPure . (wrt <=< rd)
     writerOpts :: WriterOptions
     writerOpts = def { writerHTMLMathMethod = KaTeX "/katex" }
 
-    replaceCrlf :: String -> String
-    replaceCrlf = replace "\r\n" "\n"
+copyToClipboardForCodeBlocks :: I18N -> [Block] -> [Block]
+copyToClipboardForCodeBlocks msg bs = snd $ foldr addCopyButton (0, []) bs
+  where
+    addCopyButton :: Block -> (Int, [Block]) -> (Int, [Block])
+    addCopyButton (CodeBlock (_, classes, kv) code) (n, blocks) = (n + 1, RawBlock "html" (renderMarkup $ copyToClipboardButton msg ident) : CodeBlock (ident, classes, kv) code : blocks)
+      where
+        ident :: String
+        ident = "code-" ++ show n
+    addCopyButton b (n, blocks) = (n, b : blocks)
 
 headersToDiv :: MarkupM a -> MarkupM a
 headersToDiv (Parent tag open close contents)
@@ -79,6 +88,3 @@ minHeaderLevel n (Append h1 h2) = Append (minHeaderLevel n h1) (minHeaderLevel n
 minHeaderLevel n (AddAttribute a b c contents) = AddAttribute a b c (minHeaderLevel n contents)
 minHeaderLevel n (AddCustomAttribute a b contents) = AddCustomAttribute a b (minHeaderLevel n contents)
 minHeaderLevel _ h = h
-
-syntaxHighlightCss :: (String, FilePath)
-syntaxHighlightCss = (styleToCss pygments, "syntax-highlight.css")

@@ -18,6 +18,8 @@ import           Text.Blaze.Html5 hiding (link, option)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 import           Text.Blaze.Html5.Attributes hiding (id, span)
+import           Text.Pandoc.Highlighting (styleToCss, pygments)
+
 
 import qualified Bead.Controller.Pages as P
 import           Bead.Controller.ServiceContext as ServiceContext (UserState, getStatus, uid, fullNameInState)
@@ -26,7 +28,6 @@ import           Bead.View.Fay.Hooks
 import           Bead.View.Fay.JSON.ServerSide
 import qualified Bead.View.I18N as I18N
 import           Bead.View.I18N (IHtml, translate, getI18N)
-import           Bead.View.Markdown (syntaxHighlightCss)
 import           Bead.View.RouteOf
 import           Bead.View.TemplateAndComponentNames
 import           Bead.View.Translation
@@ -108,6 +109,9 @@ publicFrame content = do
     header
     Bootstrap.container content
 
+syntaxHighlightCss :: (String, FilePath)
+syntaxHighlightCss = (styleToCss pygments, "syntax-highlight.css")
+
 -- * Basic building blocks
 
 defaultValue :: a -> Maybe a
@@ -172,6 +176,12 @@ optionalFileInput name =
 
 fileInput :: String -> Html
 fileInput name = optionalFileInput name ! A.required ""
+
+copyToClipboardButton :: I18N -> String -> Html
+copyToClipboardButton msg ident = Bootstrap.buttonOnClick "" (msg $ msg_CopyToClipboard "Copy to Clipboard") action
+  where
+    action :: String
+    action = "navigator.clipboard.writeText(document.getElementById('" ++ ident ++ "').textContent);"
 
 -- Creates a number input with the given minimum and maximum, if the value is given
 -- set as the default value

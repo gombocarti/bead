@@ -16,6 +16,7 @@ import           Bead.Domain.Relationships (SubmissionKey, AssignmentKey)
 import           Bead.View.AuthToken (Cookie(..), AuthTokenManager(encryptCookie), createAuthTokenManager)
 import           Bead.View.BeadContext (BeadContext)
 import           Bead.View.BeadContextInit (beadContextInit, Daemons(Daemons))
+import           Bead.View.Dictionary (idDictionary, unDictionary)
 import           Bead.View.Logger (createSnapLogger, snapLogger)
 import           Bead.View.Markdown (markdownToHtml, headersToDiv, minHeaderLevel)
 import           Bead.View.RequestParams (ReqParam(ReqParam))
@@ -551,7 +552,9 @@ markdown = testGroup "Markdown conversion and transformation tests"
         _ -> fail "Tag 'ul' does not have two children."
 
     html :: Html
-    html = markdownToHtml md
+    html = markdownToHtml msg md
+      where
+        msg = unDictionary idDictionary
 
     md = unlines [ "# h1 header"
                  , "paragraph 1"
