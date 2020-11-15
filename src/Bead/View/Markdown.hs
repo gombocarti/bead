@@ -11,7 +11,6 @@ module Bead.View.Markdown (
 import           Control.Monad ((<=<))
 import           Data.Char (intToDigit)
 import           Data.String (fromString)
-import           Data.String.Utils (replace)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           System.FilePath (FilePath)
@@ -28,7 +27,7 @@ import           Text.Blaze.Html5 (Html)
 import           Text.Blaze.Internal (MarkupM(..), getText, ChoiceString(Static))
 
 -- Produces HTML from the given markdown formatted string what
--- comes from a text area field, crlf endings must be replaced with lf in the string
+-- comes from a text area field.
 markdownToHtml :: String -> Html
 markdownToHtml = either (string . show) id . runPure . (wrt <=< rd)
   where
@@ -36,16 +35,13 @@ markdownToHtml = either (string . show) id . runPure . (wrt <=< rd)
     wrt = writeHtml5 writerOpts
 
     rd :: String -> PandocPure Pandoc
-    rd = readMarkdown readerOpts . T.pack . replaceCrlf
+    rd = readMarkdown readerOpts . T.pack
 
     readerOpts :: ReaderOptions
     readerOpts = def { readerExtensions = enableExtension Ext_tex_math_single_backslash pandocExtensions }
 
     writerOpts :: WriterOptions
     writerOpts = def { writerHTMLMathMethod = KaTeX "/katex" }
-
-    replaceCrlf :: String -> String
-    replaceCrlf = replace "\r\n" "\n"
 
 headersToDiv :: MarkupM a -> MarkupM a
 headersToDiv (Parent tag open close contents)
