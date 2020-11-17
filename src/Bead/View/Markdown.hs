@@ -11,7 +11,9 @@ import           Bead.View.Pagelets (copyToClipboardButton)
 import           Bead.View.Translation (I18N)
 
 import           Control.Monad ((<=<))
+import           Control.Monad.State (State, evalState, state)
 import           Data.Char (intToDigit)
+import           Data.Foldable (foldrM)
 import           Data.String (fromString)
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -22,7 +24,7 @@ import           Text.Pandoc.Definition (Pandoc, Block(Header, Div, Plain, CodeB
 import           Text.Pandoc.Extensions (pandocExtensions)
 import           Text.Pandoc.Options
 import           Text.Pandoc.Readers.Markdown (readMarkdown)
-import           Text.Pandoc.Walk (walk)
+import           Text.Pandoc.Walk (walkM)
 import           Text.Pandoc.Writers.HTML (writeHtml5)
 import           Text.Blaze (string)
 import           Text.Blaze.Html5 (Html)
@@ -31,8 +33,11 @@ import           Text.Blaze.Renderer.String (renderMarkup)
 
 -- Produces HTML from the given markdown formatted string what
 -- comes from a text area field.
+-- It also assigns unique identifiers and Copy to Clipboard buttons to code blocks.
+-- Identifiers are unique in context of single markdown document but not
+-- over multiple documents.
 markdownToHtml :: I18N -> String -> Html
-markdownToHtml msg = either (string . show) id . runPure . (wrt . walk (copyToClipboardForCodeBlocks msg) <=< rd)
+markdownToHtml msg = either (string . show) id . runPure . (wrt . transform <=< rd)
   where
     wrt :: Pandoc -> PandocPure Html
     wrt = writeHtml5 writerOpts
@@ -40,21 +45,24 @@ markdownToHtml msg = either (string . show) id . runPure . (wrt . walk (copyToCl
     rd :: String -> PandocPure Pandoc
     rd = readMarkdown readerOpts . T.pack
 
+    transform :: Pandoc -> Pandoc
+    transform p = evalState (walkM (copyToClipboardForCodeBlocks msg) p) 0
+
     readerOpts :: ReaderOptions
     readerOpts = def { readerExtensions = enableExtension Ext_tex_math_single_backslash pandocExtensions }
 
     writerOpts :: WriterOptions
     writerOpts = def { writerHTMLMathMethod = KaTeX "/katex" }
 
-copyToClipboardForCodeBlocks :: I18N -> [Block] -> [Block]
-copyToClipboardForCodeBlocks msg bs = snd $ foldr addCopyButton (0, []) bs
+copyToClipboardForCodeBlocks :: I18N -> [Block] -> State Int [Block]
+copyToClipboardForCodeBlocks msg bs = foldrM addCopyButton [] bs
   where
-    addCopyButton :: Block -> (Int, [Block]) -> (Int, [Block])
-    addCopyButton (CodeBlock (_, classes, kv) code) (n, blocks) = (n + 1, RawBlock "html" (renderMarkup $ copyToClipboardButton msg ident) : CodeBlock (ident, classes, kv) code : blocks)
-      where
-        ident :: String
-        ident = "code-" ++ show n
-    addCopyButton b (n, blocks) = (n, b : blocks)
+    addCopyButton :: Block -> [Block] -> State Int [Block]
+    addCopyButton (CodeBlock (_, classes, kv) code) blocks =
+      state (\n ->
+               let ident = "code-" ++ show n
+               in ((RawBlock "html" (renderMarkup $ copyToClipboardButton msg ident) : CodeBlock (ident, classes, kv) code : blocks), n + 1))
+    addCopyButton b blocks = return (b : blocks)
 
 headersToDiv :: MarkupM a -> MarkupM a
 headersToDiv (Parent tag open close contents)
