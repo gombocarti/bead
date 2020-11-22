@@ -153,7 +153,6 @@ labels =
  , "msg_NewAssignment_SubmissionType"
  , "msg_NewAssignment_TextSubmission"
  , "msg_NewAssignment_ZipSubmission"
- , "msg_NewAssignment_EvalTypeWarn"
  , "msg_NewAssignment_Isolated"
  , "msg_NewAssignment_Info_Isolated"
  , "msg_NewAssignment_Info_NoOfTries"
@@ -505,7 +504,6 @@ labels =
  , "msg_UserStory_NewTestScriptIsCreated"
  , "msg_UserStory_ModifyTestScriptIsDone"
  , "msg_UserStory_AlreadyEvaluated"
- , "msg_UserStory_EvalTypeWarning"
  , "msg_UserStory_AssessmentEvalTypeWarning"
 
  , "msg_UserStoryError_UnknownError"

@@ -164,17 +164,16 @@ newGroupAssignmentPreviewPage = do
 modifyAssignmentPage :: GETContentHandler
 modifyAssignmentPage = do
   ak <- getAssignmentKey
-  (as,tss,ufs,tc,ev) <- userStory $ do
+  (as,tss,ufs,tc) <- userStory $ do
     S.isAdministratedAssignment ak
     as <- S.loadAssignment ak
     tss' <- S.testScriptInfosOfAssignment ak
     ufs  <- map fst <$> S.listUsersFiles
     tc   <- S.testCaseOfAssignment ak
-    ev   <- not <$> S.isThereASubmission ak
-    return (as, nonEmptyList tss', ufs, tc, ev)
+    return (as, nonEmptyList tss', ufs, tc)
   tz <- userTimeZoneToLocalTimeConverter
   setPageContents $ newAssignmentContent $
-    PD_Assignment tz ak as tss ufs tc ev
+    PD_Assignment tz ak as tss ufs tc
 
 postModifyAssignment :: POSTContentHandler
 postModifyAssignment = do
@@ -188,17 +187,16 @@ modifyAssignmentPreviewPage = do
   ak <- getAssignmentKey
   as <- getAssignment
   tm <- readTCModificationParameters
-  (tss,ufs,tc,ev) <- userStory $ do
+  (tss,ufs,tc) <- userStory $ do
     S.isAdministratedAssignment ak
     tss' <- S.testScriptInfosOfAssignment ak
     ufs  <- map fst <$> S.listUsersFiles
     tc   <- S.testCaseOfAssignment ak
-    ev   <- not <$> S.isThereASubmission ak
-    return (nonEmptyList tss', ufs, tc, ev)
+    return (nonEmptyList tss', ufs, tc)
   tz <- userTimeZoneToLocalTimeConverter
   modifyPageSettings enableFullMarkdownRendering
   setPageContents $ newAssignmentContent $
-    PD_Assignment_Preview tz ak as tss ufs tc tm ev
+    PD_Assignment_Preview tz ak as tss ufs tc tm
 
 viewAssignmentPage :: GETContentHandler
 viewAssignmentPage = do

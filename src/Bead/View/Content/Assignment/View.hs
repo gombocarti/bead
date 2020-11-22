@@ -32,33 +32,14 @@ newAssignmentContent :: PageData -> IHtml
 newAssignmentContent pd = do
   msg <- getI18N
   let hook = assignmentEvTypeHook
-
-  -- Renders a evaluation selection or hides it if there is a submission already for the assignment,
-  -- and renders an explanation.
-  evalConfig <- do
-    let evaluationTypeSelection = return $ do
-          Bootstrap.selectionWithLabel
-            (evHiddenValueId hook)
-            (msg $ msg_NewAssignment_EvaluationType "Evaluation Type")
-            (== currentEvaluationType)
-            [ (binaryConfig, fromString . msg $ msg_NewAssignment_BinEval "Binary")
-            , (percentageConfig 0.0, fromString . msg $ msg_NewAssignment_PctEval "Percentage")
-            , (freeFormConfig, fromString . msg $ msg_NewAssignment_FftEval "Free form textual")
-            ]
-    let hiddencfg asg = return $ do
-          let e = Assignment.evType asg
-          showEvaluationType msg e
-          fromString . msg $ msg_NewAssignment_EvalTypeWarn "The evaluation type can not be modified, there is a submission for the assignment."
-          hiddenInput (evHiddenValueId hook) (encodeToFay' "selection" e)
-    pageDataCata
-      (const5 evaluationTypeSelection)
-      (const5 evaluationTypeSelection)
-      (\_tz _key asg _ts _fs _tc ev -> if ev then evaluationTypeSelection else hiddencfg asg)
-      (const5 evaluationTypeSelection)
-      (const7 evaluationTypeSelection)
-      (const7 evaluationTypeSelection)
-      (\_tz _key asg _ts _fs _tc _tm ev -> if ev then evaluationTypeSelection else hiddencfg asg)
-      pd
+      evalConfig = Bootstrap.selectionWithLabel
+        (evHiddenValueId hook)
+        (msg $ msg_NewAssignment_EvaluationType "Evaluation Type")
+        (== currentEvaluationType)
+        [ (binaryConfig, fromString . msg $ msg_NewAssignment_BinEval "Binary")
+        , (percentageConfig 0.0, fromString . msg $ msg_NewAssignment_PctEval "Percentage")
+        , (freeFormConfig, fromString . msg $ msg_NewAssignment_FftEval "Free form textual")
+        ]
 
   return $ do
             Bootstrap.row $ Bootstrap.colMd12
@@ -101,21 +82,21 @@ newAssignmentContent pd = do
                     startDateStringValue = showDate $ date $ pageDataCata
                       (\_tz t _c _ts _fs -> t)
                       (\_tz t _g _ts _fs -> t)
-                      (\_tz _k a _ts _fs _tc _ev -> Assignment.start a)
+                      (\_tz _k a _ts _fs _tc -> Assignment.start a)
                       (\_tz _k a _ts _tc -> Assignment.start a)
                       (\_tz _t _c _ts _fs a _tc  -> Assignment.start a)
                       (\_tz _t _g _ts _fs a _tc  -> Assignment.start a)
-                      (\_tz _k a _ts _fs _tc _tm _ev -> Assignment.start a)
+                      (\_tz _k a _ts _fs _tc _tm -> Assignment.start a)
                       pd
 
                     endDateStringValue = showDate $ date $ pageDataCata
                       (\_tz t _c _ts _fs -> t)
                       (\_tz t _g _ts _fs -> t)
-                      (\_tz _k a _ts _fs _tc _ev -> Assignment.end a)
+                      (\_tz _k a _ts _fs _tc -> Assignment.end a)
                       (\_tz _k a _ts _tc -> Assignment.end a)
                       (\_tz _t _c _ts _fs a _tc  -> Assignment.end a)
                       (\_tz _t _g _ts _fs a _tc  -> Assignment.end a)
-                      (\_tz _k a _ts _fs _tc _tm _ev -> Assignment.end a)
+                      (\_tz _k a _ts _fs _tc _tm -> Assignment.end a)
                       pd
 
                 -- Opening and closing dates of the assignment
@@ -219,11 +200,11 @@ newAssignmentContent pd = do
                 pageDataCata
                   (const5 $ assignmentPropertiesSection editable)
                   (const5 $ assignmentPropertiesSection editable)
-                  (const7 $ assignmentPropertiesSection editable)
+                  (const6 $ assignmentPropertiesSection editable)
                   (const5 $ assignmentPropertiesSection readOnly)
                   (const7 $ assignmentPropertiesSection editable)
                   (const7 $ assignmentPropertiesSection editable)
-                  (const8 $ assignmentPropertiesSection editable)
+                  (const7 $ assignmentPropertiesSection editable)
                   pd
 
                 submissionTypeSelection msg pd
@@ -288,11 +269,11 @@ newAssignmentContent pd = do
                 pageDataCata
                   (const5 mempty)
                   (const5 mempty)
-                  (const7 mempty)
+                  (const6 mempty)
                   (const5 mempty)
                   (\_tz _t _key _tsType _fs a _tc -> assignmentPreview a)
                   (\_tz _t _key _tsType _fs a _tc -> assignmentPreview a)
-                  (\_tz _k a _t _fs _tst _tm _ev -> assignmentPreview a)
+                  (\_tz _k a _t _fs _tst _tm -> assignmentPreview a)
                   pd
 
                 -- Assignment Test Script Selection
@@ -305,29 +286,29 @@ newAssignmentContent pd = do
 
                 -- Evaluation config
                 Bootstrap.formGroup $ do
-                  let previewAndCommitForm cfg = do
+                  let previewAndCommitForm = do
                         evalSelectionDiv hook
                         evalConfig
 
                   pageDataCata
-                    (const5 (previewAndCommitForm binaryConfig))
-                    (const5 (previewAndCommitForm binaryConfig))
-                    (\_timezone _key asg _tsType _files _testcase _ev -> previewAndCommitForm (Assignment.evType asg))
+                    (const5 previewAndCommitForm)
+                    (const5 previewAndCommitForm)
+                    (\_timezone _key asg _tsType _files _testcase -> previewAndCommitForm)
                     (\_timezone _key asg _tsInfo _testcase -> showEvaluationType msg $ Assignment.evType asg)
-                    (\_timezone _time _courses _tsType _files assignment _tccreatio -> previewAndCommitForm (Assignment.evType assignment))
-                    (\_timezone _time _groups _tsType _files assignment _tccreation -> previewAndCommitForm (Assignment.evType assignment))
-                    (\_timezone _key asg _tsType _files _testcase _tcmod _ev -> previewAndCommitForm (Assignment.evType asg))
+                    (\_timezone _time _courses _tsType _files assignment _tccreatio -> previewAndCommitForm)
+                    (\_timezone _time _groups _tsType _files assignment _tccreation -> previewAndCommitForm)
+                    (\_timezone _key asg _tsType _files _testcase _tcmod -> previewAndCommitForm)
                     pd
 
                 -- Hidden course or group keys for the assignment creation
                 pageDataCata
                   (\_tz _t (key,_course) _tsType _fs -> hiddenInput (fieldName selectedCourse) (courseKeyMap id key))
                   (\_tz _t (key,_group)  _tsType _fs -> hiddenInput (fieldName selectedGroup) (groupKeyMap id key))
-                  (const7 (return ()))
+                  (const6 (return ()))
                   (const5 (return ()))
                   (\_tz _t (key,_course) _tsType _fs _a _tc -> hiddenInput (fieldName selectedCourse) (courseKeyMap id key))
                   (\_tz _t (key,_group)  _tsType _fs _a _tc -> hiddenInput (fieldName selectedGroup) (groupKeyMap id key))
-                  (const8 (return ()))
+                  (const7 (return ()))
                   pd
 
                 -- Submit buttons
@@ -345,46 +326,46 @@ newAssignmentContent pd = do
       editOrReadOnly = pageDataCata
         (const5 id)
         (const5 id)
-        (const7 id)
+        (const6 id)
         (const5 (! A.readonly ""))
         (const7 id)
         (const7 id)
-        (const8 id)
+        (const7 id)
 
       onlyOnEdit pd t = pageDataCata
         (const5 t)
         (const5 t)
-        (const7 t)
+        (const6 t)
         (const5 mempty)
         (const7 t)
         (const7 t)
-        (const8 t)
+        (const7 t)
         pd
 
       isEditPage = pageDataCata
         (const5 True)
         (const5 True)
-        (const7 True)
+        (const6 True)
         (const5 False)
         (const7 True)
         (const7 True)
-        (const8 True)
+        (const7 True)
         pd
 
       timeZoneConverter = pageDataCata
         (\tz _t _c _ts _fs -> tz)
         (\tz _t _g _ts _fs -> tz)
-        (\tz _k _a _ts _fs _tc _ev -> tz)
+        (\tz _k _a _ts _fs _tc -> tz)
         (\tz _k _a _ts _tc -> tz)
         (\tz _t _c _ts _fs _a _tc  -> tz)
         (\tz _t _g _ts _fs _a _tc  -> tz)
-        (\tz _k _a _ts _fs _tc _tm _ev -> tz)
+        (\tz _k _a _ts _fs _tc _tm -> tz)
         pd
 
       fromAssignment :: (Assignment -> a) -> a -> PageData -> a
       fromAssignment f d pd = maybe d f (get pd) where
-        get (PD_Assignment _ _ a _ _ _ _)           = Just a
-        get (PD_Assignment_Preview _ _ a _ _ _ _ _) = Just a
+        get (PD_Assignment _ _ a _ _ _)           = Just a
+        get (PD_Assignment_Preview _ _ a _ _ _ _) = Just a
         get (PD_ViewAssignment _ _ a _ __   ) = Just a
         get (PD_Course_Preview _ _ _ _ _ a _) = Just a
         get (PD_Group_Preview  _ _ _ _ _ a _) = Just a
@@ -414,22 +395,22 @@ newAssignmentContent pd = do
         pageDataCata
           (const5 submissionTypeSelection)
           (const5 submissionTypeSelection)
-          (const7 submissionTypeSelection)
+          (const6 submissionTypeSelection)
           (\_timezone _key asg _tsInfo _testcase -> showSubmissionType asg)
           (const7 submissionTypeSelection)
           (const7 submissionTypeSelection)
-          (const8 submissionTypeSelection)
+          (const7 submissionTypeSelection)
           pd
 
       testScriptSelection :: (Translation String -> String) -> PageData -> H.Html
       testScriptSelection msg = pageDataCata
         (\_tz _t _c tsType _fs -> scriptSelection tsType)
         (\_tz _t _g tsType _fs -> scriptSelection tsType)
-        (\_tz _k _a tsType _fs mts _ev -> modificationScriptSelection tsType mts)
+        (\_tz _k _a tsType _fs mts -> modificationScriptSelection tsType mts)
         (const5 (return ()))
         (\_tz _t _c tsType _fs _a tc  -> scriptSelectionPreview tsType tc)
         (\_tz _t _g tsType _fs _a tc  -> scriptSelectionPreview tsType tc)
-        (\_tz _k _a tsType _fs mts tm _ev -> modificationScriptSelectionPreview tsType mts tm)
+        (\_tz _k _a tsType _fs mts tm -> modificationScriptSelectionPreview tsType mts tm)
         where
           testScriptField :: (IsString s) => s
           testScriptField = fieldName assignmentTestScriptField
@@ -507,11 +488,11 @@ newAssignmentContent pd = do
       testCaseArea msg = pageDataCata
         (\_tz _t _c tsType fs -> createTestCaseArea fs tsType)
         (\_tz _t _g tsType fs -> createTestCaseArea fs tsType)
-        (\_tz _k _a tsType fs tc _ev -> overwriteTestCaseArea fs tsType tc)
+        (\_tz _k _a tsType fs tc -> overwriteTestCaseArea fs tsType tc)
         (\_tz _k _a ts tc -> viewTestCaseArea ts tc)
         (\_tz _t _c tsType fs _a tc -> createTestCaseAreaPreview fs tsType tc)
         (\_tz _t _g tsType fs _a tc -> createTestCaseAreaPreview fs tsType tc)
-        (\_tz _k _a tsType fs tc tm _ev -> overwriteTestCaseAreaPreview fs tsType tc tm)
+        (\_tz _k _a tsType fs tc tm -> overwriteTestCaseAreaPreview fs tsType tc tm)
         where
           textArea val = do
             Bootstrap.labelFor (fieldName assignmentTestCaseField) (msg $ msg_NewAssignment_TestCase "Test cases")
@@ -636,21 +617,21 @@ newAssignmentContent pd = do
       pagePreview = pageDataCata
         (\_tz _t (key,_course) _tsType _fs -> newCourseAssignmentPreview key)
         (\_tz _t (key,_group)  _tsType _fs -> newGroupAssignmentPreview key)
-        (\_timezone key _asg _tsType _files _testcase _ev -> modifyAssignmentPreview key)
+        (\_timezone key _asg _tsType _files _testcase -> modifyAssignmentPreview key)
         (\_tz k _a _ts _tc -> viewAssignment k)
         (\_tz _t (key,_course) _tsType _fs _a _tc -> newCourseAssignmentPreview key)
         (\_tz _t (key,_group)  _tsType _fs _a _tc -> newGroupAssignmentPreview key)
-        (\_timezone key _asg _tsType _files _testcase _tc _ev -> modifyAssignmentPreview key)
+        (\_timezone key _asg _tsType _files _testcase _tc -> modifyAssignmentPreview key)
 
       page :: PageData -> PageDesc
       page = pageDataCata
         (\_tz _t (key,_course) _tsType _fs -> newCourseAssignment key)
         (\_tz _t (key,_group)  _tsType _fs -> newGroupAssignment key)
-        (\_tz ak _asg _tsType _files _testcase _ev -> modifyAssignment ak)
+        (\_tz ak _asg _tsType _files _testcase -> modifyAssignment ak)
         (\_tz k _a _ts _tc -> viewAssignment k)
         (\_tz _t (key,_course) _tsType _fs _a _tc -> newCourseAssignment key)
         (\_tz _t (key,_group)  _tsType _fs _a _tc -> newGroupAssignment key)
-        (\_tz k _a _fs _ts _tc _tm _ev -> modifyAssignment k)
+        (\_tz k _a _fs _ts _tc _tm -> modifyAssignment k)
 
       showEvaluationType msg e =
         Bootstrap.readOnlyTextInputWithDefault ""

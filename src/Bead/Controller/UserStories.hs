@@ -1582,16 +1582,9 @@ modifyAssignment :: AssignmentKey -> Assignment -> TCModification -> UserStory (
 modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ do
   authorize P_Modify P_Assignment
   isAdministratedAssignment ak
-  hasSubmission <- isThereASubmission ak
-  join . withUserAndPersist $ \u -> do
+  withUserAndPersist $ \u -> do
     let user = u_username u
-    new <- if hasSubmission
-             then do -- Overwrite the assignment type with the old one
-                     -- if there is submission for the given assignment
-                ev <- Assignment.evType <$> Persist.loadAssignment ak
-                return (a { Assignment.evType = ev })
-             else return a
-    Persist.modifyAssignment ak new
+    Persist.modifyAssignment ak a
     testCaseModificationForAssignment user ak tc
     now <- liftIO getCurrentTime
     let msg = Notification.NE_AssignmentUpdated (u_name u) (Assignment.name a)
@@ -1639,12 +1632,7 @@ modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ 
               Persist.updateNotification nk n'
               Persist.updateUserNotification nk newDate
             _ -> return ()
-    if and [hasSubmission, Assignment.evType a /= Assignment.evType new]
-      then return . putStatusMessage . msg_UserStory_EvalTypeWarning $ concat
-        [ "The evaluation type of the assignment is not modified. "
-        , "A solution is submitted already."
-        ]
-      else (return (return ()))
+
 -- * Guards
 
 -- Checks with the given guard function if the user has passed the guard,
