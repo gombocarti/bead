@@ -1,8 +1,22 @@
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE ExistentialQuantification #-}
 module Bead.View.ContentHandler (
-    beadHandler
+    Action(..)
+  , PageContents
+  , setPageContents
+  , RedirectionTarget
+  , redirection
+  , redirectTo
+  , HtmlPage(..)
+  , htmlPage
+  , File
+  , downloadLazy
+  , downloadStrict
+  , downloadText
+  , beadHandler
   , logMessage
   , withUserState
+  , changeUserState
   , userStory
   , registrationStory
   , getParameter
@@ -15,8 +29,6 @@ module Bead.View.ContentHandler (
   , getDictionaryInfos -- Calculates a list of language and dictionaryInfo
   , i18nE
   , i18nH
-  , bootstrapPage
-  , bootstrapPublicPage
   , Mime(..)
   , mimeCata
   , pageSettings
@@ -24,6 +36,7 @@ module Bead.View.ContentHandler (
   , userState
   , userLanguage
   , setUserLanguage
+  , setHomePage
   , userTimeZone
   , userTimeZoneToLocalTimeConverter
   , userTimeZoneToUTCTimeConverter
@@ -46,12 +59,17 @@ import           Control.Monad (void)
 import           Control.Monad.Except
 import           Control.Monad.State (StateT, gets, modify, put)
 import           Data.Bifunctor (first, second)
+import qualified Text.Blaze as B
+import           Text.Blaze.Html5 ((!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.UTF8  as BU
 import qualified Data.ByteString.Lazy  as LB
 import qualified Data.Map as Map (lookup)
 import           Data.Maybe (isNothing, fromJust, fromMaybe)
 import           Data.String (IsString(..))
+import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           Data.Time (UTCTime, LocalTime)
@@ -62,24 +80,26 @@ import           Snap.Blaze (blaze)
 import           Snap.Util.FileUploads
 import           Text.Blaze.Html5 (Html)
 
-import qualified Bead.View.AuthToken as Auth
 import           Bead.Config
 import           Bead.Controller.Logging as L
 import           Bead.Controller.Logging
+import qualified Bead.Controller.Pages as P
 import           Bead.Controller.ServiceContext (UserState)
 import qualified Bead.Controller.ServiceContext as SC
+import           Bead.Controller.UserStories (UserStory)
 import qualified Bead.Controller.UserStories as S
-import           Bead.Domain.Entities (TimeZoneName, PageSettings)
+import           Bead.Domain.Entities (TimeZoneName, PageSettings, Group, Course, shortGroupName, shortCourseName)
+import           Bead.Domain.Relationships (GroupKey, CourseKey, HomePageContents)
 import           Bead.Domain.TimeZone
+import qualified Bead.View.AuthToken as Auth
 import           Bead.View.BeadContext hiding (getDictionaryInfos)
 import qualified Bead.View.BeadContext as BeadContext
+import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.DataBridge
 import           Bead.View.Dictionary hiding (defaultLanguage)
 import           Bead.View.Header (getCookie)
-import           Bead.View.I18N (IHtml, translate)
-import           Bead.View.Pagelets (runBootstrapPage, bootstrapUserFrame, publicFrame)
-import qualified Bead.Controller.Pages as P
-import           Bead.View.RouteOf (ReqParam(..))
+import           Bead.View.I18N (IHtml, getI18N)
+import           Bead.View.RouteOf (ReqParam(..), routeOf)
 import           Bead.View.Translation
 
 import           Bead.View.Fay.JSON.ServerSide
@@ -123,6 +143,55 @@ type ContentHandler' b c = ExceptT ContentError (StateT (UserState, PageSettings
 -- also equiped with error handling, mainly used for render inner pages.
 type ContentHandler c = ContentHandler' BeadContext c
 
+-- Data types for handling GET requests
+
+type RedirectionTarget = P.PageDesc
+
+data HtmlPage = HtmlPage {
+    pageTitle  :: IHtml
+  , pageBody   :: IHtml
+  }
+
+htmlPage :: Translation String -> IHtml -> HtmlPage
+htmlPage title body = HtmlPage {
+    pageTitle = do
+      msg <- getI18N
+      return $ Bootstrap.pageHeader (msg title) Nothing
+  , pageBody = body
+  }
+
+-- | Contents of a page is either contents of some other page
+--   or some html.
+type PageContents = Either RedirectionTarget HtmlPage
+
+redirection :: RedirectionTarget -> PageContents
+redirection = Left
+
+setPageContents :: HtmlPage -> ContentHandler PageContents
+setPageContents = return . Right
+
+redirectTo :: RedirectionTarget -> ContentHandler PageContents
+redirectTo = return . redirection
+
+-- | A file to be downloaded consists of a filename, a mime info and
+--   the means to write its contents into a response.
+type File = (String, Mime, BeadHandler ())
+
+downloadStrict :: String -> Mime -> B.ByteString -> ContentHandler File
+downloadStrict filename mime contents = return (filename, mime, writeBS contents)
+
+downloadLazy :: String -> Mime -> LB.ByteString -> ContentHandler File
+downloadLazy filename mime contents = return (filename, mime, writeLBS contents)
+
+downloadText :: String -> Text -> ContentHandler File
+downloadText filename contents = return (filename, MimePlainText, writeText contents)
+
+-- Data types for handling form submissions and modification requests
+
+newtype Action = Action {
+    performAction :: UserStory PageContents
+  }
+
 -- | The 'logMessage' logs a message at a given level using the service context logger
 logMessage :: LogLevel -> String -> BeadHandler' b ()
 logMessage lvl msg = do
@@ -156,6 +225,9 @@ defaultLanguage = beadHandler . withDictionary $ configuredDefaultDictionaryLang
 
 setUserTimezone :: TimeZoneName -> ContentHandler ()
 setUserTimezone timezone = changeUserState (SC.setTimeZone timezone)
+
+setHomePage :: HomePageContents -> ContentHandler ()
+setHomePage = changeUserState . SC.setHomePage
 
 pageSettings :: ContentHandler PageSettings
 pageSettings = gets snd
@@ -211,25 +283,6 @@ i18nH = do
   let lang = Auth.cookieLanguage cookie
   dict <- withDictionary $ getDictionary lang
   return $ maybe trans unDictionary dict
-
--- | Renders a Page with the given IHtml contents.
---   Implicit 'UserState' and 'PageSettings' influences the result.
-bootstrapPage :: P.Page' IHtml -> ContentHandler Html
-bootstrapPage page = do
-  state <- userState
-  settings <- pageSettings
-  notifs <- userStory S.noOfUnseenNotifications
-  changeUserState SC.clearStatus
-  i18nE >>= (return . runBootstrapPage settings (bootstrapUserFrame state page notifs))
-
--- | Translates a public page selecting the I18N translation based on
---   the language stored in the cookie, if there is no such value, the
---   accept-language field is used, if there is no such value then
---   default translator function is used.
-bootstrapPublicPage :: PageSettings -> IHtml -> BeadHandler' v Html
-bootstrapPublicPage settings p = do
-  translator <- i18nH
-  return $ runBootstrapPage settings (publicFrame p) translator
 
 -- Tries to decode the given value with the parameter description, if
 -- fails throws an error, otherwise returns the value

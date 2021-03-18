@@ -5,6 +5,8 @@ import qualified Bead.View.AuthToken as Auth
 import           Bead.View.Translation (Translation(T))
 import           Bead.Domain.Entities
 import qualified Bead.Domain.Entity.Notification as Notification
+import           Bead.Domain.Relationships (CourseKey, GroupKey, HomePageContents)
+import qualified Bead.Domain.Relationships as R
 import           Bead.Domain.TimeZone (utcZoneInfo, cetZoneInfo)
 import           Bead.Domain.Shared.Evaluation
 
@@ -34,11 +36,15 @@ usernames :: Gen Username
 usernames = liftM Username (vectorOf 6 $ oneof [capital, digits])
   where
     capital = elements ['A' .. 'Z']
-    digits  = elements ['0' .. '9']
+
+digits :: Gen Char
+digits = elements ['0' .. '9']
 
 uids = fmap (usernameCata Uid) usernames
 
 roleGen = elements [Student, GroupAdmin, CourseAdmin, Admin]
+teacherRoleGen = elements [GroupAdmin, CourseAdmin]
+nonTeacherRoleGen = elements [Student, Admin]
 
 emails = do
   user <- word
@@ -84,6 +90,7 @@ userStates = oneof [
       <*> (return UUID.nil)
       <*> timeZones
       <*> statusMessages
+      <*> homePages
   , UserNotLoggedIn
       <$> languages
   ]
@@ -99,9 +106,19 @@ cookies = oneof [
       <*> (return UUID.nil)
       <*> timeZones
       <*> statusMessages
+      <*> homePages
   , Auth.NotLoggedInCookie
       <$> languages
   ]
+
+homePages :: Gen HomePageContents
+homePages = oneof [ return $ R.Welcome
+                  , R.StudentView <$> groupKeys
+                  , R.GroupOverview <$> groupKeys
+                  , R.GroupOverviewAsStudent <$> groupKeys
+                  , R.CourseManagement <$> courseKeys
+                  , return R.Administration
+                  ]
 
 statusMessages :: Gen (Maybe (StatusMessage (Translation String)))
 statusMessages = do
@@ -114,6 +131,9 @@ statusMessages = do
         n <- elements [1..20]
         s <- manyWords
         return $ T (n, s)
+
+courseKeys :: Gen CourseKey
+courseKeys = R.CourseKey <$> vectorOf 4 digits
 
 courseNames = word
 
@@ -135,6 +155,9 @@ courses =
     courseNames
     courseDescs
     (elements [TestScriptSimple, TestScriptZipped])
+
+groupKeys :: Gen GroupKey
+groupKeys = R.GroupKey <$> vectorOf 4 digits
 
 groupCodes = word
 

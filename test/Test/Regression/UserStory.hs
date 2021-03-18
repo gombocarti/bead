@@ -75,10 +75,10 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
       testAgentFeedbacks    
     
     si <- userStory studentUsername $ do
-      ua <- userAssignmentsAssessments
-      return $ case find (\(grp, _, _, _) -> grp == g1) ua of
-                 Nothing -> fail "Group cannot be found"
-                 Just (grp, _, asgs, _) -> do
+      (asgs, _assessments) <- userAssignmentsAssessments gk1
+      return $ case asgs of
+                 [] -> fail "Group assignments cannot be found"
+                 _ -> do
                    (_, _, submState, _) <- find (\(ak, _, _, _) -> ak == ak1) asgs
                    submState
 

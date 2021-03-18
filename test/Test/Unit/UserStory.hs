@@ -84,10 +84,11 @@ courseTest = testCase "Create Course" $ do
   return ()
 
 courseAndGroupAssignmentTest = testCase "Course and group assignments" $ do
-  str <- getCurrentTime
-  end <- getCurrentTime
-  let ca = Assignment "cname" "cexercise" emptyAspects str end binaryConfig
-      ga = Assignment "gname" "gexercise" emptyAspects str end (percentageConfig 0.3)
+  start <- getCurrentTime
+  let end = addUTCTime nominalDay start
+      end1 = addUTCTime 60 end
+      ca = Assignment "cname" "cexercise" emptyAspects start end binaryConfig
+      ga = Assignment "gname" "gexercise" emptyAspects start end1 (percentageConfig 0.3)
       c1  = E.Course "FP" "FP-DESC" TestScriptSimple
       c2  = E.Course "MA" "MA-DESC" TestScriptZipped
       g1  = E.Group  "G1" "G1-DESC"
@@ -117,9 +118,9 @@ courseAndGroupAssignmentTest = testCase "Course and group assignments" $ do
       a1 <- createGroupAssignment gk1 ga NoCreation
       subscribeToGroup gk1
       subscribeToGroup gk2
-      as <- userAssignmentsAssessments
+      as <- (concat . map fst) <$> mapM userAssignmentsAssessments [gk1, gk2]
       return (a1,as)
-    let as1 = [ ak | (_, _, asgs, _) <- as, (ak, _, _, _) <- asgs ]
+    let as1 = [ ak | (ak, _, _, _) <- as ]
     lift $ assertBool "Assignment cannot be not found in the assignment list" ([a1,a2] == as1 || [a2,a1] == as1)
 
     (uc,ug) <- userStory student2Username $ do

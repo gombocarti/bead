@@ -15,11 +15,13 @@ module Bead.View.RouteOf (
   , loginPath
   , changeLanguagePath
   , logoutPath
-  , homePath
+  , welcomePath
   , errorPath
   , profilePath
-  , courseAdminPath
-  , courseOverviewPath
+  , studentViewPath
+  , groupOverviewPath
+  , groupOverviewAsStudentPath
+  , courseManagementPath
   , modifyEvaluationPath
   , evaluationTablePath
   , evaluationPath
@@ -27,8 +29,6 @@ module Bead.View.RouteOf (
   , viewUserScorePath
   , newUserScorePath
   , modifyUserScorePath
-  , newTestScriptPath
-  , modifyTestScriptPath
   , uploadFilePath
   , markdownPath
   , submissionDetailsPath
@@ -51,6 +51,8 @@ module Bead.View.RouteOf (
   , newCourseAssignmentPreviewPath
   , modifyAssignmentPreviewPath
   , changePasswordPath
+  , createTestScriptPath
+  , modifyTestScriptPath
 #ifndef SSO
   , setUserPasswordPath
 #endif
@@ -114,8 +116,8 @@ changeLanguagePath = "/change-language"
 logoutPath :: RoutePath
 logoutPath = "/logout"
 
-homePath :: RoutePath
-homePath = "/home"
+welcomePath :: RoutePath
+welcomePath = "/welcome"
 
 errorPath :: RoutePath
 errorPath = "/error"
@@ -123,11 +125,17 @@ errorPath = "/error"
 profilePath :: RoutePath
 profilePath = "/profile"
 
-courseAdminPath :: RoutePath
-courseAdminPath = "/course-admin"
+studentViewPath :: RoutePath
+studentViewPath = "/student-view"
 
-courseOverviewPath :: RoutePath
-courseOverviewPath = "/course-overview"
+groupOverviewPath :: RoutePath
+groupOverviewPath = "/group-overview"
+
+groupOverviewAsStudentPath :: RoutePath
+groupOverviewAsStudentPath = "/group-overview-as-student"
+
+courseManagementPath :: RoutePath
+courseManagementPath = "/course-management"
 
 modifyEvaluationPath :: RoutePath
 modifyEvaluationPath = "/modify-evaluation"
@@ -149,12 +157,6 @@ newUserScorePath = "/new-user-score"
 
 modifyUserScorePath :: RoutePath
 modifyUserScorePath = "/modify-user-score"
-
-newTestScriptPath :: RoutePath
-newTestScriptPath = "/new-test-script"
-
-modifyTestScriptPath :: RoutePath
-modifyTestScriptPath = "/modify-test-script"
 
 uploadFilePath :: RoutePath
 uploadFilePath = "/upload-file"
@@ -209,6 +211,12 @@ modifyAssignmentPreviewPath = "/modify-assignment-preview"
 
 changePasswordPath :: RoutePath
 changePasswordPath = "/change-password"
+
+createTestScriptPath :: RoutePath
+createTestScriptPath = "/create-test-script"
+
+modifyTestScriptPath :: RoutePath
+modifyTestScriptPath = "/modify-test-script"
 
 #ifndef SSO
 setUserPasswordPath :: RoutePath
@@ -301,11 +309,13 @@ pageRoutePath = constantsP
     indexPath
     loginPath
     logoutPath
-    homePath
+    welcomePath
     profilePath
     administrationPath
-    courseAdminPath
-    courseOverviewPath
+    studentViewPath
+    groupOverviewPath
+    groupOverviewAsStudentPath
+    courseManagementPath
     evaluationTablePath
     evaluationPath
     modifyEvaluationPath
@@ -323,13 +333,13 @@ pageRoutePath = constantsP
     modifyUserScorePath
     groupRegistrationPath
     userDetailsPath
-    newTestScriptPath
-    modifyTestScriptPath
     uploadFilePath
     createCoursePath
     createGroupPath
     assignCourseAdminPath
     assignGroupAdminPath
+    createTestScriptPath
+    modifyTestScriptPath
     changePasswordPath
 #ifndef SSO
     setUserPasswordPath
@@ -371,8 +381,10 @@ pageRequestParams = liftsP
   (c []) -- home
   (c []) -- profile
   (c []) -- administration
-  (c []) -- courseAdmin
-  (\ck _ -> [requestParam ck]) -- courseOverview
+  (\gk _ -> [requestParam gk]) -- studentView
+  (\gk _ -> [requestParam gk]) -- groupOverview
+  (\gk _ -> [requestParam gk]) -- groupOverviewAsStudent
+  (\ck contents _ -> [requestParam ck, requestParam contents]) -- courseManagement
   (c []) -- evaluationTable
   (\ek _ -> [requestParam ek]) -- evaluation
   (\sk ek _ -> [requestParam sk, requestParam ek]) -- modifyEvaluation
@@ -390,13 +402,13 @@ pageRequestParams = liftsP
   (\sk _ -> [requestParam sk]) -- modifyUserScore
   (c []) -- groupRegistration
   (c []) -- userDetails
-  (c []) -- newTestScript
-  (\tsk _ -> [requestParam tsk]) -- modifyTestScript
   (c []) -- uploadFile
   (c []) -- createCourse
-  (c []) -- createGroup
+  (\ck _ -> [requestParam ck]) -- createGroup
   (c []) -- assignCourseAdmin
-  (c []) -- assignGroupAdmin
+  (\ck _ -> [requestParam ck]) -- assignGroupAdmin
+  (\ck _ -> [requestParam ck]) -- createTestScript
+  (\ck tsk _ -> [requestParam ck, requestParam tsk]) -- modifyTestScript
   (c []) -- changePassword
 #ifndef SSO
   (c []) -- setUserPassword

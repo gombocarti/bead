@@ -6,6 +6,7 @@ module Bead.View.Content.Submission.Page (
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
 import           Data.List (intersperse, partition)
 import           Data.Maybe (listToMaybe)
@@ -20,6 +21,7 @@ import           Text.Blaze.Html5.Attributes as A
 
 import           Bead.Config (maxUploadSizeInKb)
 import qualified Bead.Controller.Pages as Pages
+import           Bead.Controller.UserStories (UserStory)
 import qualified Bead.Controller.UserStories as Story
 import qualified Bead.Domain.Entities as E
 import qualified Bead.Domain.Entity.Assignment as Assignment
@@ -29,7 +31,7 @@ import qualified Bead.View.Content as C
 import           Bead.View.ContentHandler (modifyPageSettings)
 import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
-import qualified Bead.View.Content.SubmissionState as St
+import qualified Bead.View.Content.StateVisualization as SV
 import           Bead.View.Content.Submission.Common
 import           Bead.View.Markdown (markdownToHtml, minHeaderLevel)
 
@@ -71,22 +73,24 @@ submissionPage = do
     return $! (asg, courseAndGroup, lmt, submissions, hasTest)
 
   if (now < Assignment.start asg)
-    then setPageContents assignmentNotAvailableYetContent
+    then setPageContents $ htmlPage (msg_LinkText_Submission "Submission") $
+           assignmentNotAvailableYetContent
     else do
       modifyPageSettings E.enableFullMarkdownRendering
-      setPageContents $ submissionContent $
-        PageData {
-            asKey = ak
-          , asValue = asg
-          , asHasTestCase = hasTest
-          , asTimeConv = ut
-          , asNow = now
-          , asMaxFileSize = size
-          , asLimit = limit
-          , asSubmissions = submissions
-          , asCourse = course
-          , asGroup = grp
-          }
+      setPageContents $ htmlPage (msg_LinkText_Submission "Submission") $
+        submissionContent $
+          PageData {
+              asKey = ak
+            , asValue = asg
+            , asHasTestCase = hasTest
+            , asTimeConv = ut
+            , asNow = now
+            , asMaxFileSize = size
+            , asLimit = limit
+            , asSubmissions = submissions
+            , asCourse = course
+            , asGroup = grp
+            }
 
 submissionPostHandler :: POSTContentHandler
 submissionPostHandler = do
@@ -104,40 +108,46 @@ submissionPostHandler = do
   asg <- userStory $ Story.loadAssignment ak
   -- Assignment is for the user
   let aspects = Assignment.aspects asg
+      self = Pages.submission ak ()
+      action story = Action $ do
+        story
+        return $ redirection self
   if Assignment.isPasswordProtected aspects
     -- Password-protected assignment
     then do pwd <- getParameter (stringParameter (fieldName submissionPwdField) "Submission password")
             if Assignment.getPassword aspects == pwd
               -- Passwords do match
-              then newSubmission ak aspects uploadResult
+              then action <$> newSubmission ak aspects uploadResult
               -- Passwords do not match
-              else return . ErrorMessage $ msg_Submission_InvalidPassword "Invalid password, the solution could not be submitted!"
-    -- Non password protected assignment
-    else newSubmission ak aspects uploadResult
+              else return $ action $ Story.putErrorMessage $ msg_Submission_InvalidPassword "Invalid password, the solution could not be submitted!"
+    -- Non-password protected assignment
+    else action <$> newSubmission ak aspects uploadResult
   where
+    newSubmission :: AssignmentKey -> Aspects -> [UploadResult] -> ContentHandler (UserStory ())
     newSubmission ak as up =
       if (not $ Assignment.isZippedSubmissions as)
-        then submit $ SimpleSubmission <$> getParameter (stringParameter (fieldName submissionTextField) "Submission text")
+        then do
+           subm <- getParameter (stringParameter (fieldName submissionTextField) "Submission text")
+           return $ void $ submit $ SimpleSubmission subm
         else
           case uploadedFile of
             Just (File name contents) -> do
               let zipSignature = B.pack "PK"
               if (zipSignature `B.isPrefixOf` contents)
-                then submit $ return $ ZippedSubmission contents
-                else return $
-                  ErrorMessage $ msg_Submission_File_InvalidFile
-                    "The file to be uploaded does not appear to be a zip file. Invalid file extension and signature."
+                then return $ void $ submit $ ZippedSubmission contents
+                else return $ Story.putErrorMessage $ msg_Submission_File_InvalidFile
+                       "The file to be uploaded does not appear to be a zip file. Invalid file extension and signature."
             Just PolicyFailure      -> return $
-              ErrorMessage $ msg_Submission_File_PolicyFailure
+              Story.putErrorMessage $ msg_Submission_File_PolicyFailure
                 "The upload policy has been violated, probably the file was too large."
             Nothing                 -> return $
-              ErrorMessage $ msg_Submission_File_NoFileReceived
+              Story.putErrorMessage $ msg_Submission_File_NoFileReceived
                 "No file has been received."
             _                       -> return $
-              ErrorMessage $ msg_Submission_File_InternalError
+              Story.putErrorMessage $ msg_Submission_File_InternalError
                 "Some error happened during upload."
        where
-         submit s = NewSubmission ak <$> (E.Submission <$> s <*> liftIO getCurrentTime)
+         submit s = (E.Submission s <$> liftIO getCurrentTime) >>= Story.submitSolution ak
          uploadedFile = listToMaybe $ uncurry (++) $ partition isFile up
 
          isFile (File _ _) = True
@@ -155,7 +165,7 @@ submissionPostHandler = do
                 return $ Just body
               else return $ Nothing
           return $ case contents of
-            Just body -> File (unpack fp) body
+            Just body -> File (B.unpack fp) body
             _         -> InvalidFile
         _                         -> return UnnamedFile
 
@@ -262,7 +272,7 @@ submissionContent p = do
       Bootstrap.listGroupLinkItem
         (routeOf $ submissionDetails (asKey p) sk)
         (do fromString . showDate $ (asTimeConv p) time
-            St.formatSubmissionState St.toColoredBadge msg state
+            SV.formatSubmissionState SV.toColoredBadge msg state
         )
         where
           submissionDetails :: AssignmentKey -> SubmissionKey -> Pages.Page a b () c d f

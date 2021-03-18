@@ -10,10 +10,12 @@ module Bead.View.Content.All (
 import qualified Bead.Controller.Pages as Pages hiding (invariants)
 import Bead.View.Content
 import qualified Bead.View.ContentHandler as ContentHandler (logout)
-import Bead.View.Content.Home.Page
 import Bead.View.Content.Profile.Page
-import Bead.View.Content.CourseAdmin.Page
-import Bead.View.Content.CourseOverview.Page
+import Bead.View.Content.StudentView.Page
+import Bead.View.Content.GroupOverview.Page
+import Bead.View.Content.CourseManagement.Page
+import Bead.View.Content.CourseManagement.GroupManagement
+import Bead.View.Content.CourseManagement.TestScript (createTestScript, modifyTestScript)
 import Bead.View.Content.Administration.Page
 import Bead.View.Content.EvaluationTable.Page
 import Bead.View.Content.Evaluation.Page
@@ -21,12 +23,12 @@ import Bead.View.Content.Assignment.Page
 import Bead.View.Content.QueueSubmissionForTest (queueSubmissionForTest, queueAllSubmissionsForTest)
 import Bead.View.Content.Submission.Page
 import Bead.View.Content.SubmissionDetails.Page
+import Bead.View.Content.SubmissionTable (deleteUsersFromGroup, deleteUsersFromCourse)
 import Bead.View.Content.GroupRegistration.Page
 import Bead.View.Content.UserDetails.Page
 #ifndef SSO
 import Bead.View.Content.SetUserPassword.Page
 #endif
-import Bead.View.Content.NewTestScript.Page
 import Bead.View.Content.Notifications.Page
 import Bead.View.Content.UploadFile.Page
 import Bead.View.Content.ExportEvaluationsScores
@@ -37,7 +39,7 @@ import Bead.View.Content.Assessment.Page
 import Bead.View.Content.Score.Page
 import Bead.View.Content.Rest.Group (usersInGroup)
 import Bead.View.Content.Rest.SubmissionTable.Page (submissionTable)
-
+import Bead.View.Content.Welcome.Page (welcome)
 
 import Data.Monoid (mempty)
 
@@ -50,11 +52,13 @@ pageContent = Pages.constantsP
   nullViewHandler -- index
   nullViewHandler -- login
   logout
-  home
+  welcome
   profile
   administration
-  courseAdmin
-  courseOverview
+  studentView
+  groupOverview
+  groupOverviewAsStudent
+  courseManagement
   evaluationTable
   evaluation
   modifyEvaluation
@@ -72,13 +76,13 @@ pageContent = Pages.constantsP
   modifyUserScore
   groupRegistration
   userDetails
-  newTestScript
-  modifyTestScript
   uploadFile
   createCourse
   createGroup
   assignCourseAdmin
   assignGroupAdmin
+  createTestScript
+  modifyTestScript
   changePassword
 #ifndef SSO
   setUserPassword
@@ -111,9 +115,9 @@ pageContent = Pages.constantsP
   where
     logout :: ViewHandler
     logout = ViewHandler (ContentHandler.logout >> redirectTo (Pages.index ()))
-    -- Returns an empty handler that computes an empty I18N Html monadic value
+
     nullViewHandler :: ViewHandler
-    nullViewHandler = ViewHandler (setPageContents $ return mempty)
+    nullViewHandler = ViewHandler (setPageContents $ HtmlPage (return mempty) (return mempty))
 
 
 #ifdef TEST

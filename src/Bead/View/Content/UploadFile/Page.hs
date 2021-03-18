@@ -34,7 +34,8 @@ getUploadFile = do
   fs <- userStory Story.listUsersFiles
   size <- fmap maxUploadSizeInKb $ beadHandler getConfiguration
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
-  setPageContents $ uploadFileContent (PageData fs size convertToLocalTime)
+  setPageContents $ htmlPage (msg_LinkText_UploadFile "Upload File") $
+    uploadFileContent (PageData fs size convertToLocalTime)
 
 data Success a
   = PolicyFailure String
@@ -81,10 +82,13 @@ postUploadFile = do
                  (return . StoryError)
                  (uncurry saveFile)
                )
-  return . StatusMessage $
-    if (null $ filter isFailure results)
-      then (msg_UploadFile_Successful "File upload was successful.")
-      else (msg_UploadFile_ErrorInManyUploads "An error occured uploading one or more files.")
+  return $ Action $ do
+    Story.putStatusMessage $
+      if (null $ filter isFailure results)
+        then (msg_UploadFile_Successful "File upload was successful.")
+        else (msg_UploadFile_ErrorInManyUploads "An error occured uploading one or more files.")
+    return $ redirection $ Pages.uploadFile ()
+
   where
     handlePart :: PartInfo -> Either PolicyViolationException FilePath -> IO (Success (FilePath, B.ByteString))
     handlePart _partInfo (Left exception) = return . PolicyFailure . T.unpack $ policyViolationExceptionReason exception

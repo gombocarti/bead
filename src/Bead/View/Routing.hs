@@ -25,7 +25,9 @@ import qualified Data.Text as T
 import           Prelude hiding (id)
 import qualified Prelude
 import qualified Text.Blaze.Html5 as H
+import           Text.Read (readMaybe)
 
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import           Snap.Util.FileServe (serveDirectory)
 
@@ -100,7 +102,7 @@ pages = do
     Nothing -> pass
     Just pd
       | P.isLogin pd -> handleLogin
-      | otherwise -> handlePage $ renderResponse $ pageContent pd
+      | otherwise -> handlePage $ pageContent pd
   where
     -- Logs the user in, invalidating its previous logins (if any)
     -- but keeps the language information (if any).
@@ -115,11 +117,14 @@ pages = do
               translationErrorPage
                 (msg_Login_PageTitle "Login")
                 (msg_Login_InternalError "Some internal error happened, please contact the administrators."))
-        (return . contentsToResponse)
+        return
         (do result <- loginSubmit
-            beadHandler $ traverse (bootstrapPublicPage defaultPageSettings) result)
+            beadHandler $ publicPageContentsToResponse result)
         (SC.userNotLoggedIn (fromMaybe lang (SC.getLanguage state)))
       serveResponse response
+
+    publicPageContentsToResponse :: PageContents -> BeadHandler Response
+    publicPageContentsToResponse = either (return . Redirection) (fmap Html . bootstrapPublicPage defaultPageSettings)
 
 serve :: H.Html -> BeadHandler ()
 serve = blaze
@@ -151,21 +156,21 @@ index :: BeadHandler ()
 #ifdef SSO
 index =
   ifTop $ requireUser
-            (redirect (routeOf $ P.home ()))
+            (redirect . routeOf . P.homePageToPageDesc)
             (I.index Nothing >>= bootstrapPublicPage defaultPageSettings >>= serve)
 #else
 index =
   ifTop $ requireUser
-            (redirect (routeOf $ P.home ()))
+            (redirect . routeOf . P.homePageToPageDesc)
             (login Nothing)
 #endif
   where
-    requireUser :: BeadHandler () -> BeadHandler () -> BeadHandler ()
+    requireUser :: (HomePageContents -> BeadHandler ()) -> BeadHandler () -> BeadHandler ()
     requireUser authenticated unauthenticated = do
       (cookie, mError) <- getCookie
       maybe (return ()) reportCookieReadingError mError
       if Auth.isLoggedIn cookie
-        then authenticated
+        then (authenticated (Auth.cookieHomePage cookie))
         else unauthenticated
 
 reportCookieReadingError :: T.Text -> BeadHandler ()
@@ -188,13 +193,6 @@ changeLanguage = method GET handler <|> method POST (redirect indexPath)
     logError :: ContentError -> BeadHandler ()
     logError err = 
       logMessage ERROR ("Change language: " ++ contentHandlerErrorMsg err)
-
--- Redirects to the parent page of the given page
-redirectToParentPage :: P.PageDesc -> Response
-redirectToParentPage = Redirection . fromMaybe (P.home ()) . P.parentPage
-
-contentsToResponse :: PageContents H.Html -> Response
-contentsToResponse = either Redirection Html
 
 evalHandlerError
   :: (ContentError -> BeadHandler a)
@@ -246,29 +244,6 @@ serveResponse = responseCata
     serveJson :: Aeson.Encoding -> BeadHandler ()
     serveJson = writeBuilder . Aeson.fromEncoding
 
--- Helper type synonyms
-
-type CH     = ContentHandler (PageContents H.Html)
-type CHUA   = ContentHandler UserAction
-type CHData = ContentHandler File
-type CHRest = ContentHandler Aeson.Encoding
-
-type PageRenderer = P.Page CH CH (CH,CHUA) CHUA CHData CHRest
-
-renderResponse :: PageHandler -> PageRenderer
-renderResponse p = P.pfmap
-  (viewHandlerCata (>>= \result -> traverse addBootstrap result))
-  (userViewHandlerCata (>>= \result -> traverse addBootstrap result))
-  (viewModifyHandlerCata (\get post -> (get >>= \result -> traverse addBootstrap result, post)))
-  (modifyHandlerCata Prelude.id)
-  (dataHandlerCata Prelude.id)
-  (restViewHandlerCata Prelude.id)
-  p
-
-  where
-    addBootstrap :: IHtml -> ContentHandler H.Html
-    addBootstrap contents = bootstrapPage (P.setPageValue contents p)
-
 {- When a user logs in the home page is shown for her. An universal handler
    is used. E.g "/home" -> handlePage P.Home.
    * If the user can navigate to the
@@ -277,19 +252,19 @@ renderResponse p = P.pfmap
    * When a user submits information with a POST request, from the submitted information
    we calculate the appropiate user action and run it
 -}
-handlePage :: PageRenderer -> BeadHandler ()
+handlePage :: PageHandler -> BeadHandler ()
 handlePage page = P.pageKindCata view userView viewModify modify data_ restView page where
   pageDesc = P.pageToPageDesc page
 
   invalidPOSTMethodCall :: BeadHandler ()
   invalidPOSTMethodCall = do
      logMessage DEBUG $ "Invalid POST handler " ++ show pageDesc
-     redirect homePath
+     redirect welcomePath
 
   invalidGETMethodCall :: BeadHandler ()
   invalidGETMethodCall = do
      logMessage DEBUG $ "Invalid GET handler" ++ show pageDesc
-     redirect homePath
+     redirect welcomePath
 
   checkClearance :: UserState -> a -> a -> a
   checkClearance s handler voilationHandler =
@@ -305,7 +280,7 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
       , show pageDesc
       , " is not allowed"
       ]
-    return (Redirection (P.home ()), s)
+    return (Redirection (P.welcome ()), s)
 
   get :: BeadHandler () -> BeadHandler ()
   get h = method GET h <|> method POST invalidPOSTMethodCall
@@ -319,12 +294,12 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
   getOrPost :: BeadHandler () -> BeadHandler ()
   getOrPost p = methods [GET, POST] p
 
-  getContentsOrError :: ContentHandler (PageContents H.Html) -> BeadHandler ()
+  getContentsOrError :: ContentHandler PageContents -> BeadHandler ()
   getContentsOrError handler = do
     response <- loggedInFilter $ \s ->
       checkClearance
         s
-        (evalHandlerError (\err -> Html <$> defErrorPage err) (return . contentsToResponse) handler s)
+        (evalHandlerError (\err -> Html <$> defErrorPage err) return (handler >>= pageContentsToResponse) s)
         (notAllowed s)
     serveResponse response
 
@@ -341,7 +316,7 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
   -- handler calculates the parent page for the given 'p', and runs the
   -- attached userstory from the calculated user action and redirects to
   -- the parent page at the end, otherwise runs the onError handler.
-  runActionOrError :: ContentHandler UserAction -> BeadHandler ()
+  runActionOrError :: ContentHandler Action -> BeadHandler ()
   runActionOrError handler = do
     response <- loggedInFilter $ \s ->
       checkClearance
@@ -354,8 +329,8 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
         runAction :: ContentHandler Response
         runAction = do
           userAction <- handler
-          userStory $ userStoryFor userAction
-          return $ redirectToParentPage pageDesc
+          actionResult <- userStory $ performAction userAction
+          pageContentsToResponse actionResult
 
   getJsonOrError :: ContentHandler Aeson.Encoding -> BeadHandler ()
   getJsonOrError handler = do
@@ -366,23 +341,26 @@ handlePage page = P.pageKindCata view userView viewModify modify data_ restView 
         (notAllowed s)
     serveResponse response
 
-  view :: P.ViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
-  view = get . getContentsOrError . P.viewPageValue
+  view :: P.ViewPage ViewHandler -> BeadHandler ()
+  view = viewHandlerCata (get . getContentsOrError) . P.viewPageValue
 
-  data_ :: P.DataPage (ContentHandler File) -> BeadHandler ()
-  data_ = get . getFileOrError . P.dataPageValue
+  data_ :: P.DataPage DataHandler -> BeadHandler ()
+  data_ = dataHandlerCata (get . getFileOrError) . P.dataPageValue
 
-  userView :: P.UserViewPage (ContentHandler (PageContents H.Html)) -> BeadHandler ()
-  userView = post . getContentsOrError . P.userViewPageValue
+  userView :: P.UserViewPage UserViewHandler -> BeadHandler ()
+  userView = userViewHandlerCata (post . getContentsOrError) . P.userViewPageValue
 
-  viewModify :: P.ViewModifyPage (ContentHandler (PageContents H.Html), ContentHandler UserAction) -> BeadHandler ()
-  viewModify = (\(get, post) -> getPost (getContentsOrError get) (runActionOrError post)) . P.viewModifyPageValue
+  viewModify :: P.ViewModifyPage ViewModifyHandler -> BeadHandler ()
+  viewModify = viewModifyHandlerCata (\get post -> getPost (getContentsOrError get) (runActionOrError post)) . P.viewModifyPageValue
 
-  modify :: P.ModifyPage (ContentHandler UserAction) -> BeadHandler ()
-  modify = getOrPost . runActionOrError . P.modifyPageValue
+  modify :: P.ModifyPage ModifyHandler -> BeadHandler ()
+  modify = modifyHandlerCata (getOrPost . runActionOrError) . P.modifyPageValue
 
-  restView :: P.RestViewPage (ContentHandler Aeson.Encoding) -> BeadHandler ()
-  restView = get . getJsonOrError . P.restViewPageValue
+  restView :: P.RestViewPage RestViewHandler -> BeadHandler ()
+  restView = restViewHandlerCata (get . getJsonOrError) . P.restViewPageValue
+
+  pageContentsToResponse :: PageContents -> ContentHandler Response
+  pageContentsToResponse = either (return . Redirection) (fmap Html . bootstrapPage)
 
 withUserState :: (UserState -> BeadHandler (a, UserState)) -> BeadHandler a
 withUserState f = do
@@ -404,7 +382,7 @@ withUserState f = do
                   (return . Auth.NotLoggedInCookie)
                   loggedOutCookie
                   loggedOutCookie
-                  (\u ui n l r uuid tz s -> return $ Auth.LoggedInCookie u ui n l r uuid tz s)
+                  (\u ui n l r uuid tz s homePage-> return $ Auth.LoggedInCookie u ui n l r uuid tz s homePage)
                   new
       result <- setCookie cookie
       case result of
@@ -446,10 +424,12 @@ routeToPageMap = Map.fromList [
     (indexPath       , j $ P.index ())
   , (loginPath       , j $ P.login ())
   , (logoutPath      , j $ P.logout ())
-  , (homePath        , j $ P.home ())
+  , (welcomePath     , j $ P.welcome ())
   , (profilePath     , j $ P.profile ())
-  , (courseAdminPath , j $ P.courseAdmin ())
-  , (courseOverviewPath , \ps -> P.courseOverview <$> courseKey ps <*> unit)
+  , (studentViewPath , \ps -> P.studentView <$> groupKey ps <*> unit)
+  , (groupOverviewPath , \ps -> P.groupOverview <$> groupKey ps <*> unit)
+  , (groupOverviewAsStudentPath , \ps -> P.groupOverviewAsStudent <$> groupKey ps <*> unit)
+  , (courseManagementPath , \ps -> P.courseManagement <$> courseKey ps <*> courseManagementContents ps <*> unit)
   , (modifyEvaluationPath , \ps -> P.modifyEvaluation <$> submissionKey ps <*> evaluationKey ps <*> unit)
   , (evaluationTablePath  , j $ P.evaluationTable ())
   , (evaluationPath , \ps -> P.evaluation <$> submissionKey ps <*> unit)
@@ -457,8 +437,6 @@ routeToPageMap = Map.fromList [
   , (viewUserScorePath    , \ps -> P.viewUserScore <$> scoreKey ps <*> unit)
   , (newUserScorePath     , \ps -> P.newUserScore <$> assessmentKey ps <*> username ps <*> unit)
   , (modifyUserScorePath  , \ps -> P.modifyUserScore <$> scoreKey ps <*> unit)
-  , (newTestScriptPath    , j $ P.newTestScript ())
-  , (modifyTestScriptPath , \ps -> P.modifyTestScript <$> testScriptKey ps <*> unit)
   , (uploadFilePath , j $ P.uploadFile ())
   , (submissionDetailsPath , \ps -> P.submissionDetails <$> assignmentKey ps <*> submissionKey ps <*> unit)
   , (administrationPath    , j $ P.administration ())
@@ -466,8 +444,8 @@ routeToPageMap = Map.fromList [
   , (createCoursePath      , j $ P.createCourse ())
   , (userDetailsPath       , j $ P.userDetails ())
   , (assignCourseAdminPath , j $ P.assignCourseAdmin ())
-  , (createGroupPath       , j $ P.createGroup ())
-  , (assignGroupAdminPath  , j $ P.assignGroupAdmin ())
+  , (createGroupPath       , \ps -> P.createGroup <$> courseKey ps <*> unit)
+  , (assignGroupAdminPath  , \ps -> P.assignGroupAdmin <$> courseKey ps <*> unit)
   , (newGroupAssignmentPath , \ps -> P.newGroupAssignment <$> groupKey ps <*> unit)
   , (newCourseAssignmentPath , \ps -> P.newCourseAssignment <$> courseKey ps <*> unit)
   , (modifyAssignmentPath , \ps -> P.modifyAssignment <$> assignmentKey ps <*> unit)
@@ -475,6 +453,8 @@ routeToPageMap = Map.fromList [
   , (newGroupAssignmentPreviewPath , \ps -> P.newGroupAssignmentPreview <$> groupKey ps <*> unit)
   , (newCourseAssignmentPreviewPath , \ps -> P.newCourseAssignmentPreview <$> courseKey ps <*> unit)
   , (modifyAssignmentPreviewPath , \ps -> P.modifyAssignmentPreview <$> assignmentKey ps <*> unit)
+  , (createTestScriptPath , \ps -> P.createTestScript <$> courseKey ps <*> unit)
+  , (modifyTestScriptPath , \ps -> P.modifyTestScript <$> courseKey ps <*> testScriptKey ps <*> unit)
   , (changePasswordPath      , j $ P.changePassword ())
 #ifndef SSO
   , (setUserPasswordPath     , j $ P.setUserPassword ())
@@ -508,16 +488,17 @@ routeToPageMap = Map.fromList [
       j = const . Just
       unit = return ()
 
-      courseKey     = fmap (CourseKey     . unpack) . value courseKeyParamName
-      groupKey      = fmap (GroupKey      . unpack) . value groupKeyParamName
-      assignmentKey = fmap (AssignmentKey . unpack) . value assignmentKeyParamName
-      submissionKey = fmap (SubmissionKey . unpack) . value submissionKeyParamName
-      evaluationKey = fmap (EvaluationKey . unpack) . value evaluationKeyParamName
-      testScriptKey = fmap (TestScriptKey . unpack) . value testScriptKeyParamName
-      assessmentKey = fmap (AssessmentKey . unpack) . value assessmentKeyParamName
-      scoreKey      = fmap (ScoreKey . unpack) . value scoreKeyParamName
-      username      = fmap (Username . unpack) . value (fieldName usernameField)
-      uid           = fmap (Uid . unpack) . value (fieldName userUidField)
+      courseKey     = fmap (CourseKey     . BS.unpack) . value courseKeyParamName
+      groupKey      = fmap (GroupKey      . BS.unpack) . value groupKeyParamName
+      assignmentKey = fmap (AssignmentKey . BS.unpack) . value assignmentKeyParamName
+      submissionKey = fmap (SubmissionKey . BS.unpack) . value submissionKeyParamName
+      evaluationKey = fmap (EvaluationKey . BS.unpack) . value evaluationKeyParamName
+      testScriptKey = fmap (TestScriptKey . BS.unpack) . value testScriptKeyParamName
+      assessmentKey = fmap (AssessmentKey . BS.unpack) . value assessmentKeyParamName
+      scoreKey      = fmap (ScoreKey . BS.unpack) . value scoreKeyParamName
+      username      = fmap (Username . BS.unpack) . value (fieldName usernameField)
+      uid           = fmap (Uid . BS.unpack) . value (fieldName userUidField)
+      courseManagementContents = value courseManagementContentsParamName >=> readMaybe . BS.unpack
 
       -- Returns Just x if only one x corresponds to the key in the request params
       -- otherwise Nothing

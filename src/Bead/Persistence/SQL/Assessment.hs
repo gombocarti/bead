@@ -5,6 +5,9 @@ module Bead.Persistence.SQL.Assessment where
 import           Data.Maybe
 import qualified Data.Text as Text
 
+import           Control.Arrow ((&&&))
+import           Database.Esqueleto (select, from, on, where_, InnerJoin(InnerJoin), val, (^.), Value(unValue))
+import qualified Database.Esqueleto as Esq
 import           Database.Persist.Sql
 import           Text.JSON.Generic (encodeJSON)
 
@@ -16,6 +19,7 @@ import           Bead.Persistence.SQL.Entities
 import           Bead.Persistence.SQL.JSON
 
 #ifdef TEST
+import           Data.List (sortOn)
 import qualified Data.Set as Set
 
 import           Bead.Persistence.SQL.Course
@@ -77,17 +81,21 @@ scoresOfAssessment key = do
   scores <- selectList [ScoresOfUsernameAssessmentAssessment ==. toEntityKey key] []
   return $! fmap (toDomainKey . scoresOfUsernameAssessmentScore . entityVal) scores
 
-assessmentsOfCourse :: Domain.CourseKey -> Persist [Domain.AssessmentKey]
+assessmentsOfCourse :: Domain.CourseKey -> Persist [(Domain.AssessmentKey, Domain.Assessment)]
 assessmentsOfCourse key = do
-  assessments <- selectList [AssessmentsOfCourseCourse ==. toEntityKey key] []
-  return $! map (toDomainKey . assessmentsOfCourseAssessment . entityVal)
-                assessments
+  assessments <- select $ from $ \(ac `InnerJoin` a) -> do
+    on (ac ^. AssessmentsOfCourseAssessment Esq.==. a ^. AssessmentId)
+    where_ (ac ^. AssessmentsOfCourseCourse Esq.==. val (toEntityKey key))
+    return a
+  return $! map (toDomainKey . entityKey &&& toDomainValue . entityVal) assessments
 
-assessmentsOfGroup :: Domain.GroupKey -> Persist [Domain.AssessmentKey]
+assessmentsOfGroup :: Domain.GroupKey -> Persist [(Domain.AssessmentKey, Domain.Assessment)]
 assessmentsOfGroup key = do
-  assessments <- selectList [AssessmentsOfGroupGroup ==. toEntityKey key] []
-  return $! map (toDomainKey . assessmentsOfGroupAssessment . entityVal)
-                assessments
+  assessments <- select $ from $ \(ag `InnerJoin` a) -> do
+    on (ag ^. AssessmentsOfGroupAssessment Esq.==. a ^. AssessmentId)
+    where_ (ag ^. AssessmentsOfGroupGroup Esq.==. val (toEntityKey key))
+    return a
+  return $! map (toDomainKey . entityKey &&& toDomainValue . entityVal) assessments
 
 #ifdef TEST
 
@@ -125,13 +133,13 @@ assessmentTests = do
     a1 <- saveCourseAssessment c ast
     as <- assessmentsOfCourse c
     equals
-      (Set.fromList [a1])
-      (Set.fromList as) "The course had different assessment set"
-    a2 <- saveCourseAssessment c ast
+      [(a1, ast)]
+      as "The course had different assessment set"
+    a2 <- saveCourseAssessment c ast2
     as <- assessmentsOfCourse c
     equals
-      (Set.fromList [a1,a2])
-      (Set.fromList as) "The course had different assessment set"
+      (sortOn fst [(a1, ast), (a2, ast2)])
+      (sortOn fst as) "The course had different assessment set"
 
   ioTest "List group assessments" $ runSql $ do
     c  <- saveCourse course
@@ -141,12 +149,12 @@ assessmentTests = do
     a1 <- saveGroupAssessment g ast
     as <- assessmentsOfGroup g
     equals
-      (Set.fromList [a1])
-      (Set.fromList as) "The group had different assessment set"
-    a2 <- saveGroupAssessment g ast
+      [(a1, ast)]
+      as "The group had different assessment set"
+    a2 <- saveGroupAssessment g ast2
     as <- assessmentsOfGroup g
     equals
-      (Set.fromList [a1,a2])
-      (Set.fromList as) "The group had different assessment set"
+      (sortOn fst [(a1, ast), (a2, ast2)])
+      (sortOn fst as) "The group had different assessment set"
 
 #endif

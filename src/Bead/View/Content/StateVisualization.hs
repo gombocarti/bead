@@ -1,8 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Bead.View.Content.SubmissionState
-  ( formatSubmissionState
+module Bead.View.Content.StateVisualization
+  ( formatEvResult
+  , formatEvResultMaybe
+  , formatSubmissionState
   , Style(..)
   , toBadge
   , toColoredBadge
@@ -53,7 +55,7 @@ toPlainText = Style {
 -- This 'Style' is used on the student section of the Home page.
 toLabel :: Style H.Html
 toLabel = Style {
-    nonEvaluated = \msg -> Bootstrap.grayLabel $ nonEvaluated toPlainText msg 
+    nonEvaluated = \msg -> Bootstrap.grayLabel $ nonEvaluated toPlainText msg
   , queuedForTest = \msg -> Bootstrap.grayLabel $ queuedForTest toPlainText msg
   , testsPassed = \msg -> Bootstrap.grayLabel $ testsPassed toPlainText msg
   , testsFailed = \msg -> Bootstrap.grayLabel $ testsFailed toPlainText msg
@@ -160,45 +162,36 @@ rejectedColor = A.style "background-color: #d9534f;"
 evaluatedColor :: H.Attribute
 evaluatedColor = A.style "background-color: #337ab7;"
 
-formatSubmissionState :: forall a. Style a -> I18N -> SubmissionState -> a
+formatSubmissionState :: forall a . Style a -> I18N -> SubmissionState -> a
 formatSubmissionState style msg =
   submissionStateCata
     (nonEvaluated style msg)
     (queuedForTest style msg)
     tested
-    (\_key result -> val result) -- evaluated
+    (\_key result -> formatEvResult style msg result) -- evaluated
 
   where
     tested :: Bool -> a
     tested = bool (testsPassed style msg) (testsFailed style msg)
 
-    val :: Eval.EvResult -> a
-    val = Eval.evResultCata
-            (Eval.binaryCata (Eval.resultCata (accepted style msg) (rejected style msg)))
-            percentage
-            (Eval.freeForm $ \text ->
-              case freeFormPlaceholder style of
-                Just placeHolder ->
-                  let cell = if length text < displayableFreeFormResultLength then text else placeHolder msg in
-                    freeFormTag style cell (Just text)
-                Nothing ->
-                  freeFormTag style text Nothing)
+formatEvResultMaybe :: Style a -> I18N -> Maybe Eval.EvResult -> a
+formatEvResultMaybe style msg Nothing = nonEvaluated style msg
+formatEvResultMaybe style msg (Just eval) = formatEvResult style msg eval
 
-      where
-        percentage :: Eval.Percentage -> a
-        percentage (Eval.Percentage (Eval.Scores [p])) = percentageTag style $ concat [show . round $ (100 * p), "%"]
-        percentage _ = percentageTag style "???%"
+formatEvResult :: forall a . Style a -> I18N -> Eval.EvResult -> a
+formatEvResult style msg =
+  Eval.evResultCata
+    (Eval.binaryCata (Eval.resultCata (accepted style msg) (rejected style msg)))
+    percentage
+    (Eval.freeForm $ \text ->
+        case freeFormPlaceholder style of
+          Just placeHolder ->
+            let cell = if length text < displayableFreeFormResultLength then text else placeHolder msg in
+              freeFormTag style cell (Just text)
+          Nothing ->
+            freeFormTag style text Nothing)
 
-evResult :: forall a. a -> a -> (String -> a) -> (String -> a) -> Eval.EvResult -> a
-evResult passed failed percentage freeFormMsg =
- Eval.evResultCata
-  (Eval.binaryCata (Eval.resultCata passed failed))
-  score
-  (Eval.freeForm freeFormMsg)
   where
-    percent :: Double -> String
-    percent x = concat [show . round $ (100 * x), "%"]
-
-    score :: Eval.Percentage -> a
-    score (Eval.Percentage (Eval.Scores [p])) = percentage $ percent p
-    score _                                   = percentage "?%"
+    percentage :: Eval.Percentage -> a
+    percentage (Eval.Percentage (Eval.Scores [p])) = percentageTag style $ concat [show . round $ (100 * p), "%"]
+    percentage _ = percentageTag style "???%"

@@ -7,12 +7,13 @@ module Bead.View.Content.GetCsv (
 import           Bead.View.RequestParams (groupKeyParamName,courseKeyParamName)
 import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content
-import           Bead.View.Content.ScoreInfo (scoreInfoToRawText)
+import           Bead.View.Content.StateVisualization (formatEvResult, toPlainText)
 import qualified Bead.View.ContentHandler as CH
 
 import           Control.Monad (forM)
 import           Control.Monad.Trans (lift)
-import qualified Data.Text as Text (pack)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Function (on)
 import           Data.String (fromString)
 import           Data.List (sortBy,intercalate)
@@ -30,12 +31,12 @@ getGroupCsv = DataHandler $ do
   case maybeAk of
     Just ak -> do
       groupScores <- userStory (Story.scoresOfGroup gk ak)
-      downloadText filename (Text.pack $ csvFilled msg groupScores)
+      downloadText filename (csvFilled msg groupScores)
     Nothing -> do 
       users <- userStory $ do
         usernames <- Story.subscribedToGroup gk
         mapM Story.loadUserDesc usernames
-      downloadText filename (Text.pack $ csvEmpty msg users)
+      downloadText filename (csvEmpty msg users)
 
 getCourseCsv :: DataHandler
 getCourseCsv = DataHandler $ do
@@ -49,48 +50,45 @@ getCourseCsv = DataHandler $ do
   case maybeAk of
     Just ak -> do
       courseScores <- userStory (Story.scoresOfCourse ck ak)      
-      downloadText filename (Text.pack $ csvFilled msg courseScores)
+      downloadText filename (csvFilled msg courseScores)
     Nothing -> do
       users <- userStory $ do
         usernames <- Story.subscribedToCourse ck
         mapM Story.loadUserDesc usernames
-      downloadText filename (Text.pack $ csvEmpty msg users)
+      downloadText filename (csvEmpty msg users)
 
-csvEmpty :: I18N -> [UserDesc] -> String
-csvEmpty msg users = (information msg) ++ unlines (header : body)
+csvHeader :: I18N -> Text
+csvHeader msg = information msg `T.append` header `T.append` "\n"
+  where
+    header = T.intercalate "," [name,username,score]
+      where
+        name = T.pack . msg . msg_GetCsv_StudentName $ "Name"
+        username = T.pack . msg . msg_GetCsv_Username $ "Username"
+        score = T.pack . msg . msg_GetCsv_Score $ "Score"
+
+csvEmpty :: I18N -> [UserDesc] -> Text
+csvEmpty msg users = csvHeader msg `T.append` body
     where
-      header = intercalate "," [name,username,score]
-          where
-            name = msg . msg_GetCsv_StudentName $ "Name"
-            username = msg . msg_GetCsv_Username $ "Username"
-            score = msg . msg_GetCsv_Score $ "Score"
+      body = T.unlines $ map line (sortBy (compareHun `on` ud_fullname) users)
 
-      body = map line (sortBy (compareHun `on` fullName) users)
+      line user = userLine user ""
 
-      line user = intercalate "," [fullName user, userid user, ""]
-      userid = uid id . ud_uid 
-      fullName = ud_fullname
-
-csvFilled :: I18N -> [(UserDesc, Maybe ScoreInfo)] -> String
-csvFilled msg users = (information msg) ++ unlines (header : body)
+csvFilled :: I18N -> [(UserDesc, Maybe ScoreInfo)] -> Text
+csvFilled msg users = csvHeader msg `T.append` body
     where
-      header = intercalate "," [name,username,score]
-          where
-            name = msg . msg_GetCsv_StudentName $ "Name"
-            username = msg . msg_GetCsv_Username $ "Username"
-            score = msg . msg_GetCsv_Score $ "Score"
+      body = T.unlines $ map line (sortBy (compareHun `on` (ud_fullname . fst)) users)
 
-      body = map line (sortBy (compareHun `on` (fullName . fst)) users)
+      line (user, Just scoreInfo) = userLine user (formatEvResult toPlainText msg (evaluationOfInfo scoreInfo))
+      line (user, Nothing) = userLine user ""
 
-      line (user,mScoreInfo) = intercalate "," [fullName user, userid user, score]
-          where score = case mScoreInfo of
-                          Nothing        -> ""
-                          Just scoreInfo -> scoreInfoToRawText "" msg scoreInfo
-      userid = uid id . ud_uid
-      fullName = ud_fullname
+userLine :: UserDesc -> Text -> Text
+userLine u t = T.intercalate "," [fullName u, userid u, t]
+  where
+    userid = T.pack . uid id . ud_uid
+    fullName = T.pack . ud_fullname
 
-information :: I18N -> String
-information msg = msg . msg_GetCsv_Information $ unlines
+information :: I18N -> Text
+information msg = T.pack . msg . msg_GetCsv_Information $ unlines
               [ "# Lines starting with '#' will be ignored."
               , "# The following scores are valid:"
               , "#  - In case of binary evaluation:"

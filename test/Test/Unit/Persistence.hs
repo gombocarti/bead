@@ -32,6 +32,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Maybe
 import Data.List ((\\), isSuffixOf)
 import Data.Time.Clock
+import Data.Tuple.Utils (thd3)
 import System.Directory
 import System.FilePath
 
@@ -393,17 +394,17 @@ test_create_group_user = testCase "Create Course and Group with a user" $ do
   assertBool "Course is not found in administrated courses" (elem ck (map fst cs))
   liftE interp $ createGroupAdmin admin gk
   gs <- liftE interp $ administratedGroups admin
-  assertBool "Group is not found in administrated groups" (elem gk (map fst gs))
+  assertBool "Group is not found in administrated groups" (elem gk (concatMap (map fst . thd3) gs))
   let str = utcTimeConstant
   let end = utcTimeConstant
   let gAssignment = Assignment "GroupAssignment" "Assignment" normal str end binaryConfig
       cAssignment = Assignment "CourseAssignment" "Assignment" ballot str end (percentageConfig 0.1)
   cak <- liftE interp $ saveCourseAssignment ck cAssignment
-  cask <- liftE interp $ courseAssignments ck
-  assertBool "Course does not have the assignment" (elem cak cask)
+  cas <- liftE interp $ courseAssignments ck
+  assertBool "Course does not have the assignment" (elem cak cas)
   gak <- liftE interp $ saveGroupAssignment gk gAssignment
-  gask <- liftE interp $ groupAssignments gk
-  assertBool "Group does not have the assignment" (elem gak gask)
+  gas <- liftE interp $ groupAssignments gk
+  assertBool "Group does not have the assignment" (elem gak gas)
   us <- liftE interp $ groupAdminKeys gk
   assertBool "Admin is not in the group" ([admin] == us)
   gs <- liftE interp $ filterGroups (\_ _ -> True)

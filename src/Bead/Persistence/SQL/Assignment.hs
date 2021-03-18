@@ -3,6 +3,7 @@
 module Bead.Persistence.SQL.Assignment where
 
 import           Control.Applicative
+import           Control.Arrow ((&&&))
 import           Control.Monad.IO.Class
 import           Data.Maybe
 import qualified Data.Text as Text
@@ -21,6 +22,7 @@ import           Bead.Persistence.SQL.Group
 import           Bead.Persistence.SQL.JSON
 
 #ifdef TEST
+import           Data.List (sortOn)
 import qualified Data.Set as Set
 
 import           Bead.Persistence.SQL.Course
@@ -255,13 +257,13 @@ assignmentTests = do
     a1 <- saveCourseAssignment c asg
     as <- courseAssignments c
     equals
-      (Set.fromList [a1])
-      (Set.fromList as) "The course had different assignment set"
-    a2 <- saveCourseAssignment c asg
+      [a1]
+      as "The course had different assignment set"
+    a2 <- saveCourseAssignment c asg2
     as <- courseAssignments c
     equals
-      (Set.fromList [a1,a2])
-      (Set.fromList as) "The course had different assignment set"
+      [a1, a2]
+      as "The course had different assignment set"
 
   ioTest "List group assignments" $ runSql $ do
     c  <- saveCourse course
@@ -271,12 +273,12 @@ assignmentTests = do
     a1 <- saveGroupAssignment g asg
     as <- groupAssignments g
     equals
-      (Set.fromList [a1])
-      (Set.fromList as) "The group had different assignment set"
-    a2 <- saveGroupAssignment g asg
+      [a1]
+      as "The group had different assignment set"
+    a2 <- saveGroupAssignment g asg2
     as <- groupAssignments g
     equals
-      (Set.fromList [a1,a2])
-      (Set.fromList as) "The group had different assignment set"
+      [a1, a2]
+      as "The group had different assignment set"
 
 #endif

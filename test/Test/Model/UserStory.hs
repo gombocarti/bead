@@ -11,6 +11,7 @@ import qualified Bead.Controller.Pages as P
 import           Bead.Controller.ServiceContext
 import           Bead.Controller.UserStories as U
 import           Bead.Domain.Entities as E hiding (name, uid)
+import qualified Bead.Domain.Relationships as R
 import           Bead.Domain.TimeZone (utcZoneInfo)
 import qualified Bead.Persistence.Initialization as PersistInit
 import           Bead.Persistence.Persist
@@ -40,6 +41,7 @@ adminUserState = UserLoggedIn {
   , uuid = UUID.nil
   , _timeZone = utcZoneInfo
   , _status = Nothing
+  , _homePage = R.Administration
   }
 
 student :: User

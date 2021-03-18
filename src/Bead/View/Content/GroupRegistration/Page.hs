@@ -13,14 +13,18 @@ import           Data.String (fromString)
 import           Text.Blaze.Html5 as H hiding (map)
 
 import           Bead.Controller.UserStories (availableGroups, attendedGroups)
+import qualified Bead.Controller.UserStories as Story
 import qualified Bead.Controller.Pages as Pages
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 
 groupRegistration = ViewModifyHandler groupRegistrationPage postGroupReg
 
-unsubscribeFromCourse =
-  ModifyHandler (UnsubscribeFromCourse <$> getParameter unsubscribeUserGroupKeyPrm)
+unsubscribeFromCourse = ModifyHandler $ do
+  gk <- getParameter unsubscribeUserGroupKeyPrm
+  return $ Action $ do
+    Story.unsubscribeFromCourse gk
+    return $ redirection $ Pages.welcome ()
 
 data GroupRegData = GroupRegData {
     groups :: [(Course, GroupKey, Group, [User])]
@@ -28,8 +32,14 @@ data GroupRegData = GroupRegData {
   }
 
 postGroupReg :: POSTContentHandler
-postGroupReg = SubscribeToGroup
-  <$> getParameter (jsonGroupKeyPrm (fieldName groupRegistrationField))
+postGroupReg = do
+  gk <- getParameter (jsonGroupKeyPrm (fieldName groupRegistrationField))
+  return $ Action $ do
+    success <- Story.subscribeToGroup gk
+    return $ redirection $
+      if success
+      then Pages.studentView gk ()
+      else Pages.groupRegistration ()
 
 groupRegistrationPage :: GETContentHandler
 groupRegistrationPage = do
@@ -42,7 +52,7 @@ groupRegistrationPage = do
         groups = gs
       , groupsRegistered = as
       }
-  setPageContents $ groupRegistrationContent desc
+  setPageContents $ htmlPage (msg_LinkText_GroupRegistration "Group Registration") $ groupRegistrationContent desc
   where
     snd5 (_,b,_,_,_) = b
 

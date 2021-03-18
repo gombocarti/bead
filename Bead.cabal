@@ -273,15 +273,14 @@ Library
     Bead.View.Content.Assignment.Data
     Bead.View.Content.Assignment.Page
     Bead.View.Content.Assignment.View
-    Bead.View.Content.CourseAdmin.Page
-    Bead.View.Content.CourseOverview.Page
+    Bead.View.Content.CourseManagement.GroupManagement
+    Bead.View.Content.CourseManagement.Page
+    Bead.View.Content.CourseManagement.TestScript
+    Bead.View.Content.CourseManagement.TestScripts
     Bead.View.Content.Evaluation.Page
     Bead.View.Content.EvaluationTable.Page
+    Bead.View.Content.GroupOverview.Page
     Bead.View.Content.GroupRegistration.Page
-    Bead.View.Content.Home.Data
-    Bead.View.Content.Home.Page
-    Bead.View.Content.Home.View
-    Bead.View.Content.NewTestScript.Page
     Bead.View.Content.Notifications.Page
     Bead.View.Content.Profile.Page
     Bead.View.Content.Public.ErrorPage
@@ -292,10 +291,11 @@ Library
     Bead.View.Content.Rest.Group
     Bead.View.Content.Rest.SubmissionTable.Page
     Bead.View.Content.Score.Page
+    Bead.View.Content.StateVisualization
+    Bead.View.Content.StudentView.Page
     Bead.View.Content.Submission.Common
     Bead.View.Content.Submission.Page
     Bead.View.Content.SubmissionDetails.Page
-    Bead.View.Content.TestScript.Page
     Bead.View.Content.UploadFile.Page
     Bead.View.Content.UserDetails.Page
     Bead.View.Content.All
@@ -305,10 +305,9 @@ Library
     Bead.View.Content.ExportSubmissions
     Bead.View.Content.GetSubmission
     Bead.View.Content.GetCsv
-    Bead.View.Content.ScoreInfo
-    Bead.View.Content.SubmissionState
     Bead.View.Content.SubmissionTable
     Bead.View.Content.VisualConstants
+    Bead.View.Content.Welcome.Page
     Bead.View.ContentHandler
     Bead.View.DataBridge
     Bead.View.DataDir
@@ -329,7 +328,6 @@ Library
     Bead.View.TemplateAndComponentNames
     Bead.View.Translation.Base
     Bead.View.Translation.Entries
-    Bead.View.Translation.Enum
     Bead.View.Translation.I18N
     Bead.View.Translation.Language.DictionaryEn
     Bead.View.Translation.Language.DictionaryHu

@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 module Bead.View.Pagelets where
 
 import           Prelude hiding (span)
 
-import           Control.Monad (when)
+import           Control.Monad (when, forM_)
 import           Data.Char (isAlphaNum)
 import           Data.Data
 import           Data.Maybe (fromMaybe)
@@ -14,27 +13,29 @@ import           Data.Monoid
 import           Data.String (IsString(..), fromString)
 import           Data.Time.Clock
 
-import           Text.Blaze.Html5 hiding (link, option)
+import qualified Text.Blaze as B
+import           Text.Blaze.Html5 hiding (link, option, map)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 import           Text.Blaze.Html5.Attributes hiding (id, span)
 import           Text.Pandoc.Highlighting (styleToCss, pygments)
 
 
+import qualified Bead.Controller.UserStories as S
 import qualified Bead.Controller.Pages as P
-import           Bead.Controller.ServiceContext as ServiceContext (UserState, getStatus, uid, fullNameInState)
-import           Bead.Domain.Entities as Entity (statusMessage, uid, PageSettings(needsLatex, needsSyntaxHighlight))
+import           Bead.Controller.ServiceContext as SC (UserState, getStatus, clearStatus, uid, fullNameInState)
+import           Bead.Domain.Entities as Entity (statusMessage, uid, PageSettings(needsLatex, needsSyntaxHighlight), Course, Group, shortCourseName, shortGroupName, isAdmin)
+import           Bead.Domain.Relationships (CourseKey, GroupKey)
+import           Bead.View.BeadContext (BeadHandler')
+import qualified Bead.View.Content.Bootstrap as Bootstrap
+import           Bead.View.ContentHandler (ContentHandler, i18nH, i18nE, changeUserState, userStory, pageSettings, userState, HtmlPage, pageTitle, pageBody)
 import           Bead.View.Fay.Hooks
 import           Bead.View.Fay.JSON.ServerSide
 import qualified Bead.View.I18N as I18N
-import           Bead.View.I18N (IHtml, translate, getI18N)
+import           Bead.View.I18N (IHtml, translate, getI18N, i18n)
 import           Bead.View.RouteOf
 import           Bead.View.TemplateAndComponentNames
 import           Bead.View.Translation
-import qualified Bead.View.Content.Bootstrap as Bootstrap
-#ifdef TEST
-import           Test.Tasty.TestSet
-#endif
 
 -- * Definitions
 
@@ -76,57 +77,113 @@ bootStrapDocument settings body' = do
           js  "/katex/contrib/copy-tex.min.js"
           H.script $ fromString 
             "document.addEventListener(\"DOMContentLoaded\", function () {\n  var mathElements = document.getElementsByClassName(\"math\");\n  for (var i = 0; i < mathElements.length; i++) {\n    var texText = mathElements[i].firstChild;\n    if (mathElements[i].tagName == \"SPAN\") { katex.render(texText.data, mathElements[i], { displayMode: mathElements[i].classList.contains(\"display\"), throwOnError: false } );\n  }}});"
-    H.body $ body
+      H.body $ body
+
+-- | Renders a Page with the given IHtml contents.
+--   Implicit 'UserState' and 'PageSettings' influences the result.
+bootstrapPage :: HtmlPage -> ContentHandler Html
+bootstrapPage contents = do
+  state <- userState
+  settings <- pageSettings
+  notifs <- userStory S.noOfUnseenNotifications
+  nav <- userStory $ do
+    subscribedGroups <- S.subscribedGroups
+    grps <- S.administratedGroups
+    courses <- S.administratedCourses
+    return $ navigation state subscribedGroups grps courses
+  changeUserState SC.clearStatus
+  i18nE >>= (return . runBootstrapPage settings (bootstrapUserFrame state contents nav notifs))
+
+  where
+    navigation :: UserState -> [(CourseKey, Course, GroupKey, Group)] -> [(CourseKey, Course, [(GroupKey, Group)])] -> [(CourseKey, Course)] -> IHtml
+    navigation state subscribedCourses adminedGroups adminedCourses
+      | isAdmin state = do
+          msg <- getI18N
+          return $ nav [i18n msg administration]
+      | otherwise = do
+          msg <- getI18N
+          return $ do
+            when (not . null $ subscribedCourses) $
+              Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_RegisteredCourses "Registered courses") $
+                forM_ subscribedCourses $ \(_courseKey, course, groupKey, group_) -> do
+                  H.p $ B.toMarkup $ shortCourseName course
+                  nav [studentView groupKey group_]
+            nav [i18n msg groupRegistration]
+            when (not . null $ adminedGroups) $
+              Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedGroups "Groups") $
+                forM_ adminedGroups $ \(_courseKey, course, groups) -> do
+                  H.p $ B.toMarkup $ shortCourseName course
+                  nav $ map groupNavigationLink groups
+            when (not . null $ adminedCourses) $
+              Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedCourses "Courses") $
+                nav $ map courseNavigationLink adminedCourses
+
+      where
+        nav :: [Html] -> Html
+        nav items = H.ul ! A.class_ "nav nav-pills nav-stacked"
+                    $ mapM_ H.li $ items
+
+        groupRegistration :: IHtml
+        groupRegistration = linkToPage P.groupRegistrationWithText
+          where plus = H.span ! A.class_ "glyphicon glyphicon-plus-sign" $ mempty
+
+        studentView :: GroupKey -> Group -> Html
+        studentView gk g = Bootstrap.link (routeOf $ P.studentView gk ()) (shortGroupName g)
+
+        groupNavigationLink :: (GroupKey, Group) -> Html
+        groupNavigationLink (gk, g) = Bootstrap.link (routeOf $ P.groupOverview gk ()) (shortGroupName g)
+
+        courseNavigationLink :: (CourseKey, Course) -> Html
+        courseNavigationLink (ck, c) = Bootstrap.link (routeOf $ P.courseManagement ck P.GroupManagementContents ()) (shortCourseName c)
+
+        administration :: IHtml
+        administration = linkToPage P.administrationWithText
+
+-- | Translates a public page selecting the I18N translation based on
+--   the language stored in the cookie, if there is no such value, the
+--   accept-language field is used, if there is no such value then
+--   default translator function is used.
+bootstrapPublicPage :: PageSettings -> HtmlPage -> BeadHandler' v Html
+bootstrapPublicPage settings p = do
+  translator <- i18nH
+  return $ runBootstrapPage settings (publicFrame p) translator
 
 runBootstrapPage :: Entity.PageSettings -> IHtml -> I18N -> Html
 runBootstrapPage settings p i = translate i $ bootStrapDocument settings p
 
-bootstrapUserFrame :: UserState -> P.Page' IHtml -> Int -> IHtml
-bootstrapUserFrame s page newNotifs = withUserFrame' (P.pageValue page)
-  where
-    withUserFrame' :: IHtml -> IHtml
-    withUserFrame' content = do
-      header <- bootstrapHeader s newNotifs
-      content <- content
-      status <- bootstrapStatus s
-      msg <- getI18N
-      return $ do
-        header
-        Bootstrap.container $ do
-          Bootstrap.rowColMd12 $ hr
-          Bootstrap.rowColMd12 $ Bootstrap.pageHeader $ h2 $
-            fromString $ msg $ linkText page
-          content
-          Bootstrap.rowColMd12 $ hr
-        status
-
--- | Places a given content in a public frame
-publicFrame :: IHtml -> IHtml
-publicFrame content = do
-  header <- publicHeader
-  content <- content
+bootstrapUserFrame :: UserState -> HtmlPage -> IHtml -> Int -> IHtml
+bootstrapUserFrame s contents sidebar newNotifs = do
+  header <- bootstrapHeader s newNotifs
+  bar <- sidebar
+  title <- pageTitle contents
+  body <- pageBody contents
+  status <- bootstrapStatus s
+  msg <- getI18N
   return $ do
     header
-    Bootstrap.container content
+    Bootstrap.containerFullWidth $ do
+      Bootstrap.rowColMd12 $ hr
+      Bootstrap.rowCol9Offset3 title
+      Bootstrap.row $ do
+        Bootstrap.colMd3 bar
+        Bootstrap.colMd9 body
+      Bootstrap.rowColMd12 $ hr
+      status
+
+-- | Places a given content in a public frame
+publicFrame :: HtmlPage -> IHtml
+publicFrame content = do
+  header <- publicHeader
+  title <- pageTitle content
+  body <- pageBody content
+  return $ do
+    header
+    Bootstrap.containerFullWidth $ title <> body
 
 syntaxHighlightCss :: (String, FilePath)
 syntaxHighlightCss = (styleToCss pygments, "syntax-highlight.css")
 
 -- * Basic building blocks
-
-defaultValue :: a -> Maybe a
-defaultValue = Just
-
-hasNoDefaultValue :: Maybe a
-hasNoDefaultValue = Nothing
-
-withDefaultValue Nothing  h = h
-withDefaultValue (Just v) h = h ! A.value (fromString v)
-
-infix |>
-
-(|>) :: a -> (a -> b) -> b
-x |> f = f x
 
 conditional :: Bool -> Html -> Html -> Html
 conditional True _ visible = visible
@@ -137,36 +194,12 @@ nonEmpty os = conditional (not . null $ os)
 
 -- * Input fields
 
-charInput :: String -> String -> Int -> Maybe String -> Html
-charInput t name size value =
-  (H.input ! A.type_ (fromString t)
-           ! A.id (fromString name)
-           ! A.name (fromString name)
-           ! A.size (fromString . show $ size))
-  |> (withDefaultValue value)
-
-textInput :: String -> Int -> Maybe String -> Html
-textInput = charInput "text"
-
-passwordInput :: String -> Int -> Maybe String -> Html
-passwordInput = charInput "password"
-
-textAreaInput :: String -> Maybe String -> Html
-textAreaInput name value =
-  (H.textarea ! A.name (fromString name)
-              ! A.id   (fromString name)) value'
-  where
-    value' = fromString . maybe "" id $ value
-
 hiddenInput :: String -> String -> Html
 hiddenInput name value =
   H.input ! A.type_ "hidden"
           ! A.id (fromString name)
           ! A.name (fromString name)
           ! A.value (fromString value)
-
-hiddenInputWithId :: String -> String -> Html
-hiddenInputWithId n v = hiddenInput n v ! A.id (fromString n)
 
 optionalFileInput :: String -> Html
 optionalFileInput name =
@@ -212,10 +245,10 @@ submitButtonDanger i t =
 
 checkBox :: String -> String -> Bool -> Html
 checkBox n v c =
-  (H.input ! A.name (fromString n)
-           ! A.type_ "checkbox"
-           ! A.value (fromString v))
-  |> if c then (! A.checked "") else id
+  H.input ! A.name (fromString n)
+          ! A.type_ "checkbox"
+          ! A.value (fromString v)
+          !? (c, A.checked "")
 
 checkBox' :: (Show a, Data a) => String -> Bool -> a -> String -> Html
 checkBox' name checked value text = do
@@ -225,9 +258,8 @@ checkBox' name checked value text = do
 checkBoxRO :: (Show a, Data a) => String -> Bool -> Bool -> a -> String -> Html
 checkBoxRO name checked readonly value text = do
   checkBox name (encodeToFay' "checkBox" value) checked
-    |> if readonly then (! A.disabled "") else id
+    !? (readonly, A.disabled "")
   fromString text
-
 
 withId :: (Html -> Html) -> String -> (Html -> Html)
 withId f i = (f ! A.id (fromString i))
@@ -238,36 +270,11 @@ required h = h ! A.required ""
 
 -- * Form
 
--- Form that represents input for ajax requests generated on the client side
-fayaxForm :: String -> String -> Html -> Html
-fayaxForm id action = H.form ! A.action (fromString action) ! A.id (fromString id)
-
 postForm :: String -> Html -> Html
 postForm action = H.form ! A.method "post" ! A.action (fromString action) ! A.acceptCharset "UTF-8"
 
 getForm :: String -> Html -> Html
 getForm action = H.form ! A.method "get" ! A.action (fromString action) ! A.acceptCharset "UTF-8"
-
--- Creates a POST form with multiple choices of actions. Each action is described in a pair
--- (action, buttonText), all the buttons are added after the given html
--- NOTE: JavaScript functions are named after the given id, except that all non
--- alphanumeric characters are stripped out.
-multiActionPostForm :: String -> [(String, String)] -> Html -> Html
-multiActionPostForm id actions html =
-  H.form ! A.id (fromString id) ! A.method "post" ! A.acceptCharset "UTF-8" $ do
-    html
-    mapM_ actionButton ([1..] `zip` actions)
-  where
-    actionButton (i,(action, button)) = do
-      let fname = jsFunctionName $ concat [id, show i, "onClick"]
-      H.p $ do
-        H.input ! A.type_ "button" ! A.onclick (fromString (fname ++ "()")) ! A.value (fromString button)
-        H.script $ fromString $ concat
-          [ "function ", fname, "(){"
-          ,    "document.getElementById(\"",id,"\").setAttribute(\"action\",\"",action,"\");"
-          ,    "document.getElementById(\"",id,"\").submit();"
-          , "}"
-          ]
 
 -- Returns a string which contains only alphanum caracters
 jsFunctionName :: String -> String
@@ -341,100 +348,25 @@ countdownDiv divId daystr overstr showDays seconds = do
       , "}"
       ]
 
--- * Table
-table :: String -> String -> Html -> Html
-table i c = H.table ! A.id (fromString i) ! A.class_ (fromString c)
-
-hiddenTableLine :: Html -> Html
-hiddenTableLine value = H.tr . H.td $ value
-
-linkText :: P.Page a b c d e f -> Translation String
-linkText = P.pageCata
-  (c $ msg_LinkText_Index "BE-AD")
-  (c $ msg_LinkText_Login "Login")
-  (c $ msg_LinkText_Logout "Logout")
-  (c $ msg_LinkText_Home "Home")
-  (c $ msg_LinkText_Profile "Profile")
-  (c $ msg_LinkText_Administration "Administration")
-  (c $ msg_LinkText_CourseAdministration "Course Settings")
-  (c2 $ msg_LinkText_CourseOverview "Course Overview")
-  (c $ msg_LinkText_EvaluationTable "Evaluations")
-  (c2 $ msg_LinkText_Evaluation "Evaluation")
-  (c3 $ msg_LinkText_ModifyEvaluation "Modify Evaluation")
-  (c2 $ msg_LinkText_NewGroupAssignment "New Group Assignment")
-  (c2 $ msg_LinkText_NewCourseAssignment "New Course Assignment")
-  (c2 $ msg_LinkText_ModifyAssignment "Modify Assignment")
-  (c2 $ msg_LinkText_ViewAssignment "View Assignment")
-  (c2 $ msg_LinkText_NewGroupAssignmentPreview "New Group Assignment")
-  (c2 $ msg_LinkText_NewCourseAssignmentPreview "New Course Assignment")
-  (c2 $ msg_LinkText_ModifyAssignmentPreview "Modify Assignment")
-  (c2 $ msg_LinkText_Submission "Submission")
-  (c3 $ msg_LinkText_SubmissionDetails "Submission Details")
-  (c2 $ msg_LinkText_ViewUserScore "Score")
-  (c3 $ msg_LinkText_NewUserScore "New Score")
-  (c2 $ msg_LinkText_ModifyUserScore "Modify Score")
-  (c $ msg_LinkText_GroupRegistration "Group Registration")
-  (c $ msg_LinkText_UserDetails "User Details")
-  (c $ msg_LinkText_NewTestScript "New Test")
-  (c2 $ msg_LinkText_ModifyTestScript "Modify Test Script")
-  (c $ msg_LinkText_UploadFile "Upload file")
-  (c $ msg_LinkText_CreateCourse "Create Course")
-  (c $ msg_LinkText_CreateGroup "Create Group")
-  (c $ msg_LinkText_AssignCourseAdmin "Assign Course Admin")
-  (c $ msg_LinkText_AssignGroupAdmin "Assign Teacher")
-  (c $ msg_LinkText_ChangePassword "Change Password")
-#ifndef SSO
-  (c $ msg_LinkText_SetUserPassword "Set Student Password")
-#endif
-  (c2 $ msg_LinkText_DeleteUsersFromCourse "Remove Students")
-  (c2 $ msg_LinkText_DeleteUsersFromGroup "Remove Students")
-  (c2 $ msg_LinkText_QueueSubmissionForTest "Run Test")
-  (c2 $ msg_LinkText_QueueAllSubmissionsForTest "Run Test on All Submissions")
-  (c2 $ msg_LinkText_UnsubscribeFromCourse "Unregister")
-  (c2 $ msg_LinkText_ExportEvaluations "Export Evaluations of Admined Groups of this Course")
-  (c2 $ msg_LinkText_ExportEvaluationsAllGroups "Export Evaluations of All Groups of this Course")
-  (c2 $ msg_LinkText_ExportSubmissions "Export All Submissions")
-  (c3 $ msg_LinkText_ExportSubmissionsOfGroups "Export Admined Groups")
-  (c3 $ msg_LinkText_ExportSubmissionsOfOneGroup "Export This Group")
-  (c2 $ msg_LinkText_GetSubmission "Download Submission")
-  (c3 $ msg_LinkText_GetSubmissionsOfUserInGroup "Download Submissions of a User in Group")
-  (c3 $ msg_LinkText_GetSubmissionsOfAssignmentInGroup "Download Submissions of Assignment in Group")
-  (c2 $ msg_LinkText_GetCourseCsv "Download Course Csv")
-  (c2 $ msg_LinkText_GetGroupCsv "Download Group Csv")
-  (c2 $ msg_LinkText_NewGroupAssessment "New Group Assessment")
-  (c2 $ msg_LinkText_NewCourseAssessment "New Course Assessment")
-  (c2 $ msg_LinkText_GroupAssessmentPreview "New Group Assessment")
-  (c2 $ msg_LinkText_CourseAssessmentPreview "New Course Assessment")
-  (c2 $ msg_LinkText_ModifyAssessment "Modify Assessment")
-  (c2 $ msg_LinkText_ModifyAssessmentPreview "Modify Assessment")
-  (c2 $ msg_LinkText_ViewAssessment "View Assessment")
-  (c $ msg_LinkText_Notifications "Notifications")
-  (c2 $ msg_LinkText_SubmissionTable "Submission Table")
-  (c2 $ msg_LinkText_UsersInGroup "Users in Group")
-  where
-    c = const
-    c2 = c . const
-    c3 = c2 . const
-
-linkToPage :: P.Page a b c d e f -> IHtml
-linkToPage g = do
+linkToPage :: P.Page' (Translation String) -> IHtml
+linkToPage p = do
   msg <- getI18N
-  return $ Bootstrap.link (routeOf g) (msg $ linkText g) ! A.id (fieldName g)
+  return $ Bootstrap.link (routeOf p) (msg $ P.pageValue p) ! A.id (fieldName p)
 
-linkToPageWithPostfix :: P.Page a b c d e f -> String -> IHtml
-linkToPageWithPostfix g p = do
+linkToPageWithPostfix :: P.Page' (Translation String) -> String -> IHtml
+linkToPageWithPostfix p s = do
   msg <- getI18N
-  return $ Bootstrap.link (routeOf g) (msg (linkText g) ++ p) ! A.id (fieldName g)
+  return $ Bootstrap.link (routeOf p) (msg (P.pageValue p) ++ s) ! A.id (fieldName p)
 
-linkButtonToPageBS :: P.Page a b c d e f -> IHtml
-linkButtonToPageBS g = do
+linkButtonToPageBS :: P.Page' (Translation String) -> IHtml
+linkButtonToPageBS p = do
   msg <- getI18N
-  return $ Bootstrap.buttonLink (routeOf g) (msg $ linkText g)
+  return $ Bootstrap.buttonLink (routeOf p) (msg $ P.pageValue p)
 
-linkToPageBlank :: P.Page a b c d e f -> IHtml
-linkToPageBlank g = do
+linkToPageBlank :: P.Page' (Translation String) -> IHtml
+linkToPageBlank p = do
   msg <- getI18N
-  return $ Bootstrap.link (routeOf g) (msg $ linkText g) ! A.target "_blank" ! A.id (fieldName g)
+  return $ Bootstrap.link (routeOf p) (msg $ P.pageValue p) ! A.target "_blank" ! A.id (fieldName p)
 
 -- Produces a HTML-link with the given route text and title
 linkWithTitle :: String -> String -> String -> Html
@@ -462,7 +394,7 @@ bootstrapHeader s newNotifs = do
   return $ do
         H.div ! class_ "navbar navbar-default navbar-fixed-top" $ do
             H.style ".body{padding-top:70px}"
-            H.div ! class_ "container" $ do
+            Bootstrap.containerFullWidth $ do
                 H.div ! class_ "navbar-header" $ do
                     Bootstrap.link (routeOf home) ("BE-AD" :: Html) ! class_ "navbar-brand"
                     button ! type_ "button" ! class_ "navbar-toggle" ! dataAttribute "toggle" "collapse" ! dataAttribute "target" ".navbar-collapse" $ do
@@ -480,11 +412,11 @@ bootstrapHeader s newNotifs = do
                         li $ (I18N.i18n msg $ linkToPage profile)
                         li $ (I18N.i18n msg $ linkToPage logout)
   where
-    logout = P.logout ()
-    profile = P.profile ()
-    home = P.home ()
-    userId = fromString $ concat [ServiceContext.fullNameInState s, " / ", Entity.uid id . ServiceContext.uid $ s]
-    notifications = P.notifications ()
+    logout = P.logoutWithText
+    profile = P.profileWithText
+    home = P.welcomeWithText
+    userId = fromString $ concat [SC.fullNameInState s, " / ", Entity.uid id . SC.uid $ s]
+    notifications = P.notificationsWithText
 
 bootstrapStatus :: UserState -> IHtml
 bootstrapStatus = maybe noMessage message . getStatus
@@ -565,17 +497,3 @@ verticalRadioButtons :: (Show a, Data a) => String -> [(a, String)] -> Html
 verticalRadioButtons name values = mapM_ button values
   where
     button v = do { radioButton name v; H.br }
-
-#ifdef TEST
-
-linkTextTest =
-  assertProperty
-    "Page link is a total function"
-    (\p -> length (linkText' p) > 0)
-    P.pageGen
-    "Page link text should be defined"
-  where
-      linkText' :: P.Page a b c d e f -> String
-      linkText' = trans . linkText
-
-#endif

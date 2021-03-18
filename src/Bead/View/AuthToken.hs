@@ -10,6 +10,7 @@ module Bead.View.AuthToken (
   ) where
 
 import qualified Bead.Domain.Entities as E
+import qualified Bead.Domain.Relationships as R
 import           Bead.View.Translation (Translation)
 
 import qualified Control.Exception as Exception
@@ -49,19 +50,20 @@ data Cookie
     , cookieUuid :: UUID             -- Token for the active user session
     , cookieTimezone :: E.TimeZoneName -- Timezone of the user
     , cookieStatus :: Maybe (E.StatusMessage (Translation String)) -- The last status message
+    , cookieHomePage :: R.HomePageContents
     }
 #ifdef TEST
   deriving (Eq, Show)
 #endif
 
 cookieCata :: (E.Language -> a)
-           -> (E.Username -> E.Uid -> String -> E.Language -> E.Role -> UUID -> E.TimeZoneName -> Maybe (E.StatusMessage (Translation String)) -> a)
+           -> (E.Username -> E.Uid -> String -> E.Language -> E.Role -> UUID -> E.TimeZoneName -> Maybe (E.StatusMessage (Translation String)) -> R.HomePageContents -> a)
            -> Cookie
            -> a
 cookieCata notLoggedIn loggedIn cookie =
   case cookie of
     NotLoggedInCookie lang -> notLoggedIn lang
-    LoggedInCookie username uid name lang role uuid timezone status -> loggedIn username uid name lang role uuid timezone status
+    LoggedInCookie username uid name lang role uuid timezone status homePage -> loggedIn username uid name lang role uuid timezone status homePage
 
 $(AesonTH.deriveJSON Aeson.defaultOptions ''Translation)
 
@@ -78,6 +80,12 @@ $(AesonTH.deriveJSON Aeson.defaultOptions ''E.Role)
 $(AesonTH.deriveJSON Aeson.defaultOptions ''E.TimeZoneName)
 
 $(AesonTH.deriveJSON Aeson.defaultOptions ''Cookie)
+
+$(AesonTH.deriveJSON Aeson.defaultOptions ''R.GroupKey)
+
+$(AesonTH.deriveJSON Aeson.defaultOptions ''R.CourseKey)
+
+$(AesonTH.deriveJSON Aeson.defaultOptions ''R.HomePageContents)
 
 isLoggedIn :: Cookie -> Bool
 isLoggedIn (LoggedInCookie {}) = True

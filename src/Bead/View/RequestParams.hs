@@ -3,6 +3,7 @@ module Bead.View.RequestParams where
 import Control.Monad (join)
 import Data.String (IsString(..))
 
+import Bead.Controller.Pages (CourseManagementContents)
 import Bead.Domain.Entities (Username(Username), Uid(Uid))
 import Bead.Domain.Relationships
 import Bead.View.Dictionary (Language, languageCata)
@@ -38,6 +39,9 @@ groupKeyParamName = fromString $ fieldName groupKeyField
 testScriptKeyParamName :: IsString s => s
 testScriptKeyParamName = fromString $ fieldName testScriptKeyField
 
+courseManagementContentsParamName :: IsString s => s
+courseManagementContentsParamName = fromString "course-management-contents"
+
 -- Request Param is a Pair of Strings, which
 -- are key and value representing a parameter in
 -- the GET or POST http request
@@ -58,6 +62,11 @@ class ReqParamValue p where
 class (ReqParamValue r) => RequestParam r where
   requestParam :: r -> ReqParam
 
+instance ReqParamValue CourseManagementContents where
+  paramValue = fromString . show
+
+instance RequestParam CourseManagementContents where
+  requestParam t = ReqParam (courseManagementContentsParamName, paramValue t)
 
 instance ReqParamValue AssignmentKey where
   paramValue (AssignmentKey a) = fromString a

@@ -28,8 +28,7 @@ import qualified Bead.Domain.Entities as E
 import           Bead.Domain.String (removeAccents, replaceSlash)
 import           Bead.View.Content
 import           Bead.View.ContentHandler (Mime(MimeZip))
-import qualified Bead.View.Content.ScoreInfo as ScoreI
-import qualified Bead.View.Content.SubmissionState as SbmState
+import qualified Bead.View.Content.StateVisualization as SV
 import           Bead.View.Content.ExportSubmissions (localTimeInSeconds)
 import           Bead.View.RequestParams
 
@@ -51,19 +50,17 @@ exportEvaluationsScoresOfGroups ck gks = do
     crs <- fst <$> S.loadCourse ck
     grps <- forM gks $ \gk -> do
       grp <- S.loadGroup gk
-      return (gk, grp, groupName grp)
+      evaluations <- S.groupSubmissionTable gk
+      scores <- S.scoreBoardOfGroup gk
+      return (gk, grp, evaluations, scores)
     return (crs, grps)
   msg <- i18nE
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ convertToLocalTime <$> getCurrentTime
-  (evaluations, scoreBoards) <- userStory $ do
-    scoreBs <- mapM (S.scoreBoardOfGroup . fst3) groups
-    evals <- mapM (S.groupSubmissionTable . fst3) groups
-    return (evals, scoreBs)
   downloadEvaluations
     (removeAccents (courseName course) <.> "zip")
     now
-    (map (first (removeAccents)) (evaluationCsvs msg groups evaluations ++ assessmentCsvs msg groups scoreBoards))
+    (map (first removeAccents) (evaluationsScoresToCsvs msg course groups))
 
 quote :: Text -> Text
 quote t = T.cons '"' (T.snoc t '"')
@@ -74,73 +71,76 @@ escapeQuotes = T.replace "\"" "\"\""
 makeFilePath :: String -> String -> FilePath
 makeFilePath folder filename = replaceSlash folder </> replaceSlash filename
 
-evaluationCsvs :: I18N -> [(GroupKey, Group, String)] -> [SubmissionTableInfo] -> [(FilePath, Text)]
-evaluationCsvs msg groups submissionTables = map submissionTableToCsv (filter hasAssignment submissionTables)
+evaluationsScoresToCsvs :: I18N -> Course -> [(GroupKey, Group, SubmissionTableInfo, ScoreBoard)] -> [(FilePath, Text)]
+evaluationsScoresToCsvs msg course groups = foldr addCsvs [] groups
   where
+    addCsvs :: (GroupKey, Group, SubmissionTableInfo, ScoreBoard) -> [(FilePath, Text)] -> [(FilePath, Text)]
+    addCsvs (gk, g, subm, scores) csvs =
+      let csvs2 = if hasAssignment subm
+                  then submissionTableToCsv msg course g subm : csvs
+                  else csvs
+      in if hasAssessment scores
+         then scoreBoardToCsv msg course g scores : csvs2
+         else csvs2
+
     hasAssignment :: SubmissionTableInfo -> Bool
     hasAssignment = submissionTableInfoCata
-                       (\_ _ assignments _ _ _ -> not . null $ assignments)
-                       (\_ _ assignments _ _ _ -> not . null $ assignments)
+                       (\_ assignments _ _ _ -> not . null $ assignments)
+                       (\_ assignments _ _ _ -> not . null $ assignments)
 
-    submissionTableToCsv :: SubmissionTableInfo -> (FilePath, Text)
-    submissionTableToCsv submissionTable = (filename, T.unlines (header : map userLine (L.sortBy (compareHun `on` (ud_fullname . fst)) (stiUserLines submissionTable))))
-      where
-        filename :: FilePath
-        filename = concat
-                     [ submissionTableInfoCata
-                         (\course _ _ _ _ _ -> replaceSlash course)
-                         (\course _ _ _ _ gk -> maybe
-                                                    (replaceSlash course)
-                                                    (\(_, grp, _) -> replaceSlash (E.groupName grp))
-                                                    (L.find (\(gk',_,_) -> gk == gk') groups))
-                         submissionTable
-                     , "_"
-                     , msg (msg_ExportEvaluations_Evaluations "evaluations")
-                     ] <.> "csv"
+    hasAssessment :: ScoreBoard -> Bool
+    hasAssessment = not . null . sbAssessments
 
-        as :: [(AssignmentKey, Assignment, HasTestCase)]
-        as = submissionTableInfoCata course group submissionTable
-          where
-            course _ _ as _ _ _ = as
-            group _ _ as _ _ _ = map (cgInfoCata id id) as
-
-        header :: Text
-        header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . A.name . snd3) as)
-
-        userLine :: (UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState)) -> Text
-        userLine (uDesc, evaluations) = T.intercalate "," (T.pack (ud_fullname uDesc) : uid : map getEvaluation as)
-
-          where
-            uid :: Text
-            uid = E.uid T.pack (ud_uid uDesc)
-
-            getEvaluation :: (AssignmentKey, Assignment, HasTestCase) -> Text
-            getEvaluation (ak, _, _) = maybe "" (\(_, st) -> SbmState.formatSubmissionState SbmState.toPlainText msg st) (M.lookup ak evaluations)
-
-assessmentCsvs :: I18N -> [(GroupKey, Group, String)] -> [ScoreBoard] -> [(FilePath, Text)]
-assessmentCsvs msg groups scoreBoards = map scoreBoardToCsv (filter (not . null . sbAssessments) scoreBoards)
+submissionTableToCsv :: I18N -> Course -> Group -> SubmissionTableInfo -> (FilePath, Text)
+submissionTableToCsv msg course group_ submissionTable = (filename, T.unlines (header : map userLine (L.sortBy (compareHun `on` (ud_fullname . fst)) (stiUserLines submissionTable))))
   where
-    scoreBoardToCsv :: ScoreBoard -> (FilePath, Text)
-    scoreBoardToCsv board = (fileName, T.unlines (header : userLines board))
-      where
-        fileName :: FilePath
-        fileName = concat
-                     [ scoreBoardCata
-                       (\_ _ _ courseName _ _ -> replaceSlash courseName)
-                       (\_ _ _ groupName _ _ -> replaceSlash groupName)
-                       board
-                     , "_"
-                     , msg $ msg_ExportEvaluations_Assessments "assessments"
-                     ] <.> "csv"
+    filename :: FilePath
+    filename = concat
+                 [ submissionTableInfoCata
+                   (\_ _ _ _ _ -> replaceSlash (E.courseName course))
+                   (\_ _ _ _ _ -> (replaceSlash (E.fullGroupName course group_)))
+                   submissionTable
+                 , "_"
+                 , msg (msg_ExportEvaluations_Evaluations "evaluations")
+                 ] <.> "csv"
 
-        header :: Text
-        header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . Assess.title . snd) (sbAssessments board))
+    as :: [(AssignmentKey, Assignment, HasTestCase)]
+    as = submissionTableInfoCata course group submissionTable
+      where
+        course _ as _ _ _ = as
+        group _ as _ _ _ = map (cgInfoCata id id) as
+
+    header :: Text
+    header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . A.name . snd3) as)
+
+    userLine :: (UserDesc, [Maybe (SubmissionKey, SubmissionState)]) -> Text
+    userLine (uDesc, submissions) = T.intercalate "," (T.pack (ud_fullname uDesc) : uid : map formatSubmission submissions)
+
+      where
+        uid :: Text
+        uid = E.uid T.pack (ud_uid uDesc)
+
+        formatSubmission :: Maybe (SubmissionKey, SubmissionState) -> Text
+        formatSubmission = maybe "" (\(_, st) -> SV.formatSubmissionState SV.toPlainText msg st)
+
+scoreBoardToCsv :: I18N -> Course -> Group -> ScoreBoard -> (FilePath, Text)
+scoreBoardToCsv msg course grp board = (fileName, T.unlines (header : userLines board))
+  where
+    fileName :: FilePath
+    fileName = concat
+                 [ replaceSlash (E.fullGroupName course grp)
+                 , "_"
+                 , msg $ msg_ExportEvaluations_Assessments "assessments"
+                 ] <.> "csv"
+
+    header :: Text
+    header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . Assess.title . snd) (sbAssessments board))
 
     userLines :: ScoreBoard -> [Text]
-    userLines board = map userLine (L.sortBy (compareHun `on` ud_fullname) (sbUsers board))
+    userLines board = map userLine (L.sortBy (compareHun `on` (ud_fullname . fst)) (sbUserLines board))
       where
-        userLine :: UserDesc -> Text
-        userLine uDesc = T.intercalate "," (fullname : uid : scores)
+        userLine :: (UserDesc, [Maybe ScoreInfo]) -> Text
+        userLine (uDesc, scoreInfos) = T.intercalate "," (fullname : uid : scores)
           where
             uid :: Text
             uid = E.uid T.pack (ud_uid uDesc)
@@ -149,15 +149,7 @@ assessmentCsvs msg groups scoreBoards = map scoreBoardToCsv (filter (not . null 
             fullname = T.pack . ud_fullname $ uDesc
 
             scores :: [Text]
-            scores = map (score . fst) (sbAssessments board)
-              where
-                score :: AssessmentKey -> Text
-                score ak = T.pack $ maybe notFound (\scr -> ScoreI.scoreInfoToText notFound msg scr) $ do
-                  sk <- M.lookup (ak, ud_username uDesc) (sbScores board)
-                  M.lookup sk (sbScoreInfos board)
-
-                notFound :: String
-                notFound = ""
+            scores = map (maybe "" (\info -> SV.formatEvResult SV.toPlainText msg (evaluationOfInfo info))) scoreInfos
 
 downloadEvaluations :: String -> LocalTime -> [(FilePath, Text)] -> ContentHandler File
 downloadEvaluations _ _ [] = undefined

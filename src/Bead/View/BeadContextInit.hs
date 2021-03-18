@@ -78,7 +78,7 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
 
   timeZoneConverter <- liftIO $ createTimeZoneConverter (timeZoneInfoDirectory config)
 
-  tz <- nestSnaplet "timezoneconveter" timeZoneContext $ createTimeZoneContext timeZoneConverter
+  tz <- nestSnaplet "timezoneconverter" timeZoneContext $ createTimeZoneContext timeZoneConverter
 
 #ifdef SSO
   ldap <- nestSnaplet "ldap-config" ldapContext $

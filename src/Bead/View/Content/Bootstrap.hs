@@ -16,7 +16,7 @@ import           Data.Text (Text)
 
 import qualified Text.Blaze as B
 import           Text.Blaze.Html5 hiding (map, link)
-import qualified Text.Blaze.Html5 as H hiding (map)
+import qualified Text.Blaze.Html5 as H
 import           Text.Blaze.Html5.Attributes hiding (id)
 import qualified Text.Blaze.Html5.Attributes as A
 
@@ -67,6 +67,8 @@ colOffset12 = ColumnOffset 12
 columnOffsetClass = columnOffset $ \offset -> "col-md-offset-" ++ show offset
 
 container = H.div ! class_ "container"
+
+containerFullWidth = H.div ! class_ "container-fluid"
 
 footer = H.div ! A.id "bead-footer" ! class_ "navbar navbar-default navbar-fixed-bottom"
 
@@ -119,6 +121,17 @@ listGroupAlertLinkItem alert route text = H.a ! href (fromString route) ! class_
 
 -- | Creates a texted list group item
 listGroupTextItem text = H.li ! class_ "list-group-item" $ fromString text
+
+tab :: H.Html -> H.Html
+tab = H.ul ! class_ "nav nav-tabs"
+
+tabItem :: String -> Text -> H.Html
+tabItem route text = H.li ! role "presentation"
+                          $ H.a ! href (toValue route)
+                                $ toMarkup text
+
+tabItemActive :: String -> Text -> H.Html
+tabItemActive route text = tabItem route text ! class_ "active"
 
 -- | Creates a badge that can be displayed in list group
 badge :: ToMarkup a => a -> H.Html
@@ -466,12 +479,6 @@ optionalTextArea paramName labelText height html =
     labelFor paramName labelText
     textAreaOptionalField paramName height html
 
--- | Creates a text area input with the given name as id, a given label
-utf8TextArea paramName labelText height html =
-  formGroup $ do
-    labelFor paramName labelText
-    textAreaField paramName height ! A.acceptCharset "utf-8" $ html
-
 -- | Creates a radio button group, with a given values and labels, the parameter name
 -- as numbered ids. The first value is the primary active
 radioButtonGroup paramName valuesAndLabel =
@@ -498,11 +505,17 @@ colMd size offset =
 -- | Creates a bootstrap 12 column
 colMd12 = H.div ! class_ "col-md-12"
 
+-- | Creates a bootstrap 3 width column
+colMd3 = H.div ! class_ "col-md-3"
+
 -- | Creates a bootstrap 4 width column
 colMd4 = H.div ! class_ "col-md-4"
 
 -- | Creates a bootstrap 6 width column
 colMd6 = H.div ! class_ "col-md-6"
+
+-- | Creates a bootstrap 9 width column
+colMd9 = H.div ! class_ "col-md-9"
 
 -- | Creates a bootstrap row with only one colMd12 column
 rowColMd12 = row . colMd12
@@ -510,8 +523,17 @@ rowColMd12 = row . colMd12
 -- | Creates a boostrap row with a 4 sized column in the middle of the page
 rowCol4Offset4 = row . colMd colSize4 colOffset4
 
+rowCol9Offset3 = row . colMd colSize9 colOffset3
+
 -- | Creates a bootstrap page header
-pageHeader = H.div ! class_ "page-header"
+
+pageHeader :: String -> Maybe String -> Html
+pageHeader title subtitle = H.div ! class_ "page-header" $ h2 $
+  B.string title <> sub
+
+  where
+    sub :: Html
+    sub = maybe mempty (\st -> br <> H.small (B.string st)) subtitle
 
 -- | Creates a bootstrap table
 table = H.table ! class_ "table table-bordered table-condensed table-hover table-striped"
@@ -623,3 +645,8 @@ tooltipAtTop = dataPlacement "top"
 
 closed    = False
 collapsed = True
+
+-- | Icons
+
+infoIcon :: Html
+infoIcon = H.span ! class_ "glyphicon glyphicon-info-sign" ! A.style "font-size: xx-large" $ mempty

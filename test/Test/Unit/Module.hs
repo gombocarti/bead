@@ -21,7 +21,6 @@ import Bead.View.Dictionary (patchDictionariesTests)
 import Bead.View.EmailTemplate (runEmailTemplateTests)
 #endif
 import Bead.View.Header (acceptLanguageTests)
-import Bead.View.Pagelets (linkTextTest)
 import Bead.View.RouteOf (routeOfTest)
 import Bead.View.Routing (routingTest)
 import Bead.View.TemplateAndComponentNames (fieldNameTest)
@@ -35,7 +34,6 @@ tests = do
   group "Route of" routeOfTest
   group "Routing" routingTest
   group "Page content handler " pageContentTest
-  group "Link text" linkTextTest
   group "Permissions" permissionTest
   group "Field name" fieldNameTest
   group "Entity" entityTests

@@ -23,7 +23,9 @@ module Bead.Domain.Entities (
   , courseAppAna
   , Group(..)
   , groupCata
+  , shortCourseName
   , fullGroupName
+  , shortGroupName
   , Role(..)
   , roleCata
   , roles
@@ -224,8 +226,14 @@ data Group = Group {
 groupCata group (Group name desc)
   = group name desc
 
+shortCourseName :: Course -> String
+shortCourseName = courseName
+
 fullGroupName :: Course -> Group -> String
 fullGroupName c g = unwords [courseName c, "-", groupName g]
+
+shortGroupName :: Group -> String
+shortGroupName = groupName
 
 -- * Authorization and authentication
 

@@ -8,6 +8,7 @@ import           Database.Esqueleto (select, from, on, where_, InnerJoin(InnerJo
 import qualified Database.Esqueleto as Esq
 import           Data.Maybe
 import qualified Data.Text as Text
+import           Data.Tuple.Utils (thd3)
 
 import           Database.Persist.Sql
 
@@ -44,6 +45,19 @@ loadGroup groupKey = do
   return $! case mGroup of
     Nothing    -> persistError "loadGroup" $ "no group is found:" ++ show groupKey
     Just group -> toDomainValue group
+
+loadGroupAndCourse :: Domain.GroupKey -> Persist (Domain.CourseKey, Domain.Course, Domain.GroupKey, Domain.Group)
+loadGroupAndCourse key = do
+  groups <- select $ from $ \(g `InnerJoin` gc `InnerJoin` c) -> do
+    on (g ^. GroupId Esq.==. gc ^. GroupsOfCourseGroup Esq.&&.
+        gc ^. GroupsOfCourseCourse Esq.==. c ^. CourseId
+       )
+    where_ (g ^. GroupId Esq.==. val (fromDomainKey key))
+    return (c, g)
+  case groups of
+    [] -> persistError "loadGroupAndCourse" $ "no group is found: " ++ show key
+    [(c, g)] ->  return (toDomainKey . entityKey $ c, toDomainValue . entityVal $ c, toDomainKey . entityKey $ g, toDomainValue . entityVal $ g)
+    _ -> persistError "loadGroupAndCourse" $ "more than one groups are found: " ++ show key
 
 -- Returns the course of the given group
 courseOfGroup :: Domain.GroupKey -> Persist Domain.CourseKey
@@ -153,14 +167,14 @@ groupTests = do
     c <- saveCourse course
     g <- saveGroup c group
     ags <- administratedGroups user1name
-    equals [] (map fst ags) "There was group administrated with the user"
+    equals [] (concatMap (map fst . thd3) ags) "There was group administrated with the user"
     admins <- groupAdminKeys g
     equals [] admins "There were group admins, without creation"
     createGroupAdmin user1name g
     admins <- groupAdminKeys g
     equals [user1name] admins "The first admin was not assigned to the group"
     ags <- administratedGroups user1name
-    equals [g] (map fst ags) "There was no group administrated with the user"
+    equals [g] (concatMap (map fst . thd3) ags) "There was no group administrated with the user"
     createGroupAdmin user2name g
     admins <- groupAdminKeys g
     equals

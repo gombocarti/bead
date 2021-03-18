@@ -222,18 +222,16 @@ data TestScriptInfo = TestScriptInfo {
 
 data SubmissionTableInfo
   = CourseSubmissionTableInfo {
-      stiCourse :: String
-    , stiUsers       :: [Username]      -- Alphabetically ordered list of usernames
+      stiUsers       :: [Username]      -- Alphabetically ordered list of usernames
     , stiAssignments :: [(AssignmentKey, Assignment, HasTestCase)] -- Cronologically ordered list of assignments
-    , stiUserLines   :: [(UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))]
+    , stiUserLines   :: [(UserDesc, [Maybe (SubmissionKey, SubmissionState)])]
     , stiGroups :: Map Username (Group, [User])
     , stiCourseKey :: CourseKey
     }
   | GroupSubmissionTableInfo {
-      stiCourse :: String
-    , stiUsers      :: [Username] -- Alphabetically ordered list of usernames
+      stiUsers      :: [Username] -- Alphabetically ordered list of usernames
     , stiCGAssignments :: [CGInfo (AssignmentKey, Assignment, HasTestCase)] -- Cronologically ordered list of course and group assignments
-    , stiUserLines :: [(UserDesc, Map AssignmentKey (SubmissionKey, SubmissionState))]
+    , stiUserLines :: [(UserDesc, [Maybe (SubmissionKey, SubmissionState)])]
     , stiCourseKey :: CourseKey
     , stiGroupKey :: GroupKey
     }
@@ -242,10 +240,10 @@ submissionTableInfoCata
   course
   group
   ti = case ti of
-    CourseSubmissionTableInfo crs users asgs lines groups key ->
-                       course crs users asgs lines groups key
-    GroupSubmissionTableInfo  crs users asgs lines ckey gkey ->
-                       group  crs users asgs lines ckey gkey
+    CourseSubmissionTableInfo users asgs lines groups key ->
+                       course users asgs lines groups key
+    GroupSubmissionTableInfo  users asgs lines ckey gkey ->
+                       group  users asgs lines ckey gkey
 
 submissionTableInfoToCourseGroupKey :: SubmissionTableInfo -> Either CourseKey GroupKey
 submissionTableInfoToCourseGroupKey t@(CourseSubmissionTableInfo {}) = Left $ stiCourseKey t
@@ -374,47 +372,40 @@ newtype NotificationKey = NotificationKey String
 notificationKey f (NotificationKey x) = f x
 
 -- | Information about a score for a given assessment
-data ScoreInfo
-  = Score_Not_Found
-    -- ^ There is no score.
-  | Score_Result EvaluationKey EvResult
-    -- ^ There is a score for a given assessment and user.
-  deriving (Eq, Show)
+newtype ScoreInfo = ScoreInfo (ScoreKey, EvaluationKey, EvResult)
+  deriving (Eq)
 
-scoreInfoAlgebra
-  notFound
-  result
-  s = case s of
-    Score_Not_Found   -> notFound
-    Score_Result ek r -> result ek r
+scoreInfoCata :: (ScoreKey -> EvaluationKey -> EvResult -> a) -> ScoreInfo -> a
+scoreInfoCata f (ScoreInfo (sKey, evKey, result)) = f sKey evKey result
+
+scoreKeyOfInfo :: ScoreInfo -> ScoreKey
+scoreKeyOfInfo = scoreInfoCata (\sk _ _ -> sk)
+
+evaluationKeyOfInfo :: ScoreInfo -> EvaluationKey
+evaluationKeyOfInfo = scoreInfoCata (\_ ek _ -> ek)
+
+evaluationOfInfo :: ScoreInfo -> EvResult
+evaluationOfInfo = scoreInfoCata (\_ _ e -> e)
 
 -- | The scoreboard summarizes the information for a course or group related
--- assesments and the evaluation for the assessment.
+-- assessments and the evaluation for the assessment.
 data ScoreBoard =
     CourseScoreBoard {
-      sbScores :: Map (AssessmentKey,Username) ScoreKey
-    , sbScoreInfos :: Map ScoreKey ScoreInfo
-    , sbCourseKey :: CourseKey
-    , sbCourseName :: String
-    , sbAssessments :: [(AssessmentKey,Assessment)]
-    , sbUsers :: [UserDesc]
-    }
+        sbAssessments :: [(AssessmentKey, Assessment)]
+      , sbUserLines :: [(UserDesc, [Maybe ScoreInfo])]
+      }
   | GroupScoreBoard {
-      sbScores :: Map (AssessmentKey,Username) ScoreKey
-    , sbScoreInfos :: Map ScoreKey ScoreInfo
-    , sbGroupKey :: GroupKey
-    , sbGroupName :: String
-    , sbAssessments :: [(AssessmentKey,Assessment)]
-    , sbUsers :: [UserDesc]
-    }
+        sbAssessments :: [(AssessmentKey, Assessment)]
+      , sbUserLines :: [(UserDesc, [Maybe ScoreInfo])]
+      }
   deriving Eq
 
 scoreBoardCata course group scoreBoard =
   case scoreBoard of
-    CourseScoreBoard scores scoreInfos ck cName assessments users ->
-      course scores scoreInfos ck cName assessments users
-    GroupScoreBoard scores scoreInfos gk gName assessments users ->
-      group scores scoreInfos gk gName assessments users
+    CourseScoreBoard assessments userLines ->
+      course assessments userLines
+    GroupScoreBoard assessments userLines ->
+      group assessments userLines
 
 scoreBoardPermissions = ObjectPermissions
   [ (P_Open, P_Group), (P_Open, P_Assessment) ]
@@ -430,13 +421,44 @@ data AssessmentDesc = AssessmentDesc {
 data ScoreDesc = ScoreDesc {
       scdCourse     :: Course
     , scdGroup      :: Maybe Group
-    , scdScore      :: ScoreInfo
+    , scdScore      :: ScoreKey
+    , scdScoreInfo  :: Maybe (ScoreInfo)
     , scdAssessment :: Assessment
     }
 
 scoreDescPermissions = ObjectPermissions [
     (P_Open, P_Group), (P_Open, P_Course)
   ]
+
+-- * Default page to show for a logged-in user when URL path is "/"
+
+data HomePageContents
+  = Welcome
+  | StudentView GroupKey
+  | GroupOverview GroupKey
+  | GroupOverviewAsStudent GroupKey
+  | CourseManagement CourseKey
+  | Administration
+#ifdef TEST
+  deriving (Eq, Show, Data)
+#else
+  deriving Data
+#endif
+
+homePageContentsCata :: a -> (GroupKey -> a) -> (GroupKey -> a) -> (GroupKey -> a) -> (CourseKey -> a) -> a -> HomePageContents -> a
+homePageContentsCata welcome studentView groupOverview groupOverviewAsStudent courseManagement administration homePage =
+  case homePage of
+    Welcome -> welcome
+    StudentView gk -> studentView gk
+    GroupOverview gk -> groupOverview gk
+    GroupOverviewAsStudent gk -> groupOverviewAsStudent gk
+    CourseManagement ck -> courseManagement ck
+    Administration -> administration
+
+-- Default page at log-in
+defaultHomePage :: Role -> HomePageContents
+defaultHomePage Admin = Administration
+defaultHomePage _     = Welcome
 
 #ifdef TEST
 relationshipTests = group "Bead.Domain.Relationships" $ do

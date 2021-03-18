@@ -147,8 +147,10 @@ menuId = P.pageCata
   (c "link-home")
   (c "link-profile")
   (c "link-admin")
-  (c "link-course-admin")
-  (c2 "link-course-overview")
+  (c2 "link-student-view")
+  (c2 "link-group-overview")
+  (c2 "link-group-overview-as-student")
+  (c3 "link-course-overview")
   (c "link-evaluation-table")
   (c2 "link-evaluation")
   (c3 "link-modify-evaluation")
@@ -166,13 +168,13 @@ menuId = P.pageCata
   (c2 "link-modify-user-score")
   (c "link-group-registration")
   (c "link-user-details")
-  (c "link-new-test-script")
-  (c2 "link-modify-test-script")
   (c "link-upload-files")
   (c "link-create-course")
-  (c "link-create-group")
+  (c2 "link-create-group")
   (c "link-assign-course-admin")
-  (c "link-assign-group-admin")
+  (c2 "link-assign-group-admin")
+  (c2 "link-create-test-script")
+  (c3 "link-modify-test-script")
   (c "link-change-password")
 #ifndef SSO
   (c "link-set-user-password")
@@ -367,7 +369,6 @@ testScriptDescField = TestScriptField "test-script-desc"
 testScriptNotesField = TestScriptField "test-script-note"
 testScriptScriptField = TestScriptField "test-script-script"
 testScriptSaveButton = TestScriptField "test-script-save-button"
-testScriptCourseKeyField = TestScriptField "test-script-course-key"
 testScriptKeyField = TestScriptField "test-script-key"
 
 -- * Template names
@@ -456,7 +457,7 @@ fieldList = map fieldName $ join [
 
   , SFN testScriptNameField, SFN testScriptTypeField, SFN testScriptDescField
   , SFN testScriptNotesField, SFN testScriptScriptField, SFN testScriptSaveButton
-  , SFN testScriptCourseKeyField, SFN testScriptKeyField
+  , SFN testScriptKeyField
 
   , SFN createCourseForm, SFN evaluationTypeSelection, SFN evaluationTypeValue, SFN startDateDivId
   , SFN evalTypeSelectionDiv, SFN registrationTable, SFN createGroupForm, SFN endDateDivId

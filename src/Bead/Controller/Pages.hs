@@ -4,9 +4,13 @@ module Bead.Controller.Pages where
 
 import           Control.Monad (join)
 
+import qualified Bead.View.Translation as Trans
 import           Bead.Domain.Entities (Uid)
 import qualified Bead.Domain.Entities      as E
-import           Bead.Domain.Relationships as R
+import           Bead.Domain.Relationships ( GroupKey, CourseKey, AssignmentKey
+                                           , AssessmentKey, ScoreKey, EvaluationKey, SubmissionKey
+                                           , TestScriptKey, HomePageContents)
+import qualified Bead.Domain.Relationships as R
 
 #ifdef TEST
 import           Control.Applicative
@@ -16,34 +20,63 @@ import           Test.QuickCheck.Gen
 import           Test.QuickCheck.Arbitrary (arbitrary)
 #endif
 
--- View pages are rendered using the data stored in the
--- persistence layer. Mainly for information propagation
--- for the user.
+data CourseManagementContents
+  = GroupManagementContents
+  | AssignmentsContents
+  | TestScriptsContents
+  | NewTestScriptContents
+  | ModifyTestScriptContents TestScriptKey
+  deriving (Eq, Read, Show)
+
+courseManagementContentsCata :: a -> a -> a -> a -> (TestScriptKey -> a) -> CourseManagementContents -> a
+courseManagementContentsCata
+  groupManagementContents_
+  assignmentsContents_
+  testScriptsContents_
+  newTestScriptContents_
+  modifyTestScriptContents_
+  contents =
+    case contents of
+      GroupManagementContents -> groupManagementContents_
+      TestScriptsContents -> testScriptsContents_
+      AssignmentsContents -> assignmentsContents_
+      NewTestScriptContents -> newTestScriptContents_
+      ModifyTestScriptContents testScriptKey -> modifyTestScriptContents_ testScriptKey
+
+defaultCourseManagementContents :: CourseManagementContents
+defaultCourseManagementContents = AssignmentsContents
+
+-- View pages are rendered using data stored in the persistence
+-- layer. They present information to the user.
 data ViewPage a
   = Index a
   | Login a
   | Logout a
-  | Home a
-  | CourseOverview CourseKey a
+  | Welcome a
+  | StudentView GroupKey a
+  | GroupOverview GroupKey a
+  | GroupOverviewAsStudent GroupKey a
+  | CourseManagement CourseKey CourseManagementContents a
   | EvaluationTable a
   | ViewAssignment AssignmentKey a
   | Administration a
-  | CourseAdmin a
   | ViewAssessment AssessmentKey a
   | ViewUserScore ScoreKey a
   | Notifications a
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Show, Functor)
 
 viewPageCata
   index
   login
   logout
-  home
-  courseOverview
+  welcome
+  studentView
+  groupOverview
+  groupOverviewAsStudent
+  courseManagement
   evaluationTable
   viewAssignment
   administration
-  courseAdmin
   viewAssessment
   viewUserScore
   notifications
@@ -51,12 +84,14 @@ viewPageCata
     Index a -> index a
     Login a -> login a
     Logout a -> logout a
-    Home a -> home a
-    CourseOverview ck a -> courseOverview ck a
+    Welcome a -> welcome a
+    StudentView gk a -> studentView gk a
+    GroupOverview gk a -> groupOverview gk a
+    GroupOverviewAsStudent gk a -> groupOverviewAsStudent gk a
+    CourseManagement ck contents a -> courseManagement ck contents a
     EvaluationTable a -> evaluationTable a
     ViewAssignment ak a -> viewAssignment ak a
     Administration a -> administration a
-    CourseAdmin a -> courseAdmin a
     ViewAssessment ak a -> viewAssessment ak a
     ViewUserScore sk a -> viewUserScore sk a
     Notifications a -> notifications a
@@ -66,19 +101,25 @@ viewPageValue = viewPageCata
   id -- index
   id -- login
   id -- logout
-  id -- home
-  cid -- courseOverview
+  id -- welcome
+  cid -- studentView
+  cid -- groupOverview
+  cid -- groupOverviewAsStudent
+  c2id -- courseManagement
   id -- evaluationTable
   cid -- viewAssignment
   id -- administration
-  id -- courseAdmin
   cid -- viewAssessment
   cid -- viewUserScore
   id -- notifications
   where
+    cid :: a -> b -> b
     cid = const id
 
--- Pages that extract information from the persistence
+    c2id :: a -> b -> c -> c
+    c2id = const . const id
+
+-- Page that extract information from the persistence
 -- and only the data will be rendered in the response
 -- (e.g. file download)
 data DataPage a
@@ -92,7 +133,7 @@ data DataPage a
   | GetSubmissionsOfAssignmentInGroup GroupKey AssignmentKey a
   | GetCourseCsv CourseKey a
   | GetGroupCsv GroupKey a
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Show, Functor)
 
 dataPageCata
   exportEvaluationsScoresAdminedGroups
@@ -146,7 +187,7 @@ data UserViewPage a
   | FillNewGroupAssessmentPreview GroupKey a
   | FillNewCourseAssessmentPreview CourseKey a
   | ModifyAssessmentPreview AssessmentKey a
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Show, Functor)
 
 userViewPageCata
   newGroupAssignmentPreview
@@ -187,8 +228,6 @@ data ViewModifyPage a
   | ModifyAssessment AssessmentKey a
   | GroupRegistration a
   | UserDetails a
-  | NewTestScript a
-  | ModifyTestScript TestScriptKey a
   | UploadFile a
 #ifndef SSO
   | SetUserPassword a
@@ -199,7 +238,7 @@ data ViewModifyPage a
   | ModifyUserScore ScoreKey a
   | NewGroupAssessment GroupKey a
   | NewCourseAssessment CourseKey a
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Show, Functor)
 
 viewModifyPageCata
   profile
@@ -211,8 +250,6 @@ viewModifyPageCata
   modifyAssessment
   groupRegistration
   userDetails
-  newTestScript
-  modifyTestScript
   uploadFile
 #ifndef SSO
   setUserPassword
@@ -233,8 +270,6 @@ viewModifyPageCata
     ModifyAssessment ak a -> modifyAssessment ak a
     GroupRegistration a -> groupRegistration a
     UserDetails a -> userDetails a
-    NewTestScript a -> newTestScript a
-    ModifyTestScript tk a -> modifyTestScript tk a
     UploadFile a -> uploadFile a
 #ifndef SSO
     SetUserPassword a -> setUserPassword a
@@ -257,8 +292,6 @@ viewModifyPageValue = viewModifyPageCata
   cid -- modifyAssessment
   id -- groupRegistration
   id -- userDetails
-  id -- newTestScript
-  cid -- modifyTestScript
   id -- uploadFile
 #ifndef SSO
   id -- setUserPassword
@@ -278,21 +311,25 @@ viewModifyPageValue = viewModifyPageCata
 -- and changes information in the persistence layer
 data ModifyPage a
   = CreateCourse a
-  | CreateGroup a
+  | CreateGroup CourseKey a
   | AssignCourseAdmin a
-  | AssignGroupAdmin a
+  | AssignGroupAdmin CourseKey a
+  | CreateTestScript CourseKey a
+  | ModifyTestScript CourseKey TestScriptKey a  -- CourseKey is needed for parentPage.
   | ChangePassword a
   | DeleteUsersFromCourse R.CourseKey a
   | DeleteUsersFromGroup R.GroupKey a
   | QueueSubmissionForTest SubmissionKey a
   | QueueAllSubmissionsForTest AssignmentKey a
   | UnsubscribeFromCourse R.GroupKey a
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Show, Functor)
 
 modifyPageCata :: (a -> b)
+               -> (CourseKey -> a -> b)
                -> (a -> b)
-               -> (a -> b)
-               -> (a -> b)
+               -> (CourseKey -> a -> b)
+               -> (CourseKey -> a -> b)
+               -> (CourseKey -> TestScriptKey -> a -> b)
                -> (a -> b)
                -> (CourseKey -> a -> b)
                -> (GroupKey -> a -> b)
@@ -306,6 +343,8 @@ modifyPageCata
   createGroup
   assignCourseAdmin
   assignGroupAdmin
+  createTestScript
+  modifyTestScript
   changePassword
   deleteUsersFromCourse
   deleteUsersFromGroup
@@ -314,9 +353,11 @@ modifyPageCata
   unsubscribeFromCourse
   p = case p of
     CreateCourse a -> createCourse a
-    CreateGroup a -> createGroup a
+    CreateGroup ck a -> createGroup ck a
     AssignCourseAdmin a -> assignCourseAdmin a
-    AssignGroupAdmin a -> assignGroupAdmin a
+    AssignGroupAdmin ck a -> assignGroupAdmin ck a
+    CreateTestScript ck a -> createTestScript ck a
+    ModifyTestScript ck tsk a -> modifyTestScript ck tsk a
     ChangePassword a -> changePassword a
     DeleteUsersFromCourse ck a -> deleteUsersFromCourse ck a
     DeleteUsersFromGroup gk a -> deleteUsersFromGroup gk a
@@ -327,9 +368,11 @@ modifyPageCata
 modifyPageValue :: ModifyPage a -> a
 modifyPageValue = modifyPageCata
   id -- createCourse
-  id -- createGroup
+  cid -- createGroup
   id -- assignCourseAdmin
-  id -- assignGroupAdmin
+  cid -- assignGroupAdmin
+  cid -- createTestScript
+  c2id -- modifyTestScript
   id -- changePassword
   cid -- deleteUsersFromCourse
   cid -- deleteUsersFromGroup
@@ -343,7 +386,7 @@ modifyPageValue = modifyPageCata
 data RestViewPage a
   = SubmissionTable GroupKey a
   | UsersInGroup GroupKey a
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Show, Functor)
 
 restViewPageCata :: (GroupKey -> a -> b)
                  -> (GroupKey -> a -> b)
@@ -369,7 +412,9 @@ data Page a b c d e f
   | Modify     (ModifyPage d)
   | Data       (DataPage e)
   | RestView   (RestViewPage f)
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
+
+
 
 liftPK
   view
@@ -420,24 +465,37 @@ pageToPageDesc = pfmap unit unit unit unit unit unit where
   unit :: a -> ()
   unit = const ()
 
-index                   = View . Index
-login                   = View . Login
-logout                  = View . Logout
-home                    = View . Home
-courseOverview ck       = View . CourseOverview ck
-evaluationTable         = View . EvaluationTable
-viewAssignment ak       = View . ViewAssignment ak
-administration          = View . Administration
-courseAdmin             = View . CourseAdmin
-viewAssessment ak       = View . ViewAssessment ak
-viewUserScore sk        = View . ViewUserScore sk
-notifications           = View . Notifications
+index                     = View . Index
+login                     = View . Login
+logout                    = View . Logout
+logoutWithText            = logout $ Trans.msg_LinkText_Logout "Logout"
+welcome                      = View . Welcome
+welcomeWithText              = welcome $ Trans.msg_LinkText_Welcome "Welcome"
+studentView gk            = View . StudentView gk
+groupOverview gk          = View . GroupOverview gk
+groupOverviewAsStudent gk = View . GroupOverviewAsStudent gk
+groupOverviewAsStudentWithText gk = groupOverviewAsStudent gk $ Trans.msg_LinkText_GroupOverviewAsStudent "Group View As Student"
+courseManagement ck contents = View . CourseManagement ck contents
+newTestScriptWithText ck  = courseManagement ck NewTestScriptContents $ Trans.msg_LinkText_NewTestScript "New Test Script"
+evaluationTable           = View . EvaluationTable
+viewAssignment ak         = View . ViewAssignment ak
+administration            = View . Administration
+administrationWithText    = administration $ Trans.msg_LinkText_Administration "Administration"
+viewAssessment ak         = View . ViewAssessment ak
+viewUserScore sk          = View . ViewUserScore sk
+notifications             = View . Notifications
+notificationsWithText     = notifications $ Trans.msg_LinkText_Notifications "Notifications"
 
 exportEvaluationsScoresAdminedGroups ck          = Data . ExportEvaluationsScoresAdminedGroups ck
+exportEvaluationsScoresAdminedGroupsWithText ck = exportEvaluationsScoresAdminedGroups ck $ Trans.msg_LinkText_ExportEvaluations "Export Evaluations of Admined Groups of this Course"
 exportEvaluationsScoresAllGroups ck = Data . ExportEvaluationsScoresAllGroups ck
+exportEvaluationsScoresAllGroupsWithText ck = exportEvaluationsScoresAllGroups ck $ Trans.msg_LinkText_ExportEvaluationsAllGroups "Export Evaluations of All Groups of this Course"
 exportSubmissions ak                = Data . ExportSubmissions ak
+exportSubmissionsWithText ak        = exportSubmissions ak $ Trans.msg_LinkText_ExportSubmissions "Export All Submissions"
 exportSubmissionsOfGroups ak u      = Data . ExportSubmissionsOfGroups ak u
+exportSubmissionsOfGroupsWithText ak u = exportSubmissionsOfGroups ak u $ Trans.msg_LinkText_ExportSubmissionsOfGroups "Export Admined Groups"
 exportSubmissionsOfOneGroup ak gk   = Data . ExportSubmissionsOfOneGroup ak gk
+exportSubmissionsOfOneGroupWithText ak gk   = exportSubmissionsOfOneGroup ak gk $ Trans.msg_LinkText_ExportSubmissionsOfOneGroup "Export This Group"
 getSubmission sk                    = Data . GetSubmission sk
 getSubmissionsOfUserInGroup gk uid  = Data . GetSubmissionsOfUserInGroup gk uid
 getSubmissionsOfAssignmentInGroup gk ak = Data . GetSubmissionsOfAssignmentInGroup gk ak
@@ -453,36 +511,45 @@ fillNewGroupAssessmentPreview gk  = UserView . FillNewGroupAssessmentPreview gk
 modifyAssessmentPreview ak = UserView . ModifyAssessmentPreview ak
 
 profile                = ViewModify . Profile
+profileWithText        = profile $ Trans.msg_LinkText_Profile "Profile"
 evaluation sk          = ViewModify . Evaluation sk
 modifyEvaluation sk ek = ViewModify . ModifyEvaluation sk ek
 newGroupAssignment gk  = ViewModify . NewGroupAssignment gk
+newGroupAssignmentWithText gk = newGroupAssignment gk $ Trans.msg_LinkText_NewGroupAssignment "New Group Assignment"
 newCourseAssignment ck = ViewModify . NewCourseAssignment ck
+newCourseAssignmentWithText ck = newCourseAssignment ck $ Trans.msg_LinkText_NewCourseAssignmentPreview "New Course Assignment"
 modifyAssignment ak    = ViewModify . ModifyAssignment ak
 modifyAssessment ak    = ViewModify . ModifyAssessment ak
 groupRegistration      = ViewModify . GroupRegistration
+groupRegistrationWithText = groupRegistration $ Trans.msg_LinkText_GroupRegistration "Group Registration"
 userDetails            = ViewModify . UserDetails
-newTestScript          = ViewModify . NewTestScript
-modifyTestScript tk    = ViewModify . ModifyTestScript tk
 uploadFile             = ViewModify . UploadFile
+uploadFileWithText     = uploadFile $ Trans.msg_LinkText_UploadFile "Upload file"
 #ifndef SSO
 setUserPassword        = ViewModify . SetUserPassword
 #endif
 submissionDetails ak sk = ViewModify . SubmissionDetails ak sk
 submission ak           = ViewModify . Submission ak
 newUserScore assk u     = ViewModify . NewUserScore assk u
+newUserScoreWithText aask u = newUserScore aask u $ Trans.msg_LinkText_NewUserScore "New Score"
 modifyUserScore sk      = ViewModify . ModifyUserScore sk
 newCourseAssessment ck  = ViewModify . NewCourseAssessment ck
 newGroupAssessment gk   = ViewModify . NewGroupAssessment gk
+newGroupAssessmentWithText gk = newGroupAssessment gk $ Trans.msg_LinkText_NewGroupAssessment "New Group Assessment"
 
-createCourse      = Modify . CreateCourse
-createGroup       = Modify . CreateGroup
-assignCourseAdmin = Modify . AssignCourseAdmin
-assignGroupAdmin  = Modify . AssignGroupAdmin
-changePassword    = Modify . ChangePassword
+createCourse         = Modify . CreateCourse
+createGroup ck       = Modify . CreateGroup ck
+assignCourseAdmin    = Modify . AssignCourseAdmin
+assignGroupAdmin ck  = Modify . AssignGroupAdmin ck
+createTestScript ck  = Modify . CreateTestScript ck
+modifyTestScript ck tsk           = Modify . ModifyTestScript ck tsk
+changePassword                    = Modify . ChangePassword
 deleteUsersFromCourse ck          = Modify . DeleteUsersFromCourse ck
 deleteUsersFromGroup gk           = Modify . DeleteUsersFromGroup gk
 queueSubmissionForTest sk         = Modify . QueueSubmissionForTest sk
+queueSubmissionForTestWithText sk = queueSubmissionForTest sk $ Trans.msg_LinkText_QueueSubmissionForTest "Run Test"
 queueAllSubmissionsForTest ak     = Modify . QueueAllSubmissionsForTest ak
+queueAllSubmissionsForTestWithText ak = queueAllSubmissionsForTest ak $ Trans.msg_LinkText_QueueAllSubmissionsForTest "Run Test on All Submissions"
 unsubscribeFromCourse gk          = Modify . UnsubscribeFromCourse gk
 
 submissionTable gk = RestView . SubmissionTable gk
@@ -493,11 +560,13 @@ pageCata
   index
   login
   logout
-  home
+  welcome
   profile
   administration
-  courseAdmin
-  courseOverview
+  studentView
+  groupOverview
+  groupOverviewAsStudent
+  courseManagement
   evaluationTable
   evaluation
   modifyEvaluation
@@ -515,13 +584,13 @@ pageCata
   modifyUserScore
   groupRegistration
   userDetails
-  newTestScript
-  modifyTestScript
   uploadFile
   createCourse
   createGroup
   assignCourseAdmin
   assignGroupAdmin
+  createTestScript
+  modifyTestScript
   changePassword
 #ifndef SSO
   setUserPassword
@@ -555,11 +624,13 @@ pageCata
     (View (Index a)) -> index a
     (View (Login a)) -> login a
     (View (Logout a)) -> logout a
-    (View (Home a)) -> home a
+    (View (Welcome a)) -> welcome a
     (ViewModify (Profile a)) -> profile a
     (View (Administration a)) -> administration a
-    (View (CourseAdmin a)) -> courseAdmin a
-    (View (CourseOverview ck a)) -> courseOverview ck a
+    (View (StudentView gk a)) -> studentView gk a
+    (View (GroupOverview gk a)) -> groupOverview gk a
+    (View (GroupOverviewAsStudent gk a)) -> groupOverviewAsStudent gk a
+    (View (CourseManagement ck contents a)) -> courseManagement ck contents a
     (View (EvaluationTable a)) -> evaluationTable a
     (ViewModify (Evaluation sk a)) -> evaluation sk a
     (ViewModify (ModifyEvaluation sk ek a)) -> modifyEvaluation sk ek a
@@ -577,13 +648,13 @@ pageCata
     (ViewModify (ModifyUserScore sk a)) -> modifyUserScore sk a
     (ViewModify (GroupRegistration a)) -> groupRegistration a
     (ViewModify (UserDetails a)) -> userDetails a
-    (ViewModify (NewTestScript a)) -> newTestScript a
-    (ViewModify (ModifyTestScript tsk a)) -> modifyTestScript tsk a
     (ViewModify (UploadFile a)) -> uploadFile a
     (Modify (CreateCourse a)) -> createCourse a
-    (Modify (CreateGroup a)) -> createGroup a
+    (Modify (CreateGroup ck a)) -> createGroup ck a
     (Modify (AssignCourseAdmin a)) -> assignCourseAdmin a
-    (Modify (AssignGroupAdmin a)) -> assignGroupAdmin a
+    (Modify (AssignGroupAdmin ck a)) -> assignGroupAdmin ck a
+    (Modify (CreateTestScript ck a)) -> createTestScript ck a
+    (Modify (ModifyTestScript ck tsk a)) -> modifyTestScript ck tsk a
     (Modify (ChangePassword a)) -> changePassword a
 #ifndef SSO
     (ViewModify (SetUserPassword a)) -> setUserPassword a
@@ -619,11 +690,13 @@ constantsP
   index_
   login_
   logout_
-  home_
+  welcome_
   profile_
   administration_
-  courseAdmin_
-  courseOverview_
+  studentView_
+  groupOverview_
+  groupOverviewAsStudent_
+  courseManagement_
   evaluationTable_
   evaluation_
   modifyEvaluation_
@@ -641,13 +714,13 @@ constantsP
   modifyUserScore_
   groupRegistration_
   userDetails_
-  newTestScript_
-  modifyTestScript_
   uploadFile_
   createCourse_
   createGroup_
   assignCourseAdmin_
   assignGroupAdmin_
+  createTestScript_
+  modifyTestScript_
   changePassword_
 #ifndef SSO
   setUserPassword_
@@ -681,11 +754,13 @@ constantsP
       (c $ index index_)
       (c $ login login_)
       (c $ logout logout_)
-      (c $ home home_)
+      (c $ welcome welcome_)
       (c $ profile profile_)
       (c $ administration administration_)
-      (c $ courseAdmin courseAdmin_)
-      (\ck _ -> courseOverview ck courseOverview_)
+      (\gk _ -> studentView gk studentView_)
+      (\gk _ -> groupOverview gk groupOverview_)
+      (\gk _ -> groupOverviewAsStudent gk groupOverviewAsStudent_)
+      (\ck contents _ -> courseManagement ck contents courseManagement_)
       (c $ evaluationTable evaluationTable_)
       (\ek _ -> evaluation ek evaluation_)
       (\sk ek _ -> modifyEvaluation sk ek modifyEvaluation_)
@@ -703,13 +778,13 @@ constantsP
       (\sk _ -> modifyUserScore sk modifyUserScore_)
       (c $ groupRegistration groupRegistration_)
       (c $ userDetails userDetails_)
-      (c $ newTestScript newTestScript_)
-      (\tsk _ -> modifyTestScript tsk modifyTestScript_)
       (c $ uploadFile uploadFile_)
       (c $ createCourse createCourse_)
-      (c $ createGroup createGroup_)
+      (\ck _ -> createGroup ck createGroup_)
       (c $ assignCourseAdmin assignCourseAdmin_)
-      (c $ assignGroupAdmin assignGroupAdmin_)
+      (\ck _ -> assignGroupAdmin ck assignGroupAdmin_)
+      (\ck _ -> createTestScript ck createTestScript_)
+      (\ck tsk _ -> modifyTestScript ck tsk modifyTestScript_)
       (c $ changePassword changePassword_)
 #ifndef SSO
       (c $ setUserPassword setUserPassword_)
@@ -747,11 +822,13 @@ liftsP
   index_
   login_
   logout_
-  home_
+  welcome_
   profile_
   administration_
-  courseAdmin_
-  courseOverview_
+  studentView_
+  groupOverview_
+  groupOverviewAsStudent_
+  courseManagement_
   evaluationTable_
   evaluation_
   modifyEvaluation_
@@ -769,13 +846,13 @@ liftsP
   modifyUserScore_
   groupRegistration_
   userDetails_
-  newTestScript_
-  modifyTestScript_
   uploadFile_
   createCourse_
   createGroup_
   assignCourseAdmin_
   assignGroupAdmin_
+  createTestScript_
+  modifyTestScript_
   changePassword_
 #ifndef SSO
   setUserPassword_
@@ -809,11 +886,13 @@ liftsP
       (index . index_)
       (login . login_)
       (logout . logout_)
-      (home . home_)
+      (welcome . welcome_)
       (profile . profile_)
       (administration . administration_)
-      (courseAdmin . courseAdmin_)
-      (\ck a -> courseOverview ck (courseOverview_ ck a))
+      (\gk a -> studentView gk (studentView_ gk a))
+      (\gk a -> groupOverview gk (groupOverview_ gk a))
+      (\gk a -> groupOverviewAsStudent gk (groupOverviewAsStudent_ gk a))
+      (\ck contents a -> courseManagement ck contents (courseManagement_ ck contents a))
       (evaluationTable . evaluationTable_)
       (\ek a -> evaluation ek (evaluation_ ek a))
       (\sk ek a -> modifyEvaluation sk ek (modifyEvaluation_ sk ek a))
@@ -831,13 +910,13 @@ liftsP
       (\sk a -> modifyUserScore sk (modifyUserScore_ sk a))
       (groupRegistration . groupRegistration_)
       (userDetails . userDetails_)
-      (newTestScript . newTestScript_)
-      (\tsk a -> modifyTestScript tsk (modifyTestScript_ tsk a))
       (uploadFile . uploadFile_)
       (createCourse . createCourse_)
-      (createGroup . createGroup_)
+      (\ck a -> createGroup ck (createGroup_ ck a))
       (assignCourseAdmin . assignCourseAdmin_)
-      (assignGroupAdmin . assignGroupAdmin_)
+      (\ck a -> assignGroupAdmin ck (assignGroupAdmin_ ck a))
+      (\ck a -> createTestScript ck (createTestScript_ ck a))
+      (\ck tsk a -> modifyTestScript ck tsk (modifyTestScript_ ck tsk a))
       (changePassword . changePassword_)
 #ifndef SSO
       (setUserPassword . setUserPassword_)
@@ -877,8 +956,8 @@ isLogin _ = False
 isLogout (View (Logout _)) = True
 isLogout _ = False
 
-isHome (View (Home _)) = True
-isHome _ = False
+isWelcome (View (Welcome _)) = True
+isWelcome _ = False
 
 isProfile (ViewModify (Profile _)) = True
 isProfile _ = False
@@ -886,11 +965,17 @@ isProfile _ = False
 isAdministration (View (Administration _)) = True
 isAdministration _ = False
 
-isCourseAdmin (View (CourseAdmin _)) = True
-isCourseAdmin _ = False
+isStudentView (View (StudentView _ _)) = True
+isStudentView _ = False
 
-isCourseOverview (View (CourseOverview _ _)) = True
-isCourseOverview _ = False
+isGroupOverview (View (GroupOverview _ _)) = True
+isGroupOverview _ = False
+
+isGroupOverviewAsStudent (View (GroupOverviewAsStudent _ _)) = True
+isGroupOverviewAsStudent _ = False
+
+isCourseManagement (View (CourseManagement _ _ _)) = True
+isCourseManagement _ = False
 
 isEvaluationTable (View (EvaluationTable _)) = True
 isEvaluationTable _ = False
@@ -943,26 +1028,26 @@ isGroupRegistration _ = False
 isUserDetails (ViewModify (UserDetails _)) = True
 isUserDetails _ = False
 
-isNewTestScript (ViewModify (NewTestScript _)) = True
-isNewTestScript _ = False
-
-isModifyTestScript (ViewModify (ModifyTestScript _ _)) = True
-isModifyTestScript _ = False
-
 isUploadFile (ViewModify (UploadFile _)) = True
 isUploadFile _ = False
 
 isCreateCourse (Modify (CreateCourse _)) = True
 isCreateCourse _ = False
 
-isCreateGroup (Modify (CreateGroup _)) = True
+isCreateGroup (Modify (CreateGroup _ _)) = True
 isCreateGroup _ = False
 
 isAssignCourseAdmin (Modify (AssignCourseAdmin _)) = True
 isAssignCourseAdmin _ = False
 
-isAssignGroupAdmin (Modify (AssignGroupAdmin _)) = True
+isAssignGroupAdmin (Modify (AssignGroupAdmin _ _)) = True
 isAssignGroupAdmin _ = False
+
+isCreateTestScript (Modify (CreateTestScript _ _)) = True
+isCreateTestScript _ = False
+
+isModifyTestScript (Modify (ModifyTestScript _ _ _)) = True
+isModifyTestScript _ = False
 
 isChangePassword (Modify (ChangePassword _)) = True
 isChangePassword _ = False
@@ -1059,7 +1144,8 @@ f <||> g = \x -> case f x of
                    False -> g x
 
 regularPages = [
-    isHome
+    isWelcome
+  , isStudentView
   , isLogout
   , isProfile
   , isChangePassword
@@ -1074,7 +1160,9 @@ regularPages = [
   ]
 
 groupAdminPages = [
-    isEvaluationTable
+    isGroupOverview
+  , isGroupOverviewAsStudent
+  , isEvaluationTable
   , isEvaluation
   , isModifyEvaluation
   , isNewGroupAssignment
@@ -1110,10 +1198,13 @@ groupAdminPages = [
   ]
 
 courseAdminPages = [
-    isCourseAdmin
-  , isCourseOverview
+    isGroupOverview
+  , isGroupOverviewAsStudent
+  , isCourseManagement
   , isCreateGroup
   , isAssignGroupAdmin
+  , isCreateTestScript
+  , isModifyTestScript
   , isEvaluationTable
   , isEvaluation
   , isModifyEvaluation
@@ -1129,8 +1220,6 @@ courseAdminPages = [
 #ifndef SSO
   , isSetUserPassword
 #endif
-  , isNewTestScript
-  , isModifyTestScript
   , isUploadFile
   , isNewCourseAssessment
   , isNewGroupAssessment
@@ -1182,17 +1271,6 @@ publicPages = [
   , isLogin
   ]
 
-menuPageList = map ($ ()) [
-    home
-  , profile
-  , administration
-  , courseAdmin
-  , evaluationTable
-  , groupRegistration
-  , newTestScript
-  , uploadFile
-  ]
-
 -- Returns a page predicate function depending on the role, which page transition is allowed,
 -- from a given page
 allowedPage :: E.Role -> Page a b c d e f -> Bool
@@ -1203,77 +1281,26 @@ allowedPage = E.roleCata student groupAdmin courseAdmin admin
     courseAdmin = isPage (courseAdminPages ++ regularPages)
     admin       = isPage (adminPages ++ regularPages)
 
--- Produces a Page list that must be rendered in the page menu for the given role
-menuPages :: E.Role -> PageDesc -> [PageDesc]
-menuPages r p = filter allowedPage' menuPageList
-  where
-    allowedPage' p' = and [
-        allowedPage r p'
-      , p' /= p
-      ]
-
--- Returns a Page descriptor for the given Modify or ViewModify
--- parent page, where the page needs to be redirected after the
--- modification of the data.
-parentPage :: PageDesc -> Maybe PageDesc
-parentPage = pageCata'
-  (const Nothing)  -- view
-  (const Nothing)  -- userView
-  viewModifyParent -- viewModify
-  modifyParent     -- modify
-  (const Nothing)  -- data
-  (const Nothing)  -- restView
-  where
-    c2 :: a -> b -> c -> a
-    c2 = const . const
-    viewModifyParent = Just . viewModifyPageCata
-      profile -- profile
-      (const evaluationTable) -- evaluation
-      (c2 evaluationTable) -- modifyEvaluation
-      (const home) -- newGroupAssignment
-      (const home) -- newCourseAssignment
-      (const home) -- modifyAssignment
-      (const home) -- modifyAssessment
-      home -- groupRegistration
-      administration -- userDetails
-      home           -- newTestScript
-      (const home)   -- modifyTestScript
-      uploadFile     -- uploadFile
-#ifndef SSO
-      home           -- setUserPassword
-#endif
-      submissionDetails -- submissionDetails
-      (const home)   -- submission
-      (c2 home)      -- newUserScore
-      (const home)   -- modifyUserScore
-      (const home)   -- newGroupAssessment
-      (const home)   -- newCourseAssessment
-
-    modifyParent :: ModifyPage () -> Maybe PageDesc
-    modifyParent = Just . modifyPageCata
-      administration -- createCourse
-      courseAdmin    -- createGroup
-      administration -- assignCourseAdmin
-      courseAdmin    -- assignGroupAdmin
-      profile        -- changePassword
-      (const home)   -- deleteUsersFromCourse
-      (const home)   -- deleteUsersFromGroup
-      evaluation     -- queueSubmissionForTest
-      (const home)   -- queueAllSubmissionsForTest
-      (const home)   -- unsubscribeFromCourse
+homePageToPageDesc :: HomePageContents -> PageDesc
+homePageToPageDesc = R.homePageContentsCata
+                       (welcome ())                    -- Welcome
+                       (\gk -> studentView gk ())   -- StudentView
+                       (\gk -> groupOverview gk ()) -- GroupOverview
+                       (\gk -> groupOverviewAsStudent gk ()) -- GroupOverViewAsStudent
+                       (\ck -> courseManagement ck defaultCourseManagementContents ()) -- CourseManagement
+                       (administration ()) -- Administration
 
 #ifdef TEST
 
 pageDescTest = assertProperty
-  "Total page union: Regular, Admin and NonMenu"
+  "Total page union: Regular, Admin and Public"
   (isPage ((join [ regularPages, groupAdminPages, courseAdminPages
-                 , adminPages, menuPagePred
+                 , adminPages
                  , publicPages
                  ])))
   pageGen
   "Regular, Admin and NonMenu pages should cover all pages"
   where
-    menuPagePred = [flip elem menuPageList]
 
 pageGen :: Gen PageDesc
 pageGen = oneof [
@@ -1283,44 +1310,48 @@ pageGen = oneof [
       showInt :: Int -> String
       showInt = show
 
-      assignmentKey = AssignmentKey . showInt <$> choose (1,5000)
-      assessmentKey = AssessmentKey . showInt <$> choose (1,5000)
-      submissionKey = SubmissionKey . showInt <$> choose (1,5000)
-      scoreKey      = ScoreKey . showInt      <$> choose (1,5000)
-      evaluationKey = EvaluationKey . showInt <$> choose (1,5000)
-      courseKey     = CourseKey . showInt     <$> choose (1,5000)
-      groupKey      = GroupKey . showInt      <$> choose (1,5000)
-      testScriptKey = TestScriptKey . showInt <$> choose (1,5000)
+      assignmentKey = R.AssignmentKey . showInt <$> choose (1,5000)
+      assessmentKey = R.AssessmentKey . showInt <$> choose (1,5000)
+      submissionKey = R.SubmissionKey . showInt <$> choose (1,5000)
+      scoreKey      = R.ScoreKey . showInt      <$> choose (1,5000)
+      evaluationKey = R.EvaluationKey . showInt <$> choose (1,5000)
+      courseKey     = R.CourseKey . showInt     <$> choose (1,5000)
+      groupKey      = R.GroupKey . showInt      <$> choose (1,5000)
+      testScriptKey = R.TestScriptKey . showInt <$> choose (1,5000)
       username      = E.Username <$> vectorOf 6 alphaNum
       uid           = E.Uid <$> vectorOf 6 alphaNum
+      courseManagementContents = oneof ((ModifyTestScriptContents <$> testScriptKey) : map pure [GroupManagementContents, TestScriptsContents, AssignmentsContents, NewTestScriptContents])
 
       nonParametricPages = elements [
           index ()
         , login ()
         , logout ()
-        , home ()
+        , welcome ()
         , profile ()
         , administration ()
-        , courseAdmin ()
         , evaluationTable ()
         , groupRegistration ()
         , userDetails ()
         , uploadFile ()
         , createCourse ()
-        , createGroup ()
         , assignCourseAdmin ()
-        , assignGroupAdmin ()
         , changePassword ()
 #ifndef SSO
         , setUserPassword ()
 #endif
-        , newTestScript ()
         , notifications ()
         ]
 
       parametricPages = oneof [
           evaluation <$> submissionKey <*> unit
-        , courseOverview <$> courseKey <*> unit
+        , studentView <$> groupKey <*> unit
+        , groupOverview <$> groupKey <*> unit
+        , groupOverviewAsStudent <$> groupKey <*> unit
+        , courseManagement <$> courseKey <*> courseManagementContents <*> unit
+        , createGroup <$> courseKey <*> unit
+        , assignGroupAdmin <$> courseKey <*> unit
+        , createTestScript <$> courseKey <*> unit
+        , modifyTestScript <$> courseKey <*> testScriptKey <*> unit
         , modifyEvaluation <$> submissionKey <*> evaluationKey <*> unit
         , submission <$> assignmentKey <*> unit
         , submissionDetails <$> assignmentKey <*> submissionKey <*> unit
@@ -1332,7 +1363,6 @@ pageGen = oneof [
         , queueSubmissionForTest <$> submissionKey <*> unit
         , queueAllSubmissionsForTest <$> assignmentKey <*> unit
         , unsubscribeFromCourse <$> groupKey <*> unit
-        , modifyTestScript <$> testScriptKey <*> unit
         , newCourseAssignment <$> courseKey <*> unit
         , newGroupAssignment <$> groupKey <*> unit
         , modifyAssignment <$> assignmentKey <*> unit

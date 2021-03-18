@@ -24,7 +24,7 @@ data UserAction
   | SubscribeToGroup GroupKey
   | CreateGroupAdmin Username GroupKey
   | DeleteUsersFromGroup GroupKey [Username]
-  | UnsubscribeFromCourse GroupKey -- Student wants to unsibscribe from a course which he is subscribed to
+  | UnsubscribeFromCourse GroupKey -- Student wants to unsubscribe from a course which he is subscribed to
 
   -- Course
   | CreateCourse Course
@@ -81,7 +81,7 @@ userStoryFor (CreateGroup ck g) = Story.createGroup ck g >> return ()
 userStoryFor (UpdateUser u)     = Story.updateUser u
 userStoryFor (CreateCourseAdmin u c) = Story.createCourseAdmin u c
 userStoryFor (CreateGroupAdmin u g)   = Story.createGroupAdmin u g
-userStoryFor (SubscribeToGroup g)    = Story.subscribeToGroup g
+userStoryFor (SubscribeToGroup g)    = void $ Story.subscribeToGroup g
 userStoryFor (CreateGroupAssignment gk a tc)  = Story.createGroupAssignment gk a tc >> return ()
 userStoryFor (CreateCourseAssignment ck a tc) = Story.createCourseAssignment ck a tc >> return ()
 userStoryFor (ModifyAssignment ak a tm) = Story.modifyAssignment ak a tm
@@ -89,7 +89,7 @@ userStoryFor (CreateGroupAssessment gk a) = Story.createGroupAssessment gk a >> 
 userStoryFor (CreateCourseAssessment ck a) = Story.createCourseAssessment ck a >> return ()
 userStoryFor (ModifyAssessment ak a) = Story.modifyAssessment ak a
 userStoryFor (ModifyAssessmentAndScores ak a scores) = Story.modifyAssessmentAndScores ak a scores
-userStoryFor (SaveUserScore u ak evaluation) = Story.saveUserScore u ak evaluation
+userStoryFor (SaveUserScore u ak evaluation) = void $ Story.saveUserScore u ak evaluation
 userStoryFor (ModifyUserScore sk evaluation) = Story.modifyUserScore sk evaluation
 userStoryFor (SaveScoresOfCourseAssessment ck a evaluations) = Story.saveScoresOfCourseAssessment ck a evaluations
 userStoryFor (SaveScoresOfGroupAssessment gk a evaluations) = Story.saveScoresOfGroupAssessment gk a evaluations

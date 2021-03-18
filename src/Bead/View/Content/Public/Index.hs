@@ -21,35 +21,40 @@ import           Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 
-index :: Maybe AuthFailure -> BeadHandler IHtml
+index :: Maybe AuthFailure -> BeadHandler HtmlPage
 index authError = do
   languages <- BeadContext.withDictionary BeadContext.getDictionaryInfos
-  return $ do
-    msg <- getI18N
-    return $
-      Bootstrap.rowCol4Offset4 $ do
-        Bootstrap.pageHeader $ H.h2 $
-          fromString $ msg $ msg_Index_Header "Welcome"
+  return $ HtmlPage {
+      pageTitle = do
+        msg <- getI18N
+        return $ Bootstrap.rowCol4Offset4 $
+          Bootstrap.pageHeader (msg $ msg_Index_Header "Welcome") Nothing
+    , pageBody = do
+        msg <- getI18N
+        return $ pageContent authError languages msg
+    }
 
-        H.p $ fromString $
-          msg $ msg_Index_Body "This page can be only used with an account registered in the Active Directory of the hosting institute."
+pageContent :: Maybe AuthFailure -> DictionaryInfos -> I18N -> H.Html
+pageContent authError languages msg = Bootstrap.rowCol4Offset4 $ do
+  H.p $ fromString $
+    msg $ msg_Index_Body "This page can be only used with an account registered in the Active Directory of the hosting institute."
 
-        postForm (routeOf $ P.login ()) $ do
-          Bootstrap.textInputWithAttr (fieldName loginUsername) (msg $ msg_Login_Username "Username:") "" (A.autofocus "")
-          Bootstrap.passwordInput (fieldName loginPassword) (msg $ msg_Login_Password "Password:")
-          Bootstrap.submitButtonColorful  (fieldName loginSubmitBtn) (msg $ msg_Login_Submit "Log in")
+  postForm (routeOf $ P.login ()) $ do
+    Bootstrap.textInputWithAttr (fieldName loginUsername) (msg $ msg_Login_Username "Username:") "" (A.autofocus "")
+    Bootstrap.passwordInput (fieldName loginPassword) (msg $ msg_Login_Password "Password:")
+    Bootstrap.submitButtonColorful  (fieldName loginSubmitBtn) (msg $ msg_Login_Submit "Log in")
 
-        maybe mempty (\err -> H.br >> (Bootstrap.alert Bootstrap.Danger .(H.p ! A.class_ "text-center") . fromString . visibleFailure msg $ err)) authError
+  maybe mempty (\err -> H.br >> (Bootstrap.alert Bootstrap.Danger .(H.p ! A.class_ "text-center") . fromString . visibleFailure msg $ err)) authError
 
 #ifndef SSO
-        Bootstrap.rowCol4Offset4 $ Bootstrap.buttonGroupJustified $ do
-          Bootstrap.buttonLink "/reg_request" (msg $ msg_Login_Registration "Registration")
-          Bootstrap.buttonLink "/reset_pwd"   (msg $ msg_Login_Forgotten_Password "Forgotten password")
+  Bootstrap.rowCol4Offset4 $ Bootstrap.buttonGroupJustified $ do
+    Bootstrap.buttonLink "/reg_request" (msg $ msg_Login_Registration "Registration")
+    Bootstrap.buttonLink "/reset_pwd"   (msg $ msg_Login_Forgotten_Password "Forgotten password")
 #endif
 
-        H.hr
+  H.hr
 
-        languageMenu msg languages
+  languageMenu msg languages
 
 visibleFailure :: I18N -> AuthFailure -> String
 visibleFailure msg IncorrectUserOrPassword = msg $ msg_Login_InvalidPasswordOrUser "Incorrect username or password."

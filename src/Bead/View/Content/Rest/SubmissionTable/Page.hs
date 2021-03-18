@@ -15,11 +15,14 @@ import qualified Bead.Controller.UserStories as S
 import qualified Data.Aeson as Aeson
 import           Data.Aeson ((.=))
 import qualified Data.Aeson.Encoding as Enc
-import qualified Data.Text as T
+import           Data.List (transpose)
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.Maybe (catMaybes)
 import           Data.Monoid ((<>), mempty)
 import           Data.Semigroup (Endo(Endo, appEndo))
+import qualified Data.Text as T
+import           Data.Tuple.Utils (fst3)
 
 submissionTable :: RestViewHandler
 submissionTable = RestViewHandler submissionTablePage
@@ -29,16 +32,17 @@ submissionTablePage = do
   gk <- CH.getParameter $ Bridge.customGroupKeyPrm Params.groupKeyParamName
   table <- CH.userStory $ S.groupSubmissionTable gk
   return $ Rel.submissionTableInfoCata
-    (\_ _ _ _ _ _ -> Enc.emptyObject_)
-    (\_ _ _ userLines _ _ -> Enc.dict (Enc.text . rawAsgKey) (Enc.list submissionToObject) encodeMap (collectSubmissions userLines))
+    (\_ _ _ _ _ -> Enc.emptyObject_)
+    (\_ cgAssignments userLines _ _ -> Enc.dict (Enc.text . rawAsgKey) (Enc.list submissionToObject) (encodeTable (map (E.cgInfoCata fst3 fst3) cgAssignments)) (map snd userLines))
     table
 
   where
-    encodeMap :: (Rel.AssignmentKey -> [(Rel.SubmissionKey, Rel.SubmissionState)] -> a -> a)
-              -> a
-              -> Map Rel.AssignmentKey [(Rel.SubmissionKey, Rel.SubmissionState)]
-              -> a
-    encodeMap step x m = Map.foldrWithKey step x m
+    encodeTable :: [Rel.AssignmentKey]
+                -> (Rel.AssignmentKey -> [(Rel.SubmissionKey, Rel.SubmissionState)] -> a -> a)
+                -> a
+                -> [[Maybe (Rel.SubmissionKey, Rel.SubmissionState)]]
+                -> a
+    encodeTable aks step x table = foldr (\(ak, column) acc -> step ak (catMaybes column) acc) x (zip aks (transpose table))
 
     submissionToObject :: (Rel.SubmissionKey, Rel.SubmissionState) -> Aeson.Encoding
     submissionToObject s = Enc.dict Enc.text id encodeBoth s
@@ -51,8 +55,3 @@ submissionTablePage = do
 
     rawSubmKey :: Rel.SubmissionKey -> T.Text
     rawSubmKey = Rel.submissionKeyMap T.pack
-
-    collectSubmissions :: [(E.UserDesc, Map Rel.AssignmentKey (Rel.SubmissionKey, Rel.SubmissionState))]
-                       -> Map Rel.AssignmentKey [(Rel.SubmissionKey, Rel.SubmissionState)]
-    collectSubmissions userLines =
-      Map.map (\skSts -> appEndo skSts []) . Map.unionsWith (<>) . map (Map.map (\skSt -> Endo (skSt : )) . snd) $ userLines

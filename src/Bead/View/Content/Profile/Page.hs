@@ -11,6 +11,7 @@ import           Data.String
 
 import qualified Bead.Controller.Pages as Pages
 import           Bead.Controller.UserStories (currentUser)
+import qualified Bead.Controller.UserStories as Story
 import           Bead.Domain.Entities hiding (name)
 import           Bead.View.Content hiding (name, option)
 import           Bead.View.ContentHandler (setUserLanguage)
@@ -29,25 +30,32 @@ profilePage = do
   user <- userStory currentUser
   languages <- getDictionaryInfos
   ts <- beadHandler foundTimeZones
-  setPageContents $ profileContent ts user languages
+  setPageContents $ htmlPage (msg_LinkText_Profile "Profile") $
+    profileContent ts user languages
 
 changeUserDetails :: POSTContentHandler
-changeUserDetails =
-  ChangeUserDetails
-    <$> getParameter regFullNamePrm
-    <*> getParameter userTimeZonePrm
-    <*> getParameter userLanguagePrm
+changeUserDetails = do
+  name <- getParameter regFullNamePrm
+  tz <- getParameter userTimeZonePrm
+  lang <- getParameter userLanguagePrm
+  return $ Action $ do
+    Story.changeUserDetails name tz lang
+    return $ redirection $ Pages.profile ()
 
 #ifdef SSO
-changePassword = ModifyHandler $ do
-  return $ LogMessage "With single sign-on, one cannot change password from the Profile page."
+changePassword = ModifyHandler $
+  return $ Action $ do
+    Story.logErrorMessage "With single sign-on, one cannot change password from the Profile page."
+    return $ redirection $ Pages.profile ()
 #else
 changePassword = ModifyHandler $ do
   oldPwd <- getParameter oldPasswordPrm
   newPwd <- getParameter newPasswordPrm
   checkCurrentAuthPassword oldPwd
   updateCurrentAuthPassword newPwd
-  return . StatusMessage $ msg_Profile_PasswordHasBeenChanged "The password has been changed."
+  return Action $ do
+    Story.putStatusMessage $ msg_Profile_PasswordHasBeenChanged "The password has been changed."
+    return $ redirection $ Pages.profile ()
 #endif
 
 profileContent :: [TimeZoneName] -> User -> DictionaryInfos -> IHtml

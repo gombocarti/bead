@@ -8,7 +8,7 @@ import qualified Bead.Domain.Entities as Entity (uid)
 import qualified Bead.Domain.Entity.Assignment as Assignment
 import qualified Bead.Domain.Entity.Assessment as Assessment
 import qualified Bead.Domain.Entity.Notification as Notification
-import           Bead.Domain.Relationships
+import           Bead.Domain.Relationships as Rel
 import           Bead.Domain.RolePermission (permission)
 import           Bead.Controller.ServiceContext (ServiceContext, UserState)
 import qualified Bead.Controller.ServiceContext as SC
@@ -38,7 +38,7 @@ import           Data.Function (on)
 import           Data.List (nub, (\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Data.Maybe (catMaybes, fromMaybe)
+import           Data.Maybe (catMaybes, fromMaybe, isJust)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String
@@ -117,7 +117,7 @@ runUserStory context i18n userState
 -- * High level user stories
 
 -- | The user logs in with a given username
-login :: Username -> UserStory ()
+login :: Username -> UserStory User
 login username = 
   withUsername username $ \uname -> do
     logMessage INFO $ unwords [uname, "is trying to log in"]
@@ -247,11 +247,11 @@ administratedCourses = logAction INFO "selects adminstrated courses" $ do
   persistence $ Persist.administratedCourses u
 
 -- Produces a list of group keys, group and the full name of the group
-administratedGroups :: UserStory [(GroupKey, Group, String)]
+administratedGroups :: UserStory [(CourseKey, Course, [(GroupKey, Group)])]
 administratedGroups = logAction INFO "selects administrated groups" $ do
   authorize P_Open P_Group
   u <- username
-  persistence $ Persist.administratedGroupsWithCourseName u
+  persistence $ Persist.administratedGroups u
 
 -- | The 'create' function is an abstract function
 --   for other creators like, createCourse and createExercise
@@ -324,8 +324,8 @@ createCourseAdmin user ck = logAction INFO "sets user to course admin" $ do
   putStatusMessage $ msg_UserStory_SetCourseAdmin "The user has become a course administrator."
 
 -- Produces a list of courses and users who administrators for the courses
-courseAdministrators :: UserStory [(Course, [User])]
-courseAdministrators = logAction INFO "lists the course and admins" $ do
+allCourseAdministrators :: UserStory [(Course, [User])]
+allCourseAdministrators = logAction INFO "lists courses and their admins" $ do
   authorize P_Open P_Course
   authorize P_Open P_User
   persistence $ do
@@ -333,25 +333,17 @@ courseAdministrators = logAction INFO "lists the course and admins" $ do
       admins <- Persist.courseAdmins ck
       return (c, admins))
 
--- Produces a list of courses that the user administrates and for all the courses
--- the list of groups and users who are groups admins for the given group
-groupAdministrators :: UserStory [(Course, [(Group, [User])])]
-groupAdministrators = logAction INFO "lists the groups and admins" $ do
-  authorize P_Open P_Course
+allAdministrators :: UserStory [User]
+allAdministrators = logAction INFO "lists all admins" $ do
   authorize P_Open P_Group
   authorize P_Open P_User
-  u <- username
-  persistence $ do
-    courses <- Persist.administratedCourses u
-    forM courses $ \(ck, course) -> do
-      gks <- Persist.groupKeysOfCourse ck
-      groups <- mapM groupAndAdmins gks
-      return (course, groups)
-  where
-    groupAndAdmins gk = do
-      g <- Persist.loadGroup gk
-      as <- Persist.groupAdmins gk
-      return (g,as)
+  persistence $ Persist.allAdministrators
+
+groupAdmins :: GroupKey -> UserStory [User]
+groupAdmins gk = logAction INFO ("lists group admins of group " ++ show gk) $ do
+  authorize P_Open P_Group
+  authorize P_Open P_User
+  persistence $ Persist.groupAdmins gk
 
 -- Deletes the given users from the given course if the current user is a course
 -- admin for the given course, otherwise redirects to the error page
@@ -585,6 +577,11 @@ loadGroup gk = logAction INFO ("loads group " ++ show gk) $ do
   authorize P_Open P_Group
   persistence $ Persist.loadGroup gk
 
+loadGroupAndCourse :: GroupKey -> UserStory (CourseKey, Course, GroupKey, Group)
+loadGroupAndCourse gk = logAction INFO ("loads group and course for " ++ show gk) $ do
+  authorize P_Open P_Group
+  persistence $ Persist.loadGroupAndCourse gk
+
 -- | Checks is the user is subscribed for the group
 isUserInGroup :: GroupKey -> UserStory Bool
 isUserInGroup gk = logAction INFO ("checks if user is in the group " ++ show gk) $ do
@@ -618,27 +615,29 @@ subscribedToGroup gk = logAction INFO ("lists all users in group " ++ show gk) $
   isAdminOfGroupOrCourse gk
   persistence $ Persist.subscribedToGroup gk
 
--- | Regsiter the user in the group, if the user does not submitted
--- any solutions for the other groups of the actual course, otherwise
--- puts a message on the UI, indicating that the course change is
+
+-- | Register the user in the group, if the user has not submitted
+-- any solutions for other groups of the actual course, otherwise
+-- puts a message on the UI indicating that the group change is
 -- not allowed.
-subscribeToGroup :: GroupKey -> UserStory ()
+subscribeToGroup :: GroupKey -> UserStory Bool
 subscribeToGroup gk = logAction INFO ("subscribes to the group " ++ (show gk)) $ do
   authorize P_Open P_Group
   state <- userState
-  message <- persistence $ do
+  (message, success) <- persistence $ do
     let u = SC.usernameInState state
     ck  <- Persist.courseOfGroup gk
     gks <- Persist.groupsOfUsersCourse u ck
     hasSubmission <- isThereASubmission u gks
     case hasSubmission of
-      True -> return $ msg_UserStory_SubscribedToGroup_ChangeNotAllowed
-        "It is not possible to move between groups as there are submission for the current group."
+      True -> return $ (msg_UserStory_SubscribedToGroup_ChangeNotAllowed
+        "It is not possible to move between groups as there are submissions for the current group.", False)
       False -> do
         mapM_ (Persist.unsubscribe u) gks
         Persist.subscribe u gk
-        return $ msg_UserStory_SubscribedToGroup "Successful registration."
+        return $ (msg_UserStory_SubscribedToGroup "Successful registration.", True)
   putStatusMessage message
+  return success
   where
     isThereASubmission :: Username -> HashSet GroupKey -> Persist Bool
     isThereASubmission u gks =
@@ -648,7 +647,7 @@ subscribeToGroup gk = logAction INFO ("subscribes to the group " ++ (show gk)) $
           then return found
           else do
             aks <- Persist.groupAssignments gk
-            (not . null . catMaybes) <$> mapM (flip Persist.lastSubmission u) aks
+            any isJust <$> mapM (flip Persist.lastSubmission u) aks
         )
         False
         gks
@@ -670,6 +669,10 @@ attendedGroups = logAction INFO "lists subscribed groups with info" $ do
     isThereASubmission u ck gk = do
       (||) <$> Persist.isThereASubmissionForGroup u gk
            <*> Persist.isThereASubmissionForCourse u ck
+
+subscribedGroups :: UserStory [(CourseKey, Course, GroupKey, Group)]
+subscribedGroups = logAction INFO "lists all subscribed groups" $ do
+  withUserAndPersist $ \u -> Persist.userGroups (u_username u)
 
 testCaseModificationForAssignment :: Username -> AssignmentKey -> TCModification -> Persist ()
 testCaseModificationForAssignment u ak = tcModificationCata noModification fileOverwrite textOverwrite tcDelete where
@@ -889,9 +892,9 @@ modifyAssessment ak a = logAction INFO ("modifies assessment " ++ show ak) $ do
   authorize P_Open P_Assessment
   authorize P_Modify P_Assessment
   isAdministratedAssessment ak
+  hasScore <- isThereAScore ak
   withUserAndPersist $ \u -> do
     let user = u_username u
-    hasScore <- isThereAScorePersist ak
     new <- if hasScore
              then do
                -- Overwrite the assignment type with the old one
@@ -939,15 +942,11 @@ modifyAssessmentAndScores ak a scores = logAction INFO ("modifies assessment and
             case Map.lookup u scores of
               Nothing -> return ()
               Just newEv -> do
-                maybeSk <- scoreInfoOfUser u ak
-                case maybeSk of
-                  Just (Just sk, _) -> persistence $ do
-                    mEvKey <- Persist.evaluationOfScore sk
-                    case mEvKey of
-                      Just evKey -> Persist.modifyEvaluation evKey newEv
-                      Nothing    -> return ()
-                  Just (_,_) -> void $ saveUserScore u ak newEv
-                  _          -> return ()
+                mScoreInfo <- scoreInfoOfUser u ak
+                case mScoreInfo of
+                  Just si -> persistence $
+                     Persist.modifyEvaluation (Rel.evaluationKeyOfInfo si) newEv
+                  _ -> void $ saveUserScore u ak newEv
 
 loadAssessment :: AssessmentKey -> UserStory Assessment
 loadAssessment ak = logAction INFO ("loads assessment " ++ show ak) $ do
@@ -971,14 +970,11 @@ assessmentOfScore :: ScoreKey -> UserStory AssessmentKey
 assessmentOfScore sk = logAction INFO ("looks up the assessment of score " ++ show sk) $ do
   persistence (Persist.assessmentOfScore sk)
 
-isThereAScorePersist :: AssessmentKey -> Persist Bool
-isThereAScorePersist ak = not . null <$> Persist.scoresOfAssessment ak
-
 isThereAScore :: AssessmentKey -> UserStory Bool
 isThereAScore ak = logAction INFO ("checks whether there is a score for the assessment " ++ show ak) $
-  persistence (isThereAScorePersist ak)
+  persistence (not . null <$> Persist.scoresOfAssessment ak)
 
-scoreInfo :: ScoreKey -> UserStory ScoreInfo
+scoreInfo :: ScoreKey -> UserStory (Maybe ScoreInfo)
 scoreInfo sk = logAction INFO ("loads score information of score " ++ show sk) $ do
   persistence (Persist.scoreInfo sk)
 
@@ -994,24 +990,26 @@ scoreDesc sk = logAction INFO ("loads score description of score " ++ show sk) $
                                            (show sk)
       errorPage $ userError nonAccessibleScore
 
-saveUserScore :: Username -> AssessmentKey -> Evaluation -> UserStory ()
+saveUserScore :: Username -> AssessmentKey -> Evaluation -> UserStory ScoreKey
 saveUserScore u ak evaluation = logAction INFO ("saves user score of " ++ show u ++ " for assessment " ++ show ak) $ do
   authorize P_Open P_Assessment
   scoreInfo <- scoreInfoOfUser u ak
   case scoreInfo of
-    Just (Nothing, Score_Not_Found) ->
+    Nothing ->
         persistence $ do
           sk <- Persist.saveScore u ak (Score ())
           void $ Persist.saveScoreEvaluation sk evaluation
-    _ -> do
+          return sk
+    Just si -> do
         logMessage INFO "Other admin just gave a score for this user's assessment"
         putStatusMessage $ msg_UserStoryError_ScoreAlreadyExists
           "This user already has a score for this assessment"
+        return (Rel.scoreKeyOfInfo si)
 
 modifyUserScore :: ScoreKey -> Evaluation -> UserStory ()
 modifyUserScore sk newEvaluation = logAction INFO ("modifies user score " ++ show sk) $ do
   mEKey <- persistence (Persist.evaluationOfScore sk)
-  maybe (return ()) (\eKey -> modifyEvaluation eKey newEvaluation) mEKey
+  maybe (return ()) (\(eKey, _) -> modifyEvaluation eKey newEvaluation) mEKey
 
 saveScoresOfCourseAssessment :: CourseKey -> Assessment -> Map Username Evaluation -> UserStory ()
 saveScoresOfCourseAssessment ck a evaluations = do
@@ -1021,8 +1019,9 @@ saveScoresOfCourseAssessment ck a evaluations = do
     persistence (mapM_ (saveEvaluation ak) users)
       where
         saveEvaluation ak user = case Map.lookup user evaluations of
-                                   Just eval -> do sk <- Persist.saveScore user ak score
-                                                   void $ Persist.saveScoreEvaluation sk eval
+                                   Just eval -> do
+                                     sk <- Persist.saveScore user ak score
+                                     void $ Persist.saveScoreEvaluation sk eval
                                    Nothing   -> return ()
 
         score = Score ()
@@ -1035,15 +1034,16 @@ saveScoresOfGroupAssessment gk a evaluations = do
     persistence (mapM_ (saveEvaluation ak) users)
       where
         saveEvaluation ak user = case Map.lookup user evaluations of
-                                   Just eval -> do sk <- Persist.saveScore user ak score
-                                                   void $ Persist.saveScoreEvaluation sk eval
+                                   Just eval -> do
+                                     sk <- Persist.saveScore user ak score
+                                     void $ Persist.saveScoreEvaluation sk eval
                                    Nothing   -> return ()
 
         score = Score ()
 
 -- Produces the score key, score info for the specific user and assessment.
 -- Returns Nothing if there are multiple scoreinfo available.
-scoreInfoOfUser :: Username -> AssessmentKey -> UserStory (Maybe (Maybe ScoreKey, ScoreInfo))
+scoreInfoOfUser :: Username -> AssessmentKey -> UserStory (Maybe ScoreInfo)
 scoreInfoOfUser u ak = logAction INFO ("loads score info of user " ++ show u ++ " and assessment " ++ show ak) $
   persistence $ Persist.scoreInfoOfUser u ak
 
@@ -1053,11 +1053,9 @@ scoresOfGroup gk ak = logAction INFO ("lists scores of group " ++ show gk ++ " a
   isAdminOfGroupOrCourse gk
   usernames <- subscribedToGroup gk
   forM usernames $ \u -> do
-    mScoreInfo <- scoreInfoOfUser u ak
     userDesc <- loadUserDesc u
-    case mScoreInfo of
-      Nothing               -> return (userDesc, Nothing)
-      Just (_sk, scoreInfo) -> return (userDesc, Just scoreInfo)
+    mScoreInfo <- scoreInfoOfUser u ak
+    return (userDesc, mScoreInfo)
 
 scoresOfCourse :: CourseKey -> AssessmentKey -> UserStory [(UserDesc, Maybe ScoreInfo)]
 scoresOfCourse ck ak = logAction INFO ("lists scores of course " ++ show ck ++ " and assessment " ++ show ak) $ do
@@ -1067,14 +1065,7 @@ scoresOfCourse ck ak = logAction INFO ("lists scores of course " ++ show ck ++ "
   forM usernames $ \u -> do
     userDesc <- loadUserDesc u
     mScoreInfo <- scoreInfoOfUser u ak
-    case mScoreInfo of
-      Nothing               -> return (userDesc, Nothing)
-      Just (_sk, scoreInfo) -> return (userDesc, Just scoreInfo)
-
-scoreBoards :: UserStory (Map (Either CourseKey GroupKey) ScoreBoard)
-scoreBoards = logAction INFO "lists scoreboards" $ do
-  authPerms scoreBoardPermissions
-  withUserAndPersist $ Persist.scoreBoards . u_username
+    return (userDesc, mScoreInfo)
 
 scoreBoardOfGroup :: GroupKey -> UserStory ScoreBoard
 scoreBoardOfGroup gk = logAction INFO ("gets scoreboard of group " ++ show gk) $ do
@@ -1164,17 +1155,17 @@ logMessage level msg = do
     userNotLoggedIn _  = logMsg "[USER NOT LOGGED IN]"
     registration       = logMsg "[REGISTRATION]"
     testAgent          = logMsg "[TEST AGENT]"
-    loggedIn _ u _ _ _ uuid _ _ = logMsg (unwords [Entity.uid id u, UUID.toString uuid])
+    loggedIn _ u _ _ _ uuid _ _ _ = logMsg (unwords [Entity.uid id u, UUID.toString uuid])
 
 
 -- | Change user state
 changeUserState :: (UserState -> UserState) -> UserStory ()
 changeUserState = CMS.modify
 
-loadUserData :: Username -> UUID -> UserStory ()
+loadUserData :: Username -> UUID -> UserStory User
 loadUserData uname sessionId = do
-  info <- persistence $ Persist.personalInfo uname
-  flip personalInfoCata info $ \r n tz lang ui -> do
+  u <- persistence $ Persist.loadUser uname
+  flip userCata u $ \r _ _ n tz lang ui -> do
     CMS.put $ SC.UserLoggedIn {
         SC.user = uname
       , SC.uid = ui
@@ -1184,7 +1175,9 @@ loadUserData uname sessionId = do
       , SC.uuid = sessionId
       , SC._timeZone = tz
       , SC._status = Nothing
+      , SC._homePage = Rel.defaultHomePage r
       }
+  return u
 
 userState :: UserStory UserState
 userState = CMS.get
@@ -1325,13 +1318,13 @@ assignmentSubmissionLimit key = logAction INFO msg $ do
   where
     msg = "user assignments submission Limit"
 
-userAssignmentsAssessments :: UserStory [(Group, Course, [(AssignmentKey, Assignment, Maybe (SubmissionKey, SubmissionState), SubmissionLimit)], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
-userAssignmentsAssessments = logAction INFO "lists assignments and assessments" $ do
+userAssignmentsAssessments :: GroupKey -> UserStory ([(AssignmentKey, Assignment, Maybe (SubmissionKey, SubmissionState), SubmissionLimit)], [(AssessmentKey, Assessment, Maybe ScoreInfo)])
+userAssignmentsAssessments gk = logAction INFO ("lists assignments and assessments of group " ++ show gk) $ do
   authorize P_Open P_Assignment
   authorize P_Open P_Assessment
   authorize P_Open P_Course
   authorize P_Open P_Group
-  withUserAndPersist (Persist.userAssignmentsAssessments . u_username)
+  withUserAndPersist (\u -> Persist.userAssignmentsAssessments (u_username u) gk)
 
 allAssignmentsOfGroup :: GroupKey -> UserStory [(AssignmentKey, Assignment)]
 allAssignmentsOfGroup gk = logAction INFO ("lists all assignments of group" ++ show gk) $ do
@@ -1344,7 +1337,7 @@ submissionDescription sk = logAction INFO msg $ do
   isAdministratedSubmission sk
   persistence $ Persist.submissionDesc sk
   where
-    msg = "loads submission infomation for " ++ show sk
+    msg = "loads submission information for " ++ show sk
 
 openSubmissions :: UserStory OpenedSubmissions
 openSubmissions = logAction INFO ("lists unevaluated submissions") $ do
@@ -1368,15 +1361,6 @@ submissionTables :: UserStory [SubmissionTableInfo]
 submissionTables = logAction INFO "lists submission tables" $ do
   authPerms submissionTableInfoPermissions
   withUserAndPersist $ Persist.submissionTables . u_username
-
--- Calculates the test script infos for the given course
-testScriptInfos :: CourseKey -> UserStory [(TestScriptKey, TestScriptInfo)]
-testScriptInfos ck = persistence $
-  mapM testScriptInfoAndKey =<< (Persist.testScriptsOfCourse ck)
-  where
-    testScriptInfoAndKey tk = do
-      ts <- Persist.testScriptInfo tk
-      return (tk,ts)
 
 newEvaluation :: SubmissionKey -> Evaluation -> UserStory ()
 newEvaluation sk e = logAction INFO ("saves new evaluation for " ++ show sk) $ do
@@ -1825,7 +1809,7 @@ persistence m = do
         userNotLoggedIn _  = "Not logged in user!"
         registration       = "Registration"
         testAgent          = "Test Agent"
-        loggedIn _ ui _ _ _ uuid _ _ = concat [Entity.uid id ui, " ", UUID.toString uuid]
+        loggedIn _ ui _ _ _ uuid _ _ _ = concat [Entity.uid id ui, " ", UUID.toString uuid]
 
 -- * User Error Messages
 

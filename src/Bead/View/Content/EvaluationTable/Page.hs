@@ -18,8 +18,8 @@ import           Bead.Controller.UserStories (openSubmissions)
 import           Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Pagelets
 import           Bead.View.Content
-import qualified Bead.View.Content.SubmissionState as St
 import qualified Bead.View.Content.Bootstrap as Bootstrap
+import qualified Bead.View.Content.StateVisualization as SV
 
 import           Text.Blaze.Html5 as H hiding (link, map)
 import qualified Text.Blaze.Html5.Attributes as A
@@ -32,7 +32,7 @@ evaluationTablePage = do
   evalTable <- evaluationTableContent
                <$> userTimeZoneToLocalTimeConverter
                <*> userStory openSubmissions
-  setPageContents evalTable
+  setPageContents $ htmlPage (msg_LinkText_EvaluationTable "Evaluations") evalTable
 
 evaluationTableContent :: UserTimeConverter -> OpenedSubmissions -> IHtml
 evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup related -> do
@@ -97,7 +97,7 @@ submissionInfo tc msg isGroup (key, desc) = H.tr $ do
   H.td . fromString . eCourse $ desc
   when isGroup $ H.td . fromString . fromMaybe "" . eGroup $ desc
   H.td . fromString . showDate . tc $ submissionPostTime desc
-  H.td . St.formatSubmissionState St.toMediumIcon msg . snd3 . eSubmissionInfo $ desc
+  H.td . SV.formatSubmissionState SV.toMediumIcon msg . snd3 . eSubmissionInfo $ desc
   where
     evaluation k = Pages.evaluation k ()
 

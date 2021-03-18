@@ -12,7 +12,7 @@ import           Bead.Controller.ServiceContext (ServiceContext(ServiceContext))
 import           Bead.Daemon.Email (startEmailDaemon)
 import           Bead.Daemon.LDAP (LDAPDaemon(LDAPDaemon), LDAPResult(LDAPInvalidUser))
 import           Bead.Domain.Entities
-import           Bead.Domain.Relationships (SubmissionKey, AssignmentKey)
+import           Bead.Domain.Relationships (SubmissionKey, AssignmentKey, defaultHomePage)
 import           Bead.View.AuthToken (Cookie(..), AuthTokenManager(encryptCookie), createAuthTokenManager)
 import           Bead.View.BeadContext (BeadContext)
 import           Bead.View.BeadContextInit (beadContextInit, Daemons(Daemons))
@@ -83,8 +83,8 @@ initBead = do
 -- Checks the following relationship holds:
 -- User              |                        Assignment                            |
 --                   |  GroupA1  |  GroupA2  |  Group B  |   CourseA   |   CourseB  |
--- course admin A    |  allowed  |  allowed  |           |   allowed   |            |
--- group admin A     |  allowed  |           |           |   allowed   |            |
+-- course A admin    |  allowed  |  allowed  |           |   allowed   |            |
+-- group A1 admin    |  allowed  |           |           |   allowed   |            |
 -- student           |           |           |           |             |            |
 -- logged out        |           |           |           |             |            |
 --
@@ -132,7 +132,7 @@ queueSubmissionsForTest = testCase "Test queuing submissions for test" $ do
         a <- assignmentWithSubmission as
         elements $ submissionsOf a
       assertErrorPage resp = assertSuccess resp >> assertBodyContains "not administrated by you" resp
-      assertUnaccessiblePage = assertRedirectTo (routeOf $ Pages.home ())
+      assertUnaccessiblePage = assertRedirectTo (routeOf $ Pages.welcome ())
       assertNotLoggedIn = assertRedirectTo (routeOf $ Pages.index ())
   -- single submission tests
   --   course admin tests
@@ -279,29 +279,32 @@ queueSubmissionsForTest = testCase "Test queuing submissions for test" $ do
   -- bulk tests
   --   course admin tests
   ak <- pickAk c1g1As
+  Just gk <- P.runPersistIOCmd p $ P.groupOfAssignment ak
   putStrLn $ "lasts in tests: " ++ show (submissionsOf ak) ++ " " ++ show ak
   testScenario
     "course admin queues submissions of a (group assignment, own group, own course)"
     (get (Pages.queueAllSubmissionsForTest ak ()) auth (Just $ cookie cAdmin uuid))
     (HashSet.fromList (submissionsOf ak))
-    (assertRedirectTo (routeOf $ Pages.home ()))
+    (assertRedirectTo (routeOf $ Pages.groupOverview gk ()))
     bead
     p
   ak <- pickAk c1g2As
+  Just gk <- P.runPersistIOCmd p $ P.groupOfAssignment ak
   putStrLn $ "lasts in tests: " ++ show (submissionsOf ak) ++ " " ++ show ak
   testScenario
     "course admin queues submissions of a (group assignment, other group, own course)"
     (get (Pages.queueAllSubmissionsForTest ak ()) auth (Just $ cookie cAdmin uuid))
     (HashSet.fromList (submissionsOf ak))
-    (assertRedirectTo (routeOf $ Pages.home ()))
+    (assertRedirectTo (routeOf $ Pages.groupOverview gk ()))
     bead
     p
   ak <- pickAk c1As
+  Just ck <- P.runPersistIOCmd p $ P.courseOfAssignment ak
   testScenario
     "course admin queues submissions of a (course assignment, own course)"
     (get (Pages.queueAllSubmissionsForTest ak ()) auth (Just $ cookie cAdmin uuid))
     (HashSet.fromList (submissionsOf ak))
-    (assertRedirectTo (routeOf $ Pages.home ()))
+    (assertRedirectTo (routeOf $ Pages.courseManagement ck Pages.AssignmentsContents ()))
     bead
     p
   ak <- pickAk c2g1As
@@ -322,19 +325,21 @@ queueSubmissionsForTest = testCase "Test queuing submissions for test" $ do
     p
   --   group admin tests
   ak <- pickAk c1g1As
+  Just gk <- P.runPersistIOCmd p $ P.groupOfAssignment ak
   testScenario
     "group admin queues submissions of a (group assignment, own group, own course)"
     (get (Pages.queueAllSubmissionsForTest ak ()) auth (Just $ cookie gAdmin uuid))
     (HashSet.fromList (submissionsOf ak))
-    (assertRedirectTo (routeOf $ Pages.home ()))
+    (assertRedirectTo (routeOf $ Pages.groupOverview gk ()))
     bead
     p
   ak <- pickAk c1As
+  Just ck <- P.runPersistIOCmd p $ P.courseOfAssignment ak
   testScenario
     "group admin queues submissions of a (course assignment, own course)"
     (get (Pages.queueAllSubmissionsForTest ak ()) auth (Just $ cookie gAdmin uuid))
     (HashSet.fromList (submissionsOf ak))
-    (assertRedirectTo (routeOf $ Pages.home ()))
+    (assertRedirectTo (routeOf $ Pages.courseManagement ck Pages.AssignmentsContents ()))
     bead
     p
   ak <- pickAk c1g2As
@@ -467,6 +472,7 @@ queueSubmissionsForTest = testCase "Test queuing submissions for test" $ do
                             , cookieUuid = uuid
                             , cookieTimezone = tz
                             , cookieStatus = Nothing
+                            , cookieHomePage = defaultHomePage role
                             })
                       u
     addCookie :: AuthTokenManager -> Cookie -> Snap.RequestBuilder IO ()

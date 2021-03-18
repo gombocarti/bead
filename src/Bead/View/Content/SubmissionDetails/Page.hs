@@ -48,12 +48,10 @@ submissionDetailsPage = do
     lmt <- Story.assignmentSubmissionLimit ak
     return (lmt,sd)
 
-  -- TODO: Refactor use guards
-  -- getSubmission ak sk $ \submission -> do
   tc <- userTimeZoneToLocalTimeConverter
   currentTime <- liftIO getCurrentTime
-  setPageContents $
-    submissionDetailsContent PageData {
+  setPageContents $ htmlPage (msg_LinkText_SubmissionDetails "Submission Details") $
+    submissionDetailsContent $ PageData {
         smKey = sk
       , aKey  = ak
       , smDetails = sd
@@ -77,19 +75,22 @@ submissionDetailsPostHandler = do
     Story.doesBlockSubmissionView sk
     Story.isAccessibleSubmission sk
 
-  return $! SubmissionComment sk Comment {
-                     comment = c
-                   , commentAuthor = uname
-                   , commentDate = now
-                   , commentType = CT_Student
-                   }
+  return $ Action $ do
+    Story.createComment sk Comment {
+        comment = c
+      , commentAuthor = uname
+      , commentDate = now
+      , commentType = CT_Student
+      }
+    return $ redirection $ Pages.submissionDetails ak sk ()
+
   where
     getName :: UserState -> Maybe String
     getName = userStateCata
       (const Nothing)
       Nothing
       Nothing
-      (\_username _uid name _lang _role _uuid _timezone _status -> Just name)
+      (\_username _uid name _lang _role _uuid _timezone _status _homePage -> Just name)
 
 submissionDetailsContent :: PageData -> IHtml
 submissionDetailsContent p = do

@@ -14,7 +14,7 @@ import           Data.List
 import           Data.String (fromString)
 
 import qualified Bead.Controller.Pages as Pages
-import           Bead.Controller.UserStories hiding (createCourse)
+import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import qualified Bead.View.UserActions as UA (UserAction(..))
@@ -35,9 +35,9 @@ data PageInfo = PageInfo {
 administrationPage :: GETContentHandler
 administrationPage = do
   (cs,ausers,assigned) <- userStory $ do
-    cs <- selectCourses each
-    ausers <- selectUsers adminOrCourseAdmin
-    assigned <- courseAdministrators
+    cs <- Story.selectCourses each
+    ausers <- Story.selectUsers adminOrCourseAdmin
+    assigned <- Story.allCourseAdministrators
     return (cs,ausers,assigned)
   let info = PageInfo {
       courses = cs
@@ -45,7 +45,7 @@ administrationPage = do
     , courseAdmins = filter courseAdmin ausers
     , assignedCourseAdmins = assigned
     }
-  setPageContents $ administrationContent info
+  setPageContents $ htmlPage (msg_LinkText_Administration "Administration") $ administrationContent info
   where
     each _ _ = True
 
@@ -143,17 +143,21 @@ courseAdministratorsTable i18n courses = Bootstrap.row $ Bootstrap.colMd12 $ do
 -- Add Course Admin
 
 assignCourseAdmin :: ModifyHandler
-assignCourseAdmin = ModifyHandler submitCourse
-
-submitCourse :: POSTContentHandler
-submitCourse = UA.CreateCourseAdmin
-  <$> getParameter (jsonUsernamePrm  (fieldName selectedCourseAdmin))
-  <*> getParameter (jsonCourseKeyPrm (fieldName selectedCourse))
+assignCourseAdmin = ModifyHandler $ do
+  admin <- getParameter (jsonUsernamePrm  (fieldName selectedCourseAdmin))
+  course <- getParameter (jsonCourseKeyPrm (fieldName selectedCourse))
+  return $ Action $ do
+    Story.createCourseAdmin admin course
+    return $ redirection $ Pages.administration ()
 
 -- Create Course
 
 createCourse :: ModifyHandler
-createCourse = ModifyHandler $ UA.CreateCourse <$> getCourse
+createCourse = ModifyHandler $ do
+  c <- getCourse
+  return $ Action $ do
+    Story.createCourse c
+    return $ redirection $ Pages.administration ()
 
 getCourse :: ContentHandler Course
 getCourse = Course

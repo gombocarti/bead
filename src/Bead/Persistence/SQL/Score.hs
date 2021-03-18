@@ -9,6 +9,8 @@ import           Data.Maybe
 import qualified Data.Text as Text
 
 import           Database.Persist.Sql
+import           Database.Esqueleto (select, from, on, where_, limit, InnerJoin(InnerJoin), val, (^.), Value(unValue))
+import qualified Database.Esqueleto as Esq
 
 import qualified Bead.Domain.Entities          as Domain
 import qualified Bead.Domain.Relationships     as Domain
@@ -78,12 +80,16 @@ scoreOfAssessmentAndUser u ak = do
   scores <- selectList [ScoresOfUsernameAssessmentUser ==. userId, ScoresOfUsernameAssessmentAssessment ==. toEntityKey ak] []
   return $ map (toDomainKey . scoresOfUsernameAssessmentScore . entityVal) scores
 
-evaluationOfScore :: Domain.ScoreKey -> Persist (Maybe Domain.EvaluationKey)
+evaluationOfScore :: Domain.ScoreKey -> Persist (Maybe (Domain.EvaluationKey, Domain.Evaluation))
 evaluationOfScore key = do
-  evaluations <- selectList [ScoreOfEvaluationScore ==. toEntityKey key] []
-  return $!
-    fmap (toDomainKey . scoreOfEvaluationEvaluation . entityVal)
-         (listToMaybe evaluations)
+  evaluations <- select $ from $ \(scoreEvaluation `InnerJoin` evaluation) -> do
+    on (scoreEvaluation ^. ScoreOfEvaluationEvaluation Esq.==. evaluation ^. EvaluationId)
+    where_ (scoreEvaluation ^. ScoreOfEvaluationScore Esq.==. val (fromDomainKey key))
+    limit 1
+    return evaluation
+  case evaluations of
+    [] -> return Nothing
+    e : _ -> return $! Just (toDomainKey . entityKey $ e, toDomainValue . entityVal $ e)
 
 scoresOfUser :: Domain.Username -> Persist [Domain.ScoreKey]
 scoresOfUser user = do
@@ -126,5 +132,5 @@ scoreTests = do
     es <- evaluationOfScore s
 
     -- Then
-    equals (Just e) es "An evaluated score does not have some evaluation."
+    equals (Just (e, ev)) es "An evaluated score does not have some evaluation."
 #endif

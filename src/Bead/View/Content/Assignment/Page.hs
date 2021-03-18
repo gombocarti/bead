@@ -15,7 +15,8 @@ import           Control.Monad (when)
 import qualified Data.Map as Map
 import           Data.Time (getCurrentTime)
 
-import qualified Bead.Controller.UserStories as S
+import qualified Bead.Controller.UserStories as Story
+import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Content
 import           Bead.View.ContentHandler (getJSONParameters, contentHandlerError, modifyPageSettings)
@@ -42,21 +43,24 @@ newCourseAssignmentPage :: GETContentHandler
 newCourseAssignmentPage = do
   ck <- getParameter (customCourseKeyPrm courseKeyParamName)
   (c, tss, ufs) <- userStory $ do
-    S.isAdministratedCourse ck
-    (course, _groupKeys) <- S.loadCourse ck
-    tss' <- S.testScriptInfosOfCourse ck
-    ufs  <- map fst <$> S.listUsersFiles
+    Story.isAdministratedCourse ck
+    (course, _groupKeys) <- Story.loadCourse ck
+    tss' <- Story.testScriptInfosOfCourse ck
+    ufs  <- map fst <$> Story.listUsersFiles
     return ((ck, course), nonEmptyList tss', ufs)
   now <- liftIO $ getCurrentTime
   tz <- userTimeZoneToLocalTimeConverter
-  setPageContents $ newAssignmentContent $ PD_Course tz now c tss ufs
+  setPageContents $ htmlPage (msg_LinkText_NewCourseAssignment "New Course Assignment") $
+    newAssignmentContent $ PD_Course tz now c tss ufs
 
 postCourseAssignment :: POSTContentHandler
 postCourseAssignment = do
-  CreateCourseAssignment
-    <$> getParameter (customCourseKeyPrm (fieldName selectedCourse))
-    <*> getAssignment
-    <*> readTCCreation
+  ck <- getParameter (customCourseKeyPrm (fieldName selectedCourse))
+  a <- getAssignment
+  tc <- readTCCreation
+  return $ Action $ do
+    Story.createCourseAssignment ck a tc
+    return $ redirection $ Pages.courseManagement ck Pages.AssignmentsContents ()
 
 newCourseAssignmentPreviewPage :: ViewPOSTContentHandler
 newCourseAssignmentPreviewPage = do
@@ -64,16 +68,16 @@ newCourseAssignmentPreviewPage = do
   assignment <- getAssignment
   tc <- readTCCreationParameters
   (c, tss, ufs) <- userStory $ do
-    S.isAdministratedCourse ck
-    (course, _groupKeys) <- S.loadCourse ck
-    tss' <- S.testScriptInfosOfCourse ck
-    ufs  <- map fst <$> S.listUsersFiles
+    Story.isAdministratedCourse ck
+    (course, _groupKeys) <- Story.loadCourse ck
+    tss' <- Story.testScriptInfosOfCourse ck
+    ufs  <- map fst <$> Story.listUsersFiles
     return ((ck, course), nonEmptyList tss', ufs)
   now <- liftIO $ getCurrentTime
   tz <- userTimeZoneToLocalTimeConverter
   modifyPageSettings enableFullMarkdownRendering
-  setPageContents $ newAssignmentContent $
-    PD_Course_Preview tz now c tss ufs assignment tc
+  setPageContents $ htmlPage (msg_LinkText_NewCourseAssignmentPreview "New Course Assignment") $
+    newAssignmentContent $ PD_Course_Preview tz now c tss ufs assignment tc
 
 -- Tries to create a TCCreation descriptive value. If the test script, usersfile and testcase
 -- parameters are included returns Just tccreation otherwise Nothing
@@ -127,20 +131,23 @@ newGroupAssignmentPage = do
   now <- liftIO $ getCurrentTime
   gk <- getParameter (customGroupKeyPrm groupKeyParamName)
   (g,tss,ufs) <- userStory $ do
-    S.isAdminOfGroupOrCourse gk
-    group <- S.loadGroup gk
-    tss' <- S.testScriptInfosOfGroup gk
-    ufs  <- map fst <$> S.listUsersFiles
+    Story.isAdminOfGroupOrCourse gk
+    group <- Story.loadGroup gk
+    tss' <- Story.testScriptInfosOfGroup gk
+    ufs  <- map fst <$> Story.listUsersFiles
     return ((gk, group), nonEmptyList tss', ufs)
   tz <- userTimeZoneToLocalTimeConverter
-  setPageContents $ newAssignmentContent $ PD_Group tz now g tss ufs
+  setPageContents $ htmlPage (msg_LinkText_NewGroupAssignment "New Group Assignment") $
+    newAssignmentContent $ PD_Group tz now g tss ufs
 
 postGroupAssignment :: POSTContentHandler
 postGroupAssignment = do
-  CreateGroupAssignment
-  <$> getParameter (customGroupKeyPrm (fieldName selectedGroup))
-  <*> getAssignment
-  <*> readTCCreation
+  gk <- getParameter (customGroupKeyPrm (fieldName selectedGroup))
+  a <- getAssignment
+  tc <- readTCCreation
+  return $ Action $ do
+    Story.createGroupAssignment gk a tc
+    return $ redirection $ Pages.groupOverview gk ()
 
 newGroupAssignmentPreviewPage :: ViewPOSTContentHandler
 newGroupAssignmentPreviewPage = do
@@ -148,16 +155,16 @@ newGroupAssignmentPreviewPage = do
   assignment <- getAssignment
   tc <- readTCCreationParameters
   (g,tss,ufs) <- userStory $ do
-    S.isAdminOfGroupOrCourse gk
-    group <- S.loadGroup gk
-    tss' <- S.testScriptInfosOfGroup gk
-    ufs  <- map fst <$> S.listUsersFiles
+    Story.isAdminOfGroupOrCourse gk
+    group <- Story.loadGroup gk
+    tss' <- Story.testScriptInfosOfGroup gk
+    ufs  <- map fst <$> Story.listUsersFiles
     return ((gk, group), nonEmptyList tss', ufs)
   tz <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ getCurrentTime
   modifyPageSettings enableFullMarkdownRendering
-  setPageContents $ newAssignmentContent $
-    PD_Group_Preview tz now g tss ufs assignment tc
+  setPageContents $ htmlPage (msg_LinkText_NewGroupAssignmentPreview "New Group Assignment") $
+    newAssignmentContent $ PD_Group_Preview tz now g tss ufs assignment tc
 
 -- * Modify Assignment
 
@@ -165,22 +172,28 @@ modifyAssignmentPage :: GETContentHandler
 modifyAssignmentPage = do
   ak <- getAssignmentKey
   (as,tss,ufs,tc) <- userStory $ do
-    S.isAdministratedAssignment ak
-    as <- S.loadAssignment ak
-    tss' <- S.testScriptInfosOfAssignment ak
-    ufs  <- map fst <$> S.listUsersFiles
-    tc   <- S.testCaseOfAssignment ak
+    Story.isAdministratedAssignment ak
+    as <- Story.loadAssignment ak
+    tss' <- Story.testScriptInfosOfAssignment ak
+    ufs  <- map fst <$> Story.listUsersFiles
+    tc   <- Story.testCaseOfAssignment ak
     return (as, nonEmptyList tss', ufs, tc)
   tz <- userTimeZoneToLocalTimeConverter
-  setPageContents $ newAssignmentContent $
-    PD_Assignment tz ak as tss ufs tc
+  setPageContents $ htmlPage (msg_LinkText_ModifyAssignment "Modify Assignment") $
+    newAssignmentContent $ PD_Assignment tz ak as tss ufs tc
 
 postModifyAssignment :: POSTContentHandler
 postModifyAssignment = do
-  ModifyAssignment
-  <$> getAssignmentKey
-  <*> getAssignment
-  <*> readTCModification
+  ak <- getAssignmentKey
+  a <- getAssignment
+  tm <- readTCModification
+  return $ Action $ do
+    Story.modifyAssignment ak a tm
+    ckGk <- Story.courseOrGroupOfAssignment ak
+    return $ redirection $ either
+        (\ck -> Pages.courseManagement ck Pages.AssignmentsContents ())
+        (\gk -> Pages.groupOverview gk ())
+        ckGk
 
 modifyAssignmentPreviewPage :: ViewPOSTContentHandler
 modifyAssignmentPreviewPage = do
@@ -188,29 +201,29 @@ modifyAssignmentPreviewPage = do
   as <- getAssignment
   tm <- readTCModificationParameters
   (tss,ufs,tc) <- userStory $ do
-    S.isAdministratedAssignment ak
-    tss' <- S.testScriptInfosOfAssignment ak
-    ufs  <- map fst <$> S.listUsersFiles
-    tc   <- S.testCaseOfAssignment ak
+    Story.isAdministratedAssignment ak
+    tss' <- Story.testScriptInfosOfAssignment ak
+    ufs  <- map fst <$> Story.listUsersFiles
+    tc   <- Story.testCaseOfAssignment ak
     return (nonEmptyList tss', ufs, tc)
   tz <- userTimeZoneToLocalTimeConverter
   modifyPageSettings enableFullMarkdownRendering
-  setPageContents $ newAssignmentContent $
-    PD_Assignment_Preview tz ak as tss ufs tc tm
+  setPageContents $ htmlPage (msg_LinkText_ModifyAssignmentPreview "Modify Assignment") $
+    newAssignmentContent $ PD_Assignment_Preview tz ak as tss ufs tc tm
 
 viewAssignmentPage :: GETContentHandler
 viewAssignmentPage = do
   ak <- getAssignmentKey
   (as,tss,tc) <- userStory $ do
-    S.isAdministratedAssignment ak
-    as <- S.loadAssignment ak
-    tss' <- S.testScriptInfosOfAssignment ak
-    ts   <- S.testCaseOfAssignment ak
+    Story.isAdministratedAssignment ak
+    as <- Story.loadAssignment ak
+    tss' <- Story.testScriptInfosOfAssignment ak
+    ts   <- Story.testCaseOfAssignment ak
     return (as, tss', ts)
   tz <- userTimeZoneToLocalTimeConverter
   let ti = do (_tck, _tc, tsk) <- tc
               Map.lookup tsk $ Map.fromList tss
-  setPageContents $ newAssignmentContent $ PD_ViewAssignment tz ak as ti tc
+  setPageContents $ htmlPage (msg_LinkText_ViewAssignment "View Assignment") $ newAssignmentContent $ PD_ViewAssignment tz ak as ti tc
 
 -- * Helpers
 

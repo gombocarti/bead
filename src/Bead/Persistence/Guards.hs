@@ -30,6 +30,7 @@ import           Data.List (find, nub)
 import           Data.Maybe (isNothing)
 import qualified Data.Set as Set
 import           Data.Time (getCurrentTime)
+import           Data.Tuple.Utils (fst3,thd3)
 
 import           Bead.Domain.Entities
 import           Bead.Domain.Relationships
@@ -178,16 +179,15 @@ adminCourse u = do
 -- the given group key otherwise False
 adminGroup :: Username -> Persist (GroupKey -> Bool)
 adminGroup u = do
-  gks <- map fst <$> administratedGroups u
+  gks <- concatMap (map fst . thd3) <$> administratedGroups u
   return (\gk -> elem gk gks)
 
 -- Returns a function that returns True if the user administrates a
 -- group of a course, otherwise False.
 adminCourseOfGroup :: Username -> Persist (CourseKey -> Bool)
 adminCourseOfGroup u = do
-  gks <- map fst <$> administratedGroups u
-  cks <- mapM courseOfGroup gks
-  return (\ck -> elem ck cks)
+  gs <- administratedGroups u
+  return (\ck -> elem ck (map fst3 gs))
 
 -- Returns True if the given student is in the
 -- administrated groups or courses of the user
@@ -198,7 +198,7 @@ isStudentOf student admin = do
   sgcourses <- mapM courseOfGroup sgroups
 
   acourses <- map fst <$> administratedCourses admin
-  agroups  <- map fst <$> administratedGroups  admin
+  agroups  <- concatMap (map fst . thd3) <$> administratedGroups admin
   return $ or [ hasIntersection (Set.fromList (scourses ++ sgcourses)) (Set.fromList acourses)
               , hasIntersection (Set.fromList sgroups) (Set.fromList agroups)
               ]
@@ -226,11 +226,16 @@ doesBlockAssignmentView u ak = do
           gks <- groupsOfUsersCourse u ck
           foldM (\acc gk -> (++ acc) <$> groupAssignments gk) aks gks
         Right gk -> do
-          ck <- courseOfGroup gk
-          aks  <- courseAssignments ck
+          aks  <- courseAssignmentsOfGroup gk
           aks' <- groupAssignments gk
           return (aks ++ aks')
-      asgs <- mapM loadAssignment others
-      let otherOpenIsolated = isNothing $ find (\a -> and [isActive a now, isIsolated $ aspects a]) asgs
-      return $! otherOpenIsolated
+      not <$> foldM (\found ak ->
+                        if found
+                        then return found
+                        else do
+                          a <- loadAssignment ak
+                          return $ isActive a now && isIsolated (aspects a)
+                    )
+                    False
+                    others
 

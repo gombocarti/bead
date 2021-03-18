@@ -8,9 +8,9 @@ module Bead.View.Content.Score.Page (
 import           Bead.View.Content
 import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
-import           Bead.View.RequestParams
+import           Bead.View.Content.StateVisualization (formatEvResult, formatEvResultMaybe, toPlainText)
 import           Bead.View.Content.VisualConstants
-import           Bead.View.Content.ScoreInfo (scoreInfoToText)
+import           Bead.View.RequestParams
 import           Bead.Controller.Pages (PageDesc)
 import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
@@ -39,7 +39,6 @@ data PageData
     , pdUid            :: Uid
     , pdAssessmentDesc :: AssessmentDesc
     , pdScore          :: ScoreInfo
-    , pdScoreKey       :: ScoreKey
     }
 
 pageDataAlgebra
@@ -47,7 +46,7 @@ pageDataAlgebra
   modifyUserScore_
   pd = case pd of
          PD_NewUserScore student uname uid assessmentDesc -> newUserScore_ student uname uid assessmentDesc
-         PD_ModifyUserScore student uname uid assessmentDesc score sk -> modifyUserScore_ student uname uid assessmentDesc score sk
+         PD_ModifyUserScore student uname uid assessmentDesc score -> modifyUserScore_ student uname uid assessmentDesc score
     
 newUserScore :: ViewModifyHandler
 newUserScore = ViewModifyHandler scorePage newScorePostHandler
@@ -66,7 +65,8 @@ scorePage = do
   let uname = u_name user
       uid = u_uid user
   assessmentDesc <- userStory (Story.assessmentDesc ak)
-  setPageContents . scoreContent $ PD_NewUserScore uname username uid assessmentDesc
+  setPageContents $ htmlPage (msg_LinkText_NewUserScore "New Score") $
+    scoreContent $ PD_NewUserScore uname username uid assessmentDesc
 
 newScorePostHandler :: POSTContentHandler
 newScorePostHandler = do
@@ -74,9 +74,17 @@ newScorePostHandler = do
   ak <- getParameter $ assessmentKeyPrm
   evConfig <- evConfig <$> userStory (Story.loadAssessment ak)
   evaluation <- getEvaluation evConfig
-  return $ either id (SaveUserScore username ak) evaluation
+  let success ev = Action $ do
+        sk <- Story.saveUserScore username ak ev
+        return $ redirection $ Pages.modifyUserScore sk ()
 
-getEvaluation :: EvConfig -> ContentHandler (Either UserAction Evaluation)
+      failure message = Action $ do
+        Story.putErrorMessage message
+        return $ redirection $ Pages.newUserScore ak username ()
+
+  return $ either failure success evaluation
+
+getEvaluation :: EvConfig -> ContentHandler (Either (Translation String) Evaluation)
 getEvaluation evConfig = do
   commentOrResult <-
     evConfigCata
@@ -88,25 +96,29 @@ getEvaluation evConfig = do
         return . EvCmtResult $ freeFormResult freeForm)
     evConfig
   withEvalOrComment commentOrResult
-    (return . Left . ErrorMessage $ msg_Evaluation_EmptyCommentAndFreeFormResult "Comments are not supported yet.")
+    (return . Left $ msg_Evaluation_EmptyCommentAndFreeFormResult "Comments are not supported yet.")
     (\result -> return . Right $ Evaluation {
-        evaluationResult = result
-        , writtenEvaluation = ""       
+          evaluationResult = result
+        , writtenEvaluation = ""
         })
 
 modifyScorePage :: GETContentHandler
 modifyScorePage = do
   sk <- getParameter scoreKeyPrm
-  (user,username,assessmentDesc,score) <- userStory $ do
-     username <- Story.usernameOfScore sk
-     user <- Story.loadUser username
-     ak <- Story.assessmentOfScore sk
-     assessmentDesc <- Story.assessmentDesc ak
-     score <- Story.scoreInfo sk
-     return (user,username,assessmentDesc,score)
-  let uname = u_name user
-      uid = u_uid user
-  setPageContents . scoreContent $ PD_ModifyUserScore uname username uid assessmentDesc score sk
+  mScore <- userStory $ Story.scoreInfo sk
+  case mScore of
+    Nothing -> redirectTo $ Pages.modifyUserScore sk ()
+    Just score -> do
+      (user,username,assessmentDesc) <- userStory $ do
+        username <- Story.usernameOfScore sk
+        user <- Story.loadUser username
+        ak <- Story.assessmentOfScore sk
+        assessmentDesc <- Story.assessmentDesc ak
+        return (user,username,assessmentDesc)
+      let uname = u_name user
+          uid = u_uid user
+      setPageContents $ htmlPage (msg_LinkText_ModifyUserScore "Modify Score") $
+        scoreContent $ PD_ModifyUserScore uname username uid assessmentDesc score
 
 modifyScorePostHandler :: POSTContentHandler
 modifyScorePostHandler = do
@@ -115,7 +127,15 @@ modifyScorePostHandler = do
                            ak <- Story.assessmentOfScore sk
                            Story.loadAssessment ak)
   evaluation <- getEvaluation evConfig
-  return $ either id (ModifyUserScore sk) evaluation
+  let success ev = Action $ do
+        Story.modifyUserScore sk ev
+        return $ redirection $ Pages.modifyUserScore sk ()
+
+      failure message = Action $ do
+        Story.putErrorMessage message
+        return $ redirection $ Pages.modifyUserScore sk ()
+
+  return $ either failure success evaluation
 
 scoreContent :: PageData -> IHtml
 scoreContent pd = do
@@ -150,22 +170,21 @@ scoreContent pd = do
 
       handler = pageDataAlgebra
                   (\_student uname _uid aDesc -> Pages.newUserScore (adAssessmentKey aDesc) uname ())
-                  (\_student _uname _uid _aDesc _score sk -> Pages.modifyUserScore sk ())
+                  (\_student _uname _uid _aDesc score -> Pages.modifyUserScore (scoreKeyOfInfo score) ())
                   pd
 
       view :: I18N -> Html
       view msg = pageDataAlgebra
                  (\_student _uname _uid _aDesc -> mempty)
-                 (\_student _uname _uid _aDesc score _sk -> Bootstrap.rowColMd12 . H.p . fromString $ (scoreInfoToText "error" msg) score)
+                 (\_student _uname _uid _aDesc score -> Bootstrap.rowColMd12 . H.p . H.toMarkup $ formatEvResult toPlainText msg (evaluationOfInfo score))
                  pd
 
       evaluationInput :: I18N -> Html
       evaluationInput msg = pageDataAlgebra
                         (\_student _uname _uid _aDesc -> evaluationFrame (evConfig as) msg mempty)
-                        (\_student _uname _uid _aDesc score _sk ->
-                             scoreInfoAlgebra
-                             (evaluationFrame (evConfig as) msg mempty)
-                             (\_ evResult -> evaluationFrameWithDefault msg (evConfig as) evResult mempty)
+                        (\_student _uname _uid _aDesc score ->
+                             scoreInfoCata
+                             (\_ _ evResult -> evaluationFrameWithDefault msg (evConfig as) evResult mempty)
                              score)
                         pd
 
@@ -173,7 +192,8 @@ viewScorePage :: GETContentHandler
 viewScorePage = do
   sk <- getParameter scoreKeyPrm
   sDesc <- userStory $ Story.scoreDesc sk
-  setPageContents $ viewScoreContent sDesc
+  setPageContents $ htmlPage (msg_LinkText_ViewUserScore "Score") $
+    viewScoreContent sDesc
 
 viewScoreContent :: ScoreDesc -> IHtml
 viewScoreContent sd = do
@@ -184,7 +204,7 @@ viewScoreContent sd = do
       (msg . msg_ViewUserScore_Assessment $ "Assessment:") .|. aTitle
       when (not . null $ aDesc) $
         (msg . msg_ViewUserScore_Description $ "Description:") .|. aDesc
-    Bootstrap.rowColMd12 . H.p . H.toMarkup . (scoreInfoToText "error" msg) $ scdScore sd
+    Bootstrap.rowColMd12 . H.p . H.toMarkup . (formatEvResultMaybe toPlainText msg) . fmap evaluationOfInfo . scdScoreInfo $ sd
   where 
     aTitle, aDesc :: String
     (aTitle, aDesc) = assessment (\title desc _creation _cfg _visible -> (title,desc)) (scdAssessment sd)

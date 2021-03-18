@@ -29,9 +29,11 @@ import qualified Bead.Controller.UserStories as Story
 #ifdef SSO
 import           Bead.Daemon.LDAP.Result
 #endif
+import           Bead.Domain.Entities (u_role)
+import           Bead.Domain.Relationships (HomePageContents)
+import qualified Bead.Domain.Relationships as R
 import           Bead.View.BeadContext
 import           Bead.View.Common
-import           Bead.View.RouteOf (homePath)
 import           Bead.View.Content hiding (BlazeTemplate, template)
 import qualified Bead.View.Content.Public.Index as I
 import           Bead.View.ContentHandler
@@ -39,7 +41,7 @@ import           Bead.View.ErrorPage
 
 -- * Login handler
 
-loginSubmit :: ContentHandler (PageContents IHtml)
+loginSubmit :: ContentHandler PageContents
 loginSubmit = do
   cfg <- beadHandler getConfiguration
   principal <- getParameter principalPrm
@@ -78,23 +80,23 @@ loginSubmit = do
       logMessage INFO $ join ["[Login] Login with principal ", principal, " failed. Code: ", show (fromIntegral code :: Int), ", reason: ", B.unpack errorMessage]
 
     -- Falls back to local credentials
-    ldapError :: Username -> String -> ContentHandler (PageContents IHtml)
+    ldapError :: Username -> String -> ContentHandler PageContents
     ldapError username msg = do
       beadHandler $ logMessage ERROR $ join ["[LDAP] Query failed, falling back to normal login for ", usernameCata id username, ", reason: ", msg]
       beadLogin username
 
-    ldapInvalidUser :: Username -> ContentHandler (PageContents IHtml)
+    ldapInvalidUser :: Username -> ContentHandler PageContents
     ldapInvalidUser username = beadHandler $ do
       logMessage ERROR $ join ["[LDAP] Invalid user: ", usernameCata id username]
       Right <$> I.index (Just IncorrectUserOrPassword)
 
     -- Logs error and authenticates with the fallback
-    ldapAttrMapError :: Username -> ContentHandler (PageContents IHtml)
+    ldapAttrMapError :: Username -> ContentHandler PageContents
     ldapAttrMapError username = do
       beadHandler $ logMessage ERROR $ join ["[LDAP] Attributes cannot be mapped, falling back to normal login for ", usernameCata id username]
       beadLogin username
 
-    ldapUser :: Username -> (Uid, Email, String) -> ContentHandler (PageContents IHtml)
+    ldapUser :: Username -> (Uid, Email, String) -> ContentHandler PageContents
     ldapUser ldapUsername (uid,email,name) = do
       -- Check if the user exist
       let username = ldapUsername
@@ -115,13 +117,13 @@ loginSubmit = do
       beadLogin username
 
     -- Tries to log in the user
-    beadLogin :: Username -> ContentHandler (PageContents IHtml)
+    beadLogin :: Username -> ContentHandler PageContents
     beadLogin username = do
       -- Force login on the user
-        userStory $ Story.login username
+        user <- userStory $ Story.login username
         beadHandler $
           logMessage INFO $ show username ++ " successfully logged in"
-        redirectTo $ P.home ()
+        redirectTo $ P.homePageToPageDesc (defaultHomePage $ u_role user)
 
     -- Creates user in persistent with the default time zone and language
     -- from the session

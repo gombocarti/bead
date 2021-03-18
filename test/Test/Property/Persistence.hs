@@ -173,6 +173,10 @@ evaluationConfigForSubmission sk = do
   ak <- runPersistCmd $ assignmentOfSubmission sk
   Assignment.evType <$> (runPersistCmd $ loadAssignment ak)
 
+evaluationConfigForAssessement ak = runPersistCmd $ do
+  a <- loadAssessment ak
+  return $ evaluationCfg a
+
 evaluationGroupSaveAndLoad = do
   (ak, u, sk) <- saveAndLoadSubmission
   cfg <- evaluationConfigForSubmission sk
@@ -275,27 +279,32 @@ groupAssessmentGen n gs = do
   list <- createListRef
   quick n $ do
     gk <- pick $ elements gs
+    a <- pick Gen.assessments
     ak <- saveAndLoadIdenpotent "Group assessment"
-      (saveGroupAssessment gk) (loadAssessment) Gen.assessments
-    run $ insertListRef list ak
+      (saveGroupAssessment gk) (loadAssessment) (return a)
+    run $ insertListRef list (ak, a)
   listInRef list
 
 courseAssessmentGen n cs = do
   list <- createListRef
   quick n $ do
     ck <- pick $ elements cs
+    a <- pick Gen.assessments
     ak <- saveAndLoadIdenpotent "Course assessment"
-      (saveCourseAssessment ck) (loadAssessment) Gen.assessments
-    run $ insertListRef list ak
+      (saveCourseAssessment ck) (loadAssessment) (return a)
+    run $ insertListRef list (ak, a)
   listInRef list
 
 -- Generate and store the given number of users, and returns the usernames found in the
 -- persistence layer
 users :: Int -> IO [Username]
-users n = do
+users n = users' Gen.roleGen n
+
+users' :: Gen Role -> Int -> IO [Username]
+users' genRole n = do
   list <- createListRef
   quick n $ do
-    u <- pick Gen.users
+    u <- pick (genRole >>= Gen.users')
     u' <- createOrLoadUser u
     run $ insertListRef list (u_username u)
   listInRef list
@@ -523,6 +532,23 @@ groupsTests = test $ testCase "Groups tests" $ do
   assertSetEquals cgs cgs' "A group is missing or there is a course-groupkey-group mismatch."
   assertEquals (length cgs) (length cgs') "A group is missing or a group is listed multiple times."
 
+loadGroupAndCourseTests :: TestSet ()
+loadGroupAndCourseTests = test $ testCase "Load group and course tests" $ do
+  reinitPersistence
+  cs <- courses 20
+  cgs <- fmap concat $ forM cs $ \ck -> do
+    gks <- groups 20 [ck]
+    gs <- runPersistIOCmd $ mapM Persist.loadGroup gks
+    c <- runPersistIOCmd $ Persist.loadCourse ck
+    return [(ck, c, gk, g) | (gk, g) <- zip gks gs]
+  quick 100 $ do
+    (ck, c, gk, g) <- pick $ elements cgs
+    (ck', c', gk', g') <- runPersistCmd $ loadGroupAndCourse gk
+    assertEquals ck ck' "Course keys do not match."
+    assertEquals c c' "Courses do not match."
+    assertEquals gk gk' "Group keys do not match."
+    assertEquals g g' "Groups do not match."
+
 courseAdminsTests :: TestSet ()
 courseAdminsTests = test $ testCase "Course admin [key] tests" $ do
   reinitPersistence
@@ -612,13 +638,60 @@ groupAdminsTests = test $ testCase "Group admin [key] tests" $ do
         assertTrue (length ak'' - length ak <= 1) "A group admin is listed multiple times second time."
         assertTrue (length a'' - length a <= 1) "A group admin is listed multiple times second time."
 
+allAdminsTests :: TestSet ()
+allAdminsTests = test $ testCase "All administrator tests" $ do
+  reinitPersistence
+  cs <- courses 20
+  gs <- groups 200 cs
+  us <- users' (elements [Student, Admin]) 200
+  admins <- runPersistIOCmd allAdministrators
+  assertEmpty admins "Admins' list is not empty initially."
+  users <- runPersistIOCmd $ mapM loadUser us
+  runPropertyM $ testAllAdmins 100 [] users
+    where
+      testAllAdmins :: Int -> [User] -> [User] -> PropertyM IO ()
+      testAllAdmins 0 _ _ = return ()
+      testAllAdmins n admins regulars = do
+        let actions = [("regularToAdmin", regularToAdmin), ("adminToAdmin", adminToAdmin), ("adminToRegular", adminToRegular)]        
+        (i, a) <- pick $ elements $ zip [0..] (map fst actions)
+        (admins', regulars') <- (snd $ actions !! i) admins regulars
+        actualAdmins <- runPersistCmd allAdministrators
+        assertEquals (sortOn u_uid admins') (sortOn u_uid actualAdmins) ("allAdministrators didn't reflect change among administrators made by " ++ a)
+        testAllAdmins (n - 1) admins' regulars'
+
+      regularToAdmin :: [User] -> [User] -> PropertyM IO ([User], [User])
+      regularToAdmin admins regulars = do
+        u <- pick $ elements regulars
+        role <- pick Gen.teacherRoleGen
+        let u' = u { u_role = role }
+        runPersistCmd $ updateUser u'
+        return ((u' : admins), (filter (\u'' -> u_uid u'' /= u_uid u) regulars))
+
+      adminToAdmin :: [User] -> [User] -> PropertyM IO ([User], [User])
+      adminToAdmin [] regulars = return ([], regulars)
+      adminToAdmin admins regulars = do
+        u <- pick $ elements admins
+        role <- pick Gen.teacherRoleGen
+        let u' = u { u_role = role }
+        runPersistCmd $ updateUser u'
+        return (admins, regulars)
+
+      adminToRegular :: [User] -> [User] -> PropertyM IO ([User], [User])
+      adminToRegular [] regulars = return ([], regulars)
+      adminToRegular admins regulars = do
+        u <- pick $ elements admins
+        role <- pick Gen.nonTeacherRoleGen
+        let u' = u { u_role = role }
+        runPersistCmd $ updateUser u'
+        return ((filter (\u'' -> u_uid u'' /= u_uid u) admins), (u' : regulars))
+
 courseAndGroupAssignments :: Int -> Int -> [CourseKey] -> [GroupKey] -> IO [AssignmentKey]
 courseAndGroupAssignments cn gn cs gs = do
   cas <- courseAssignmentGen cn cs
   gas <- groupAssignmentGen gn gs
   return (cas ++ gas)
 
-courseAndGroupAssessments :: Int -> Int -> [CourseKey] -> [GroupKey] -> IO [AssessmentKey]
+courseAndGroupAssessments :: Int -> Int -> [CourseKey] -> [GroupKey] -> IO [(AssessmentKey, Assessment)]
 courseAndGroupAssessments cn gn cs gs = do
   cas <- courseAssessmentGen cn cs
   gas <- groupAssessmentGen gn gs
@@ -639,26 +712,21 @@ userAssignmentKeyTest = test $ testCase "User assignment tests" $ do
     u <- pick $ elements us
     gk <- pick $ elements gs
     ck <- runPersistCmd $ courseOfGroup gk
-    grp <- runPersistCmd $ loadGroup gk
-    crs <- runPersistCmd $ loadCourse ck
     runPersistCmd $ subscribe u gk
     gas <- runPersistCmd $ groupAssignments gk
     cas <- runPersistCmd $ courseAssignments ck
     let uas = gas ++ cas
-    groups <- runPersistCmd $ userAssignmentsAssessments u
-    case find (\(g, c, _, _) -> g == grp && c == crs) groups of
-      Nothing -> fail "User is subscribed to a group and she does not see it."
-      Just (g, c, as, _assessments) -> do
-        assertTrue
-          (HashSet.fromList uas == HashSet.fromList [ ak | (ak, _, _, _) <- as])
-          (unlines [
-              "User assignment for a given course and group does not match the expected. User:", show u
-            , " Group and course assignments: ", show uas, " User assignments:", show as
-            , " Group: ", show gk
-            , " Course: ", show ck
-            , " Group assignments: ", show gas
-            , " Course assignments: ", show cas
-            ])
+    (asgs, _assessments) <- runPersistCmd $ userAssignmentsAssessments u gk
+    assertTrue
+      (HashSet.fromList uas == HashSet.fromList [ ak | (ak, _, _, _) <- asgs ])
+      (unlines [
+          "User assignment for a given course and group does not match the expected. User:", show u
+        , " Group and course assignments: ", show uas, " User assignments:", show as
+        , " Group: ", show gk
+        , " Course: ", show ck
+        , " Group assignments: ", show gas
+        , " Course assignments: ", show cas
+        ])
 
 -- User can register course and groups and these groups and courses can have assessments.
 -- The user can subscribe to groups and courses, and it is necessary for him to
@@ -675,26 +743,20 @@ userAssessmentKeyTest = test $ testCase "User assessment tests" $ do
     u <- pick $ elements us
     gk <- pick $ elements gs
     ck <- runPersistCmd $ courseOfGroup gk
-    grp <- runPersistCmd $ loadGroup gk
-    crs <- runPersistCmd $ loadCourse ck
     runPersistCmd $ subscribe u gk
     gas <- runPersistCmd $ do
-      aks <- assessmentsOfGroup gk
-      assessments <- mapM loadAssessment aks
-      return [ ak | (ak, assessment) <- zip aks assessments, Assessment.visible assessment]
+      assessments <- assessmentsOfGroup gk
+      return [ ak | (ak, a) <- assessments, Assessment.visible a]
     let uas = gas
-    groups <- runPersistCmd $ userAssignmentsAssessments u
-    case find (\(g, c, _, _) -> g == grp && c == crs) groups of
-      Nothing -> fail "User is subscribed to a group and she does not see it."
-      Just (g, c, _as, assessments) -> do
-        assertSetEquals uas [ ak | (ak, _, _, _) <- assessments]
-          (unlines [
-              "User assessment for a given course and group does not match the expected. User:", show u
-            , " Group and course assessments: ", show uas, " User assessments:", show as
-            , " Group: ", show gk
-            , " Course: ", show ck
-            , " Group assessments (visible and hidden): ", show gas
-            ])
+    (_asgs, assessments) <- runPersistCmd $ userAssignmentsAssessments u gk
+    assertSetEquals uas [ ak | (ak, _, _) <- assessments ]
+      (unlines [
+          "User assessment for a given course and group does not match the expected. User:", show u
+        , " Group and course assessments: ", show uas, " User assessments:", show as
+        , " Group: ", show gk
+        , " Course: ", show ck
+        , " Group assessments visible: ", show gas
+        ])
 
 -- courseOrGroupOfAssignment returns the correct group or course
 courseOrGroupAssignmentTest = test $ testCase "Course or group assignment tests" $ do
@@ -863,10 +925,11 @@ submissionTablesTest = test $ testCase "Submission tables" $ do
     ags <- runPersistCmd $ administratedGroups  u
     ts  <- runPersistCmd $ submissionTables     u
     forM_ ts $ \t -> do
-      assertNonEmpty (stiCourse t) "Course name was empty"
 --      assertTrue (length (stAssignments t) >= 0) "Invalid assignment list" TODO
-      forM (stiUsers t) $ usernameCata (\u -> assertNonEmpty u "Username was empty")
-      assertTrue (length (stiUserLines t) >= 0) "Invalid user line number"
+      let asgNum = submissionTableInfoCata (\_ asgs _ _ _ -> length asgs) (\_ asgs _ _ _ -> length asgs) t
+      forM_ (stiUserLines t) $ \(_, submissions) ->
+        assertTrue (length submissions == asgNum) "Invalid user line number"
+      forM_ (stiUsers t) $ usernameCata (\u -> assertNonEmpty u "Username was empty")
 
 -- All the saved course must have a key and these
 -- course keys must be listed
@@ -1354,7 +1417,7 @@ unevaluatedScoresTests = test $ testCase "Unevaluated scores" $ do
   cs <- courses 100
   gs <- groups 200 cs
   as <- courseAndGroupAssessments 300 300 cs gs
-  scs <- scores 500 us as
+  scs <- scores 500 us (map fst as)
   quick 1000 $ do
     s <- pick $ elements scs
     -- All the saved scores should have an assessment
@@ -1379,7 +1442,7 @@ scoreEvaluationTests = test $ testCase "Evaluated scores" $ do
   cs <- courses 100
   gs <- groups 200 cs
   as <- courseAndGroupAssessments 300 300 cs gs
-  scs <- scores 500 us as
+  scs <- scores 500 us (map fst as)
   quick 1000 $ do
     s <- pick $ elements scs
     es <- runPersistCmd $ evaluationOfScore s
@@ -1392,14 +1455,15 @@ scoreEvaluationTests = test $ testCase "Evaluated scores" $ do
         e   <- pick $ Gen.evaluations cfg
         ek  <- runPersistCmd $ saveScoreEvaluation s e
         ek' <- runPersistCmd $ evaluationOfScore s
-        assertEquals (Just ek) ek' "The freshly evaluated score does not have the score key."
+        assertEquals (Just ek) (fst <$> ek') "The freshly evaluated score does not have the score key."
+        assertEquals (Just e) (snd <$> ek') "The freshly evaluated score does not have the right evaluation."
         s'  <- runPersistCmd $ scoreOfEvaluation ek
         assertEquals (Just s) s' "The score evaluation does not have the score."
         sbm <- runPersistCmd $ submissionOfEvaluation ek
         assertEquals Nothing sbm "The score evaluation has a submission key."
 
       -- All the evaluation of the score should have the score key
-      Just ek -> do
+      Just (ek, _) -> do
         s'  <- runPersistCmd $ scoreOfEvaluation ek
         assertEquals (Just s) s' "The score evaluation does not have the score."
         sbm <- runPersistCmd $ submissionOfEvaluation ek
@@ -1421,37 +1485,38 @@ assessmentTests = test $ testCase "Assessment tests" $ do
   gs <- groups 200 cs
   as <- courseAndGroupAssessments 300 300 cs gs
   quick 1000 $ do
-    a <- pick $ elements as
+    (ak, a) <- pick $ elements as
 
     -- All the assessemnt should have at least either a course or group
-    (c,g) <- groupOrCourseOf a
+    (c,g) <- groupOrCourseOf ak
 
     case (c,g) of
       (Nothing, Nothing) -> fail "There was no course or group of the assessment."
       (Just _, Just _)   -> fail "There were course and group of assessment."
 
-      -- The course of assessment should be appear in its course assessment list
+      -- The course of assessment should appear in its course assessment list
       (Just c, Nothing)  -> do
         as' <- runPersistCmd $ assessmentsOfCourse c
-        assertTrue (elem a as') "The course assessment was not registered in its course."
+        assertTrue (elem (ak, a) as') "The course assessment was not registered in its course."
 
-      -- The group of the assessment should be appear in its group assessment list
+      -- The group of the assessment should appear in its group assessment list
       (Nothing, Just g)  -> do
         as' <- runPersistCmd $ assessmentsOfGroup g
-        assertTrue (elem a as') "The group assessment was not registered in its group."
+        assertTrue (elem ak (map fst as')) "The group assessment was not registered in its group (key)."
+        assertTrue (elem (ak, a) as') "The group assessment was not registered in its group."
 
-    -- All the non scores assessment should be have empty score list
-    s <- runPersistCmd $ scoresOfAssessment a
-    assertEquals s [] "There were some scores for the assessemnt"
+    -- All the non scores assessment should have empty score list
+    s <- runPersistCmd $ scoresOfAssessment ak
+    assertEquals s [] "There were some scores for the assessement"
 
-    -- The modification of an assessment should be stored property
+    -- The modification of an assessment should be stored properly
     asm <- pick $ Gen.assessments
-    runPersistCmd $ modifyAssessment a asm
-    asm' <- runPersistCmd $ loadAssessment a
+    runPersistCmd $ modifyAssessment ak asm
+    asm' <- runPersistCmd $ loadAssessment ak
     assertEquals asm asm' "The modification of the assessment has failed."
 
     -- The modification of an assessment should not change its group or course
-    (c',g') <- groupOrCourseOf a
+    (c',g') <- groupOrCourseOf ak
     assertEquals (c,g) (c',g') "The course or group of the assessment has changed after modification."
 
 openSubmissionsTest = test $ testCase "Open submissions list" $ do
@@ -1482,10 +1547,8 @@ openSubmissionsTest = test $ testCase "Open submissions list" $ do
     -- is administrated by the admin. Check if the course is related to the
     -- admin via groups that the user administrates
     checkAdminedCourse a sks = runPersistCmd $ do
-      adminedCourses <- (map fst) <$> administratedCourses a
-      relatedCourses <- do
-        gs <- map fst <$> administratedGroups a
-        mapM courseOfGroup gs
+      adminedCourses <- map fst <$> administratedCourses a
+      relatedCourses <- map fst3 <$> administratedGroups a
       let courses = adminedCourses ++ relatedCourses
       forM_ sks $ \sk -> do
         u  <- usernameOfSubmission sk
@@ -1510,7 +1573,7 @@ openSubmissionsTest = test $ testCase "Open submissions list" $ do
     -- the admin administrates. Check if the submission is administrated by the admin
     -- checks if the submission is administrated by the admin.
     checkAdminedGroup  a sks = runPersistCmd $ do
-      adminedGroups <- (map fst) <$> administratedGroups a
+      adminedGroups <- concatMap (map fst . thd3) <$> administratedGroups a
       forM_ sks $ \sk -> do
         u <- usernameOfSubmission sk
         isInGroup <- or <$> mapM (isUserInGroup u) adminedGroups
@@ -1531,8 +1594,9 @@ openSubmissionsTest = test $ testCase "Open submissions list" $ do
             , " Submission ", show sk
             ]
     checkRelatedCourse a sks = runPersistCmd $ do
-      groups <- map fst <$> administratedGroups a
-      courses <- (++) <$> mapM courseOfGroup groups <*> (map fst <$> administratedCourses a)
+      groupsPerCourse <- administratedGroups a
+      let groups = concatMap (map fst . thd3) groupsPerCourse
+      courses <- (map fst3 groupsPerCourse ++) <$> (map fst <$> administratedCourses a)
       forM_ sks $ \sk -> do
         u <- usernameOfSubmission sk
         isNotInGroup <- (not . or) <$> mapM (isUserInGroup u) groups
@@ -1777,7 +1841,9 @@ complexTests = group "Persistence Layer Complex tests" $ do
   courseKeysTest
   courseAdminsTests
   groupAdminsTests
+  allAdminsTests
   groupsTests
+  loadGroupAndCourseTests
   userGroupsTest
   assignmentKeyTest
   filterSubmissionsTest
@@ -1882,16 +1948,17 @@ createTestData n = do
   print "Subscribing users to groups ..."
   quick (4 * noOfUsers) $ do
     gk <- pick $ elements gs
-    ck <- runPersistCmd $ courseOfGroup gk
     u  <- pick $ elements us
     runPersistCmd $ subscribe u gk
 
   as <- courseAndGroupAssignments (8 * noOfCourses) (8 * noOfGroups) cs gs
   let noOfSubmissions = 15000 * n
-  print "Creating subscriptions ..."
+  print "Creating submissions ..."
   quick noOfSubmissions $ do
     u <- pick $ elements us
-    aks <- runPersistCmd $ userAssignmentKeyList u
+    subscribed <- runPersistCmd $ userGroupKeys u
+    gk <- pick $ elements subscribed
+    aks <- runPersistCmd $ userAssignmentKeyList u gk
     when (not $ null aks) $ do
       ak <- pick $ elements aks
       s  <- pick $ Gen.submissions startDate
@@ -1901,7 +1968,9 @@ createTestData n = do
   print "Creating comments ..."
   quick (3 * noOfSubmissions) $ do
     u <- pick $ elements us
-    aks <- runPersistCmd $ userAssignmentKeyList u
+    subscribed <- runPersistCmd $ userGroupKeys u
+    gk <- pick $ elements subscribed
+    aks <- runPersistCmd $ userAssignmentKeyList u gk
     when (not $ null aks) $ do
       ak <- pick $ elements aks
       sks <- runPersistCmd $ userSubmissions u ak
@@ -1914,7 +1983,9 @@ createTestData n = do
   print "Creating evaluations ..."
   quick (4 * noOfSubmissions) $ do
     u <- pick $ elements us
-    aks <- runPersistCmd $ userAssignmentKeyList u
+    subscribed <- runPersistCmd $ userGroupKeys u
+    gk <- pick $ elements subscribed
+    aks <- runPersistCmd $ userAssignmentKeyList u gk
     when (not $ null aks) $ do
       ak <- pick $ elements aks
       sks <- runPersistCmd $ userSubmissions u ak
@@ -1926,8 +1997,8 @@ createTestData n = do
         return ()
 
   where
-    userAssignmentKeyList :: Username -> Persist [AssignmentKey]
-    userAssignmentKeyList u =
-      (\asgsOfGroups -> [ ak | (_, _, asgs, _) <- asgsOfGroups, (ak, _, _, _) <- asgs ]) <$>
-        userAssignmentsAssessments u
+    userAssignmentKeyList :: Username -> GroupKey -> Persist [AssignmentKey]
+    userAssignmentKeyList u gk =
+      (\(asgs, _) -> [ ak | (ak, _, _, _) <- asgs ]) <$>
+        userAssignmentsAssessments u gk
 

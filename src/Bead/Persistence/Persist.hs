@@ -56,6 +56,7 @@ module Bead.Persistence.Persist (
   -- Group
   , saveGroup
   , loadGroup
+  , loadGroupAndCourse
   , groups
   , courseOfGroup
   , filterGroups
@@ -64,6 +65,7 @@ module Bead.Persistence.Persist (
   , userGroups
   , subscribe
   , unsubscribe
+  , allAdministrators
   , groupAdminKeys
   , groupAdmins
   , createGroupAdmin
@@ -102,8 +104,8 @@ module Bead.Persistence.Persist (
   , loadAssignment
   , modifyAssignment
   , courseAssignments
-  , groupAssignments
   , courseAssignmentsOfGroup
+  , groupAssignments
   , saveCourseAssignment
   , saveGroupAssignment
   , courseOfAssignment
@@ -257,7 +259,7 @@ administratedCourses :: Username -> Persist [(CourseKey, Course)]
 administratedCourses = PersistImpl.administratedCourses
 
 -- Lists all the groups that are administrated by the user
-administratedGroups :: Username -> Persist [(GroupKey, Group)]
+administratedGroups :: Username -> Persist [(CourseKey, Course, [(GroupKey, Group)])]
 administratedGroups = PersistImpl.administratedGroups
 
 isAdminOfGroup :: Username -> GroupKey -> Persist Bool
@@ -357,7 +359,7 @@ testScriptsOfCourse :: CourseKey -> Persist [TestScriptKey]
 testScriptsOfCourse = PersistImpl.testScriptsOfCourse
 
 -- Lists all the assessment defined for the given course
-assessmentsOfCourse :: CourseKey -> Persist [AssessmentKey]
+assessmentsOfCourse :: CourseKey -> Persist [(AssessmentKey, Assessment)]
 assessmentsOfCourse = PersistImpl.assessmentsOfCourse
 
 -- * Group Persistence
@@ -369,6 +371,10 @@ saveGroup = PersistImpl.saveGroup
 -- Load the group from the database
 loadGroup :: GroupKey -> Persist Group
 loadGroup = PersistImpl.loadGroup
+
+-- Load the group and course from the database
+loadGroupAndCourse :: GroupKey -> Persist (CourseKey, Course, GroupKey, Group)
+loadGroupAndCourse = PersistImpl.loadGroupAndCourse
 
 -- Lists all groups from the database
 groups :: Persist [(Course, GroupKey, Group)]
@@ -402,6 +408,9 @@ subscribe = PersistImpl.subscribe
 unsubscribe :: Username -> GroupKey -> Persist ()
 unsubscribe = PersistImpl.unsubscribe
 
+allAdministrators :: Persist [User]
+allAdministrators = PersistImpl.allAdministrators
+
 groupAdminKeys :: GroupKey -> Persist [Username]
 groupAdminKeys = PersistImpl.groupAdminKeys
 
@@ -422,7 +431,7 @@ unsubscribedFromGroup :: GroupKey -> Persist [Username]
 unsubscribedFromGroup = PersistImpl.unsubscribedFromGroup
 
 -- Lists all assessments (visible or hidden) defined for the given group
-assessmentsOfGroup :: GroupKey -> Persist [AssessmentKey]
+assessmentsOfGroup :: GroupKey -> Persist [(AssessmentKey, Assessment)]
 assessmentsOfGroup = PersistImpl.assessmentsOfGroup
 
 -- * Test Scripts
@@ -736,6 +745,7 @@ scoresOfAssessment = PersistImpl.scoresOfAssessment
 
 -- * Score
 
+-- Save the evaluation for the given score entry
 saveScore :: Username -> AssessmentKey -> Score -> Persist ScoreKey
 saveScore = PersistImpl.saveScore
 
@@ -748,7 +758,7 @@ assessmentOfScore = PersistImpl.assessmentOfScore
 usernameOfScore :: ScoreKey -> Persist Username
 usernameOfScore = PersistImpl.usernameOfScore
 
-evaluationOfScore :: ScoreKey -> Persist (Maybe EvaluationKey)
+evaluationOfScore :: ScoreKey -> Persist (Maybe (EvaluationKey, Evaluation))
 evaluationOfScore = PersistImpl.evaluationOfScore
 
 scoreOfAssessmentAndUser :: Username -> AssessmentKey -> Persist [ScoreKey]

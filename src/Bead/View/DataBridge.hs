@@ -8,6 +8,7 @@ import Data.String (fromString)
 import Data.Time (LocalTime(..))
 import Text.Printf (printf)
 
+import Bead.Controller.Pages (CourseManagementContents)
 import Bead.Domain.Types (readMaybe)
 import Bead.Domain.Entities hiding (name)
 import Bead.Domain.Relationships
@@ -114,6 +115,16 @@ jsonCourseKeyPrm field = jsonParameter field "course key"
 -- Represents the CourseKey parameter
 courseKeyPrm :: Parameter CourseKey
 courseKeyPrm = customCourseKeyPrm (fieldName courseKeyInfo)
+
+-- Represents CourseManagementContents parameter
+courseManagementContentsPrm :: Parameter CourseManagementContents
+courseManagementContentsPrm = Parameter {
+    encode = show
+  , decode = readMaybe
+  , name = courseManagementContentsParamName
+  , decodeError = \m -> printf "%s could not be decoded: %s." (name courseManagementContentsPrm) m
+  , notFound = printf "%s could not be found." (name courseManagementContentsPrm)
+  }
 
 -- Represents the AssessmentKey parameter
 assessmentKeyPrm :: Parameter AssessmentKey

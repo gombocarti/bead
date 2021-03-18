@@ -14,6 +14,8 @@ module Bead.Controller.ServiceContext (
   , getLanguage
   , setTimeZone
   , getTimeZone
+  , getHomePage
+  , setHomePage
   , usernameInState
   , userNotLoggedIn
   , ServiceContext(..)
@@ -29,6 +31,7 @@ import           Data.UUID (UUID)
 import           Bead.Controller.Pages as Pages
 import           Bead.Controller.Logging
 import           Bead.Domain.Entities as Entities
+import           Bead.Domain.Relationships as R
 import           Bead.View.Translation
 import qualified Bead.Persistence.Persist as Persist
 
@@ -47,6 +50,7 @@ data UserState
     , uuid :: UUID     -- Token for the active user session
     , _timeZone :: TimeZoneName -- Timezone of the user
     , _status :: Maybe (StatusMessage (Translation String)) -- The last status message
+    , _homePage :: R.HomePageContents -- Last set default page to show when URL path is "/"
     } deriving Eq
 
 Lens.makeLenses ''UserState
@@ -60,7 +64,7 @@ userStateCata
     UserNotLoggedIn language -> userNotLoggedIn language
     Registration -> registration
     TestAgent -> testAgent
-    UserLoggedIn u ui n l r uuid tz s -> userLoggedIn u ui n l r uuid tz s
+    UserLoggedIn u ui n l r uuid tz s homePage -> userLoggedIn u ui n l r uuid tz s homePage
 
 userStateKindCata :: a -> a -> a -> a -> UserState -> a
 userStateKindCata
@@ -72,7 +76,7 @@ userStateKindCata
     UserNotLoggedIn _language -> userNotLoggedIn
     Registration -> registration
     TestAgent -> testAgent
-    UserLoggedIn _u _ui _n _l _r _uuid _tz _s -> userLoggedIn
+    UserLoggedIn _u _ui _n _l _r _uuid _tz _s _homePage -> userLoggedIn
 
 userNotLoggedIn :: Language -> UserState
 userNotLoggedIn = UserNotLoggedIn
@@ -83,7 +87,7 @@ userRole = userStateCata
              (const (Left EmptyRole)) -- UserNotLoggedIn
              (Left RegRole)           -- Registration
              (Left TestAgentRole)     -- TestAgent
-             (\_ _ _ _ role _ _ _ -> Right role) -- UserLoggedIn
+             (\_ _ _ _ role _ _ _ _ -> Right role) -- UserLoggedIn
 
 -- Produces a new user state from the old one, setting
 -- the status message to the given one
@@ -98,7 +102,7 @@ getStatus = userStateCata
               (const Nothing)  -- UserNotLoggedIn
               Nothing          -- Registration
               Nothing          -- TestAgent
-              (\_ _ _ _ _ _ _ s -> s) -- UserLoggedIn
+              (\_ _ _ _ _ _ _ s _ -> s) -- UserLoggedIn
 
 -- Produces a new status expect that the status message is cleared.
 clearStatus :: UserState -> UserState
@@ -116,6 +120,12 @@ getTimeZone st = st ^? timeZone
 setTimeZone :: TimeZoneName -> UserState -> UserState
 setTimeZone = Lens.set timeZone
 
+getHomePage :: UserState -> Maybe HomePageContents
+getHomePage st = st ^? homePage
+
+setHomePage :: HomePageContents -> UserState -> UserState
+setHomePage = Lens.set homePage
+
 -- | Returns a username stored in the user state, or a description
 --   string for the state
 usernameInState :: UserState -> Username
@@ -124,13 +134,13 @@ usernameInState =
     (const (Username "NotLoggedIn"))
     (Username "Registration")
     (Username "TestAgent")
-    (\user _ _ _ _ _ _ _ -> user)
+    (\user _ _ _ _ _ _ _ _ -> user)
 
 instance InRole UserState where
-  isAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> isAdmin role)
-  isCourseAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> Entities.isCourseAdmin role)
-  isGroupAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> isGroupAdmin role)
-  isStudent = userStateCata (const False) False False (\_ _ _ _ role _ _ _ -> isStudent role)
+  isAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ _ -> isAdmin role)
+  isCourseAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ _ -> Entities.isCourseAdmin role)
+  isGroupAdmin = userStateCata (const False) False False (\_ _ _ _ role _ _ _ _ -> isGroupAdmin role)
+  isStudent = userStateCata (const False) False False (\_ _ _ _ role _ _ _ _ -> isStudent role)
 
 uidInState :: UserState -> Uid
 uidInState =
@@ -138,7 +148,7 @@ uidInState =
     (const (Uid "NotLoggedIn"))
     (Uid "Registration")
     (Uid "TestAgent")
-    (\_ uid _ _ _ _ _ _ -> uid)
+    (\_ uid _ _ _ _ _ _ _ -> uid)
 
 fullNameInState :: UserState -> String
 fullNameInState =
@@ -146,7 +156,7 @@ fullNameInState =
     (const "Not logged in")
     "Registration"
     "Test Agent"
-    (\_ _ name _ _ _ _ _ -> name)
+    (\_ _ name _ _ _ _ _ _ -> name)
 
 data ServiceContext = ServiceContext {
     logger             :: Logger

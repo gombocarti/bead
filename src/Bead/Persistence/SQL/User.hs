@@ -4,11 +4,13 @@ module Bead.Persistence.SQL.User where
 
 import           Control.Applicative
 import           Data.ByteString (ByteString)
+import qualified Data.Function as Fun (on)
+import           Data.List (groupBy, sortBy)
 import           Data.Maybe
 import qualified Data.Text as Text
 
 import           Database.Persist.Sql
-import           Database.Esqueleto (select, exists, from, on, where_, limit, InnerJoin(InnerJoin), val, (^.), Value(unValue))
+import           Database.Esqueleto (select, exists, from, on, where_, orderBy, asc, limit, InnerJoin(InnerJoin), val, (^.), Value(unValue))
 import qualified Database.Esqueleto as Esq
 
 import qualified Bead.Domain.Entities as Domain
@@ -37,6 +39,20 @@ filterUsers :: (Domain.User -> Bool) -> Persist [Domain.User]
 filterUsers pred = do
   users <- selectList [] []
   return $! filter pred $ map (toDomainValue . entityVal) users
+
+allAdministrators :: Persist [Domain.User]
+allAdministrators = do
+  admins <- select $ from $ \u -> do
+    where_ (u ^. UserRole Esq.==. val "\"GroupAdmin\"" Esq.||. u ^. UserRole Esq.==. val "\"CourseAdmin\"")
+    return u
+  return $ sortBy (Domain.compareHun `Fun.on` Domain.u_name) $ map (toDomainValue . entityVal) admins
+
+  where
+    compareUser :: Domain.User -> Domain.User -> Ordering
+    compareUser u1 u2 = case compare (Domain.u_name u1) (Domain.u_name u2) of
+                          LT -> LT
+                          EQ -> compare (Domain.u_username u1) (Domain.u_username u2)
+                          GT -> GT
 
 -- Loads the user information for the given username, supposing that the user
 -- exists in the database
@@ -115,19 +131,22 @@ administratedCourses username =
       return $ fmap (\x -> (toDomainKey k,toDomainValue x)) mVal
 
 -- Lists all the groups that are administrated by the user
-administratedGroups :: Domain.Username -> Persist [(Domain.GroupKey, Domain.Group)]
-administratedGroups username =
-  withUser
-    username
-    (persistError "administratedGroup" $ "user is not found: " ++ show username)
-    (\userEnt -> do
-       gks <- map (adminsOfGroupGroup . entityVal) <$>
-                selectList [AdminsOfGroupAdmin ==. entityKey userEnt] []
-       catMaybes <$> mapM getWithKey gks)
-  where
-    getWithKey k = do
-      mVal <- get k
-      return $ fmap (\x -> (toDomainKey k,toDomainValue x)) mVal
+administratedGroups :: Domain.Username -> Persist [(Domain.CourseKey, Domain.Course, [(Domain.GroupKey, Domain.Group)])]
+administratedGroups username = do
+  groups <- select $ from $ \(u `InnerJoin` ag `InnerJoin` g `InnerJoin` gc `InnerJoin` c) -> do
+    on (u ^. UserId Esq.==. ag ^. AdminsOfGroupAdmin Esq.&&.
+        ag ^. AdminsOfGroupGroup Esq.==. g ^. GroupId Esq.&&.
+        g ^. GroupId Esq.==. gc ^. GroupsOfCourseGroup Esq.&&.
+        gc ^. GroupsOfCourseCourse Esq.==. c ^. CourseId)
+    where_ (u ^. UserUsername Esq.==. val (Domain.usernameCata Text.pack username))
+    orderBy [ asc (c ^. CourseId) ]
+    return (c, g)
+  return . extract . groupBy ((==) `Fun.on` (entityKey . fst)) $ groups
+
+      where
+        extract :: [[(Entity Course, Entity Group)]] -> [(Domain.CourseKey, Domain.Course, [(Domain.GroupKey, Domain.Group)])]
+        extract = map (\grps@((c,_):_) -> (toDomainKey (entityKey c), toDomainValue (entityVal c), [(toDomainKey (entityKey g), toDomainValue (entityVal g)) | (_, g) <- grps]))
+
 
 -- Returns True if the given user administrates the given group.
 isAdminOfGroup :: Domain.Username -> Domain.GroupKey -> Persist Bool

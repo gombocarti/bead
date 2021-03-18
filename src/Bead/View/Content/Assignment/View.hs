@@ -511,7 +511,7 @@ newAssignmentContent pd = do
                 Bootstrap.helpBlock $ fromString (printf (msg $ msg_NewAssignment_TestFile_Info
                   "A file passed to the tester (containing the test data) may be set here.  Files may be added on the \"%s\" subpage.")
                   (msg $ msg_LinkText_UploadFile "Upload File"))
-                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank uploadFile
+                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank Pages.uploadFileWithText
                 where
                   keyValue = (id &&& (usersFile id id))
 
@@ -534,7 +534,7 @@ newAssignmentContent pd = do
                 Bootstrap.helpBlock $ printf (msg $ msg_NewAssignment_TestFile_Info
                   "A file passed to the tester (containing the test data) may be set here.  Files may be added on the \"%s\" subpage.")
                   (msg $ msg_LinkText_UploadFile "Upload File")
-                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank uploadFile
+                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank Pages.uploadFileWithText
                 where
                   keyValue = (id &&& (usersFile id id))
 
@@ -576,7 +576,7 @@ newAssignmentContent pd = do
                 Bootstrap.helpBlock $ fromString $ printf (msg $ msg_NewAssignment_TestFile_Info
                   "A file passed to the tester (containing the test data) may be set here.  Files may be added on the \"%s\" subpage.")
                   (msg $ msg_LinkText_UploadFile "Upload File")
-                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank uploadFile
+                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank Pages.uploadFileWithText
                 where
                   keyValue l@(Left ()) = (l, msg $ msg_NewAssignment_DoNotOverwrite "No changes")
                   keyValue r@(Right uf) = (r, usersFile id id uf)
@@ -602,7 +602,7 @@ newAssignmentContent pd = do
                 Bootstrap.helpBlock $ printf (msg $ msg_NewAssignment_TestFile_Info
                   "A file passed to the tester (containing the test data) may be set here.  Files may be added on the \"%s\" subpage.")
                   (msg $ msg_LinkText_UploadFile "Upload File")
-                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank uploadFile
+                Bootstrap.buttonGroup $ i18n msg $ linkToPageBlank Pages.uploadFileWithText
                 where
                   keyValue l@(Left ()) = (l, msg $ msg_NewAssignment_DoNotOverwrite "No changes")
                   keyValue r@(Right uf) = (r, usersFile id id uf)

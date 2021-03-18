@@ -12,7 +12,7 @@ import           Data.String (fromString)
 
 import           Text.Blaze.Html5 hiding (map)
 
-import           Bead.Controller.UserStories (loadUser, doesUserExist)
+import           Bead.Controller.UserStories (loadUser, doesUserExist, updateUser)
 import qualified Bead.Controller.Pages as Pages
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
@@ -33,7 +33,7 @@ userDetailPage = do
       return (userDetailForm ts user languages)
 
     False -> return (userDoesNotExist username)
-  setPageContents page
+  setPageContents $ htmlPage (msg_LinkText_UserDetails "User Details") page
 
 userDataChange :: POSTContentHandler
 userDataChange = do
@@ -45,7 +45,9 @@ userDataChange = do
     <*> getParameter userTimeZonePrm
     <*> getParameter userLanguagePrm
     <*> getParameter uidPrm
-  return $ UpdateUser user
+  return $ Action $ do
+    updateUser user      
+    return $ redirection $ Pages.administration ()
 
 userDetailForm :: [TimeZoneName] -> User -> DictionaryInfos -> IHtml
 userDetailForm timeZones user dictionaries = do

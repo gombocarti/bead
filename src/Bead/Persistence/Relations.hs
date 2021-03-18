@@ -14,7 +14,6 @@ module Bead.Persistence.Relations (
   , courseAndGroupOfAssignment
   , courseOrGroupOfAssignment
   , courseOrGroupOfAssessment
-  , administratedGroupsWithCourseName
   , groupsOfUsersCourse
   , removeOpenedSubmission
   , deleteUserFromCourse -- Deletes a user from a course, searching the roup id for the unsubscription
@@ -24,7 +23,6 @@ module Bead.Persistence.Relations (
   , openedSubmissionInfo -- Calculates the opened submissions for the user from the administrated groups and courses
   , submissionLimitOfAssignment
   , scoreBoardOfGroup
-  , scoreBoards
   , scoreInfo
   , scoreInfoOfUser
   , scoreDesc
@@ -57,10 +55,10 @@ import qualified Data.HashSet as HashSet
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime, getCurrentTime)
-import           Data.Tuple.Utils (fst3, snd3)
+import           Data.Tuple.Utils (fst3, snd3, thd3)
 import           Data.Foldable (traverse_)
 
-import           Bead.Domain.Entities hiding (fullGroupName)
+import           Bead.Domain.Entities
 import qualified Bead.Domain.Entities as Domain
 import qualified Bead.Domain.Entity.Assignment as Assignment
 import qualified Bead.Domain.Entity.Assessment as Assessment
@@ -160,21 +158,6 @@ courseOrGroupOfAssignment ak = do
         Just ck -> return . Left $ ck
         Nothing -> error $ "Impossible: No course or groupkey was found for the assignment:" ++ show ak
 
-administratedGroupsWithCourseName :: Username -> Persist [(GroupKey, Group, String)]
-administratedGroupsWithCourseName u = do
-  gs <- administratedGroups u
-  forM gs $ \(gk,g) -> do
-    fn <- fullGroupName gk
-    return (gk,g,fn)
-
--- Produces a full name for a group including the name of the course.
-fullGroupName :: GroupKey -> Persist String
-fullGroupName gk = do
-  ck <- courseOfGroup gk
-  course <- loadCourse ck
-  group <- loadGroup gk
-  return $ Domain.fullGroupName course group
-
 submissionDesc :: SubmissionKey -> Persist SubmissionDesc
 submissionDesc sk = do
   submission <- loadSubmission sk
@@ -231,10 +214,13 @@ submissionDesc sk = do
 openedSubmissionInfo :: Username -> Persist OpenedSubmissions
 openedSubmissionInfo u = do
   acs <- map fst <$> administratedCourses u
-  ags <- map fst <$> administratedGroups  u
-  agcs <- (\\ acs) <$> mapM courseOfGroup ags
+  (ags, agcs) <- do
+    grps <- administratedGroups u
+    return ( concatMap (map fst . thd3) grps
+           , [ck | (ck, _course, _groupInCourse) <- grps, ck `notElem` acs]
+           )
   courseAsgs <- concat <$> mapM courseAssignments acs
-  groupAsgs <- concat <$> mapM groupAssignments  ags
+  groupAsgs <- concat <$> mapM groupAssignments ags
   let isCourseAsg = flip elem courseAsgs
   let isGroupAsg  = flip elem groupAsgs
   relatedCourseAsgs <- concat <$> mapM courseAssignments agcs
@@ -315,19 +301,19 @@ submissionDetailsDesc sk = do
   , sdFeedbacks  = fs
   }
 
--- | Checks if the assignment of the submission is adminstrated by the user
+-- | Checks if the assignment of the submission is administrated by the user
 isAdminedSubmission :: Username -> SubmissionKey -> Persist Bool
 isAdminedSubmission u sk = do
   -- Assignment of the submission
   ak <- assignmentOfSubmission sk
 
-  -- Assignment Course Key
-  ack <- either return (courseOfGroup) =<< (courseOrGroupOfAssignment ak)
+  -- Course Key of assignment
+  ack <- either return courseOfGroup =<< courseOrGroupOfAssignment ak
 
   -- All administrated courses
-  groupCourses <- mapM (courseOfGroup . fst) =<< (administratedGroups u)
+  groupCourses <- map fst3 <$> administratedGroups u
   courses <- map fst <$> administratedCourses u
-  let allCourses = nub (groupCourses ++ courses)
+  let allCourses = groupCourses ++ courses
 
   return $ elem ack allCourses
 
@@ -347,25 +333,22 @@ allAssignmentsOfGroup gk = do
   mapM (\ak -> (,) ak <$> loadAssignment ak) asgsByCreationTime
 
 -- Produces assignments, information about the submissions and
--- assessments which are associated with subscribed groups of the
--- user.
+-- assessments which are associated with a group for a user.
 --
--- Assignments are sorted as in allAssignmentsOfGroup.
+-- Assignments are sorted in descending order by their deadline (from future to past).
 --
 -- Assessments are sorted by creation time (from oldest to youngest).
-userAssignmentsAssessments :: Username -> Persist [(Group, Course, [(AssignmentKey, Assignment, Maybe (SubmissionKey, SubmissionState), SubmissionLimit)], [(AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo)])]
-userAssignmentsAssessments u = do
+userAssignmentsAssessments :: Username -> GroupKey -> Persist ([(AssignmentKey, Assignment, Maybe (SubmissionKey, SubmissionState), SubmissionLimit)], [(AssessmentKey, Assessment, Maybe ScoreInfo)])
+userAssignmentsAssessments u gk = do
   now <- liftIO getCurrentTime
-  groups <- userGroups u
-  forM groups $ \(ck, course, gk, grp) -> do
-    asgs <- sortOn (Down . Assignment.end . snd) . filter (isVisible now . snd) <$> allAssignmentsOfGroup gk
-    asgAndSubmission <- forM asgs $ \(ak, a) -> do
-      info <- userLastSubmission u ak
-      limit <- submissionLimitOfAssignment u ak
-      return (ak, a, submKeyAndState <$> info, limit)
-    assmnts <- assessmentsOfGroup gk
-    assmntDescs <- (sortAssessments . catMaybes) <$> mapM (createAssessmentDesc u) assmnts    
-    return (grp, course, asgAndSubmission, assmntDescs)
+  asgs <- sortOn (Down . Assignment.end . snd) . filter (isVisible now . snd) <$> allAssignmentsOfGroup gk
+  asgAndSubmission <- forM asgs $ \(ak, a) -> do
+    info <- userLastSubmission u ak
+    limit <- submissionLimitOfAssignment u ak
+    return (ak, a, submKeyAndState <$> info, limit)
+  assmnts <- assessmentsOfGroup gk
+  assmntDescs <- (sortAssessments . catMaybes) <$> mapM (createAssessmentDesc u) assmnts    
+  return (asgAndSubmission, assmntDescs)
   where
     -- Returns True if the assignment is visible to students, otherwise False.
     isVisible :: UTCTime -> Assignment -> Bool
@@ -373,25 +356,20 @@ userAssignmentsAssessments u = do
 
     -- Produces an assessment and information about the evaluations for the
     -- assessments.
-    createAssessmentDesc :: Username -> AssessmentKey -> Persist (Maybe (AssessmentKey, Assessment, Maybe ScoreKey, ScoreInfo))
-    createAssessmentDesc u ak = do
-      assessment <- loadAssessment ak
-      if Assessment.visible assessment
+    createAssessmentDesc :: Username -> (AssessmentKey, Assessment) -> Persist (Maybe (AssessmentKey, Assessment, Maybe ScoreInfo))
+    createAssessmentDesc u (ak, a) = do
+      if Assessment.visible a
         then do
           mScoreInfo <- scoreInfoOfUser u ak
-          case mScoreInfo of
-            Nothing         -> return $ Just (ak, assessment, Nothing, Score_Not_Found)
-            Just (sk,sInfo) -> return $ Just (ak, assessment, sk, sInfo)
+          return $ Just (ak, a, mScoreInfo)
         else return Nothing
 
-    sortAssessments :: [(a, Assessment, b, c)] -> [(a, Assessment, b, c)]
-    sortAssessments = sortOn (\(_, as, _, _) -> Assessment.created as)
+    sortAssessments :: [(a, Assessment, b)] -> [(a, Assessment, b)]
+    sortAssessments = sortOn (\(_, as, _) -> Assessment.created as)
 
--- Returns all the submissions of the users for the groups that the
--- user administrates
 submissionTables :: Username -> Persist [SubmissionTableInfo]
 submissionTables u = do
-  groupKeys <- map fst <$> administratedGroups u
+  groupKeys <- concatMap (map fst . thd3) <$> administratedGroups u
   groupTables  <- mapM (groupSubmissionTableInfo) groupKeys
   return groupTables
 
@@ -399,18 +377,16 @@ groupSubmissionTableInfo :: GroupKey -> Persist SubmissionTableInfo
 groupSubmissionTableInfo gk = do
   ck <- courseOfGroup gk
   gassignments <- groupAssignments gk
-  cassignments <- courseAssignmentsOfGroup gk
-  usernames <- subscribedToGroup gk
-  name <- fullGroupName gk
-  mkGroupSubmissionTableInfo name usernames cassignments gassignments ck gk
+  cassignments <- courseAssignments ck
+  usernames   <- subscribedToGroup gk
+  mkGroupSubmissionTableInfo usernames cassignments gassignments ck gk
 
 -- Returns the course submission table information for the given course key
 courseSubmissionTableInfo :: CourseKey -> Persist SubmissionTableInfo
 courseSubmissionTableInfo ck = do
   assignments <- courseAssignments ck
   usernames   <- subscribedToCourse ck
-  name        <- courseName <$> loadCourse ck
-  mkCourseSubmissionTableInfo name usernames assignments ck
+  mkCourseSubmissionTableInfo usernames assignments ck
 
 -- Sort the given keys into an ordered list based on some data
 sortKeysBy :: Ord a => (key -> Persist a) -> [key] -> Persist [key]
@@ -420,30 +396,20 @@ sortKeysBy f keys = map snd . sortOn fst <$> mapM attach keys
       a <- f key
       return (a, key)
 
-loadAssignmentInfos :: [AssignmentKey] -> Persist [(AssignmentKey, Assignment, HasTestCase)]
-loadAssignmentInfos as = mapM loadAssignmentInfo as
-  where
-    loadAssignmentInfo a = do
-       asg <- loadAssignment a
-       hasTestCase <- maybe DoesNotHaveTestCase (const HasTestCase) <$> testCaseOfAssignment a
-       return (a, asg, hasTestCase)
-
-lastSubmissionAsgKey :: Username -> AssignmentKey -> Persist (AssignmentKey, Maybe SubmissionInfo)
-lastSubmissionAsgKey u ak = addKey <$> (userLastSubmission u ak)
-  where
-    addKey s = (ak,s)
+hasTestCase :: AssignmentKey -> Persist HasTestCase
+hasTestCase ak = maybe DoesNotHaveTestCase (const HasTestCase) <$> testCaseOfAssignment ak
 
 mkCourseSubmissionTableInfo
-  :: String -> [Username] -> [AssignmentKey] -> CourseKey
+  :: [Username] -> [AssignmentKey] -> CourseKey
   -> Persist SubmissionTableInfo
-mkCourseSubmissionTableInfo courseName us as key = do
+mkCourseSubmissionTableInfo us as key = do
   assignments <- sortKeysBy assignmentCreatedTime as
-  assignmentInfos <- loadAssignmentInfos as
+  assignmentInfos <- forM assignments $ \ak -> (,,) ak <$> loadAssignment ak <*> hasTestCase ak
   users <- subscribedToCourse key
   ulines <- forM users $ \u -> do
     ud <- userDescription u
-    sInfos <- mapM (lastSubmissionAsgKey u) as
-    return (ud, Map.fromList . map (second submKeyAndState) . removeNotFound $ sInfos)
+    sInfos <- mapM (userLastSubmission u) assignments
+    return (ud, map (fmap submKeyAndState) sInfos)
   groups <- groupKeysOfCourse key
   groupOfUser <- fmap (Map.fromList . concat) $ forM groups $ \gkey -> do
     group_ <- loadGroup gkey
@@ -452,33 +418,29 @@ mkCourseSubmissionTableInfo courseName us as key = do
     return $ [(u, (group_, admins)) | u <- users]
 
   return CourseSubmissionTableInfo {
-      stiCourse = courseName
-    , stiUsers = us
+      stiUsers = us
     , stiAssignments = assignmentInfos
-    , stiUserLines = ulines
+    , stiUserLines = sortBy (compareHun `on` ud_fullname . fst) ulines
     , stiGroups = groupOfUser
     , stiCourseKey = key
     }
 
 mkGroupSubmissionTableInfo
-  :: String
-  -> [Username] -> [AssignmentKey] -> [AssignmentKey]
+  :: [Username] -> [AssignmentKey] -> [AssignmentKey]
   -> CourseKey -> GroupKey
   -> Persist SubmissionTableInfo
-mkGroupSubmissionTableInfo courseName us cas gas ckey gkey = do
-  cAssignmentInfos <- loadAssignmentInfos cas
-  gAssignmentInfos <- loadAssignmentInfos gas
+mkGroupSubmissionTableInfo us cas gas ckey gkey = do
+  cAssignmentInfos <- forM cas $ \ak -> (,,) ak <$> loadAssignment ak <*> hasTestCase ak
+  gAssignmentInfos <- forM gas $ \ak -> (,,) ak <$> loadAssignment ak <*> hasTestCase ak
   cgAssignments <- sortKeysBy createdTime (map CourseInfo cAssignmentInfos ++ map GroupInfo gAssignmentInfos)
   ulines <- forM us $ \u -> do
     ud <- userDescription u
-    casInfos <- mapM (lastSubmissionAsgKey u) cas
-    gasInfos <- mapM (lastSubmissionAsgKey u) gas
-    return (ud, Map.fromList . map (second submKeyAndState) . removeNotFound $ casInfos ++ gasInfos)
+    sInfos <- mapM (userLastSubmission u . cgInfoCata fst3 fst3) cgAssignments
+    return (ud, map (fmap submKeyAndState) sInfos)
   return GroupSubmissionTableInfo {
-      stiCourse = courseName
-    , stiUsers = us
+      stiUsers = us
     , stiCGAssignments = cgAssignments
-    , stiUserLines = ulines
+    , stiUserLines = sortBy (compareHun `on` ud_fullname . fst) ulines
     , stiCourseKey = ckey
     , stiGroupKey  = gkey
     }
@@ -487,9 +449,6 @@ mkGroupSubmissionTableInfo courseName us cas gas ckey gkey = do
     createdTime = cgInfoCata
       (assignmentCreatedTime . fst3)
       (assignmentCreatedTime . fst3)
-
-removeNotFound :: [(a, Maybe b)] -> [(a, b)]
-removeNotFound abs = [(a, b) | (a, Just b) <- abs]
 
 -- |Loads information on a 'Submission'.
 -- It loads a 'Submission' exactly once from the database, to get the time of upload.
@@ -501,22 +460,20 @@ submissionInfo sk = do
 
 -- Produces the score key, score info for the specific user and assessment.
 -- Returns Nothing if there are multiple scoreinfos available.
-scoreInfoOfUser :: Username -> AssessmentKey -> Persist (Maybe (Maybe ScoreKey, ScoreInfo))
+scoreInfoOfUser :: Username -> AssessmentKey -> Persist (Maybe ScoreInfo)
 scoreInfoOfUser u ak = do
   scoreKeys <- scoreOfAssessmentAndUser u ak
   case scoreKeys of
-    []   -> return . Just $ (Nothing, Score_Not_Found)
-    [sk] -> do info <- scoreInfo sk
-               return . Just $ (Just sk,info)
-    _    -> return Nothing
+    (sk : _) -> scoreInfo sk
+    _ -> return Nothing
 
 -- Produces information for the given score
-scoreInfo :: ScoreKey -> Persist ScoreInfo
+scoreInfo :: ScoreKey -> Persist (Maybe ScoreInfo)
 scoreInfo sk = do
-  mEk <- evaluationOfScore sk
-  case mEk of
-    Nothing -> return Score_Not_Found
-    Just ek -> Score_Result ek . evaluationResult <$> loadEvaluation ek
+  eval <- evaluationOfScore sk
+  case eval of
+    Nothing -> return Nothing
+    Just (ek, e) ->  return $ Just (ScoreInfo (sk, ek, evaluationResult e))
 
 -- Produces the info on the last submission for the given user and assignment
 userLastSubmission :: Username -> AssignmentKey -> Persist (Maybe SubmissionInfo)
@@ -552,15 +509,15 @@ testScriptInfo tk = do
 -- assignments for the given group, otherwise False
 isThereASubmissionForGroup :: Username -> GroupKey -> Persist Bool
 isThereASubmissionForGroup u gk = do
-  aks <- groupAssignments gk
-  (not . null . catMaybes) <$> mapM (flip (lastSubmission) u) aks
+  as <- groupAssignments gk
+  (not . null . catMaybes) <$> mapM (flip (lastSubmission) u) as
 
 -- Returns True if the given student submitted at least one solution for the
 -- assignments for the given group, otherwise False
 isThereASubmissionForCourse :: Username -> CourseKey -> Persist Bool
 isThereASubmissionForCourse u ck = do
-  aks <- courseAssignments ck
-  (not . null . catMaybes) <$> mapM (flip (lastSubmission) u) aks
+  as <- courseAssignments ck
+  (not . null . catMaybes) <$> mapM (flip lastSubmission u) as
 
 -- Returns the number of the possible submission for the given assignment
 -- by the given user.
@@ -568,44 +525,29 @@ submissionLimitOfAssignment :: Username -> AssignmentKey -> Persist SubmissionLi
 submissionLimitOfAssignment username key =
   calcSubLimit <$> (loadAssignment key) <*> (length <$> userSubmissions username key)
 
-scoreBoards :: Username -> Persist (Map (Either CourseKey GroupKey) ScoreBoard)
-scoreBoards u = do
-  groupKeys <- map (Right . fst) <$> administratedGroups u
-  courseKeys <- map (Left . fst) <$> administratedCourses u
-  let keys = courseKeys ++ groupKeys
-  Map.fromList . zip keys <$> mapM scoreBoard keys
-
 scoreBoardOfGroup :: GroupKey -> Persist ScoreBoard
 scoreBoardOfGroup = scoreBoard . Right
 
 scoreBoard :: Either CourseKey GroupKey -> Persist ScoreBoard
 scoreBoard key = do
-  assessmentKeys <- assessmentsOf
+  assessments <- assessmentsOf
   users <- subscriptions
-  board <- foldM boardColumn (Map.empty,Map.empty) assessmentKeys
-  assessments <- mapM loadAssessment assessmentKeys
   userDescriptions <- mapM userDescription users
-  name <- loadName
-  return $ mkScoreBoard board name (sortByCreationTime (zip assessmentKeys assessments)) userDescriptions
+  board <- mapM (boardLine (map fst assessments)) userDescriptions
+  return $ mkScoreBoard (sortByCreationTime assessments) board
   where
-        mkScoreBoard (scores,infos) n as us =
-          either (\k -> CourseScoreBoard scores infos k n as us)
-                 (\k -> GroupScoreBoard scores infos k n as us)
+        mkScoreBoard as us =
+          either (const $ CourseScoreBoard as us)
+                 (const $ GroupScoreBoard as us)
                  key
         assessmentsOf = either assessmentsOfCourse assessmentsOfGroup key
         subscriptions = either subscribedToCourse subscribedToGroup key
         loadName      = either (fmap courseName . loadCourse) (fmap groupName . loadGroup) key
-        boardColumn :: (Map (AssessmentKey,Username) ScoreKey,Map ScoreKey ScoreInfo)
-                    -> AssessmentKey
-                    -> Persist (Map (AssessmentKey,Username) ScoreKey,Map ScoreKey ScoreInfo)
-        boardColumn board assessment = do
-                       scoresKeys <- scoresOfAssessment assessment
-                       foldM (cell assessment) board scoresKeys
-
-        cell assessment (scores,infos) scoreKey = do
-                       user <- usernameOfScore scoreKey
-                       info <- scoreInfo scoreKey
-                       return (Map.insert (assessment,user) scoreKey scores,Map.insert scoreKey info infos)
+        boardLine :: [AssessmentKey] -> UserDesc
+                  -> Persist (UserDesc, [Maybe ScoreInfo])
+        boardLine assessments u = do
+          infos <- mapM (scoreInfoOfUser (ud_username u)) assessments
+          return (u, infos)
 
         sortByCreationTime :: [(AssessmentKey, Assessment)] -> [(AssessmentKey, Assessment)]
         sortByCreationTime = sortOn (Assessment.created . snd)
@@ -625,7 +567,7 @@ scoreDesc sk = do
         ck <- courseOfGroup gk
         course <- loadCourse ck
         return (course, Just group)
-  return $ ScoreDesc course group info as
+  return $ ScoreDesc course group sk info as
 
 assessmentDesc :: AssessmentKey -> Persist AssessmentDesc
 assessmentDesc ak = do

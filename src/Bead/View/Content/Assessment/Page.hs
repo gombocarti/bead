@@ -12,8 +12,8 @@ module Bead.View.Content.Assessment.Page (
 import           Bead.View.Content
 import           Bead.View.Content.Bootstrap ((.|.))
 import qualified Bead.View.Content.Bootstrap as Bootstrap
-import           Bead.View.Content.ScoreInfo (scoreInfoToIcon)
 import           Bead.View.RequestParams
+import           Bead.View.Content.StateVisualization (formatEvResultMaybe, toLargeIcon)
 import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
 import           Bead.Domain.Shared.Evaluation
@@ -25,6 +25,7 @@ import           Snap.Util.FileUploads
 import           System.Directory (doesFileExist)
 
 import           Data.Char (toUpper,isSpace)
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.UTF8 as BsUTF8 (toString)
 import           Data.Function (on)
@@ -35,7 +36,7 @@ import           Data.Time (getCurrentTime)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 import           Text.Blaze.Html5 ((!))
-import           Control.Monad (join,when)
+import           Control.Monad (join,when,void)
 import           Control.Monad.Trans (lift)
 import           Control.Monad.IO.Class (liftIO)
 
@@ -97,7 +98,8 @@ data UploadResult
 newGroupAssessmentPage :: GETContentHandler
 newGroupAssessmentPage = do
   gk <- getParameter $ customGroupKeyPrm groupKeyParamName
-  setPageContents $ fillAssessmentTemplate $ PD_NewGroupAssessment gk
+  setPageContents $ htmlPage (msg_LinkText_NewGroupAssessment "New Group Assessment") $
+    fillAssessmentTemplate $ PD_NewGroupAssessment gk
 
 postNewGroupAssessment :: POSTContentHandler
 postNewGroupAssessment = do 
@@ -110,23 +112,29 @@ postNewGroupAssessment = do
   now <- liftIO getCurrentTime
   let visible = True
       a = Assessment title description now evalConfig visible
+      redirectionTarget = Pages.groupOverview gk ()
   case uploadResult of
     [File _name contents] -> do
       users <- userStory $ do
         usernames <- Story.subscribedToGroup gk
         mapM Story.loadUserDesc usernames
       let evaluations = fromUserDescKey (toUserDescKey ud_uid users (parseEvaluations msg evalConfig (readCsv contents)))
-      return $ SaveScoresOfGroupAssessment gk a evaluations
+      return $ Action $ do
+        Story.saveScoresOfGroupAssessment gk a evaluations
+        return $ redirection redirectionTarget
     _ -> do
       evaluations <- read <$> getParameter evaluationsParam
-      return $ if M.null evaluations
-                 then CreateGroupAssessment gk a
-                 else SaveScoresOfGroupAssessment gk a evaluations
+      return $ Action $ do
+        if M.null evaluations
+          then void $ Story.createGroupAssessment gk a
+          else Story.saveScoresOfGroupAssessment gk a evaluations
+        return $ redirection redirectionTarget
 
 newCourseAssessmentPage :: GETContentHandler
 newCourseAssessmentPage = do
   ck <- getParameter $ customCourseKeyPrm courseKeyParamName
-  setPageContents $ fillAssessmentTemplate $ PD_NewCourseAssessment ck
+  setPageContents $ htmlPage (msg_LinkText_NewCourseAssessment "New Course Assessment") $
+    fillAssessmentTemplate $ PD_NewCourseAssessment ck
 
 postNewCourseAssessment :: POSTContentHandler
 postNewCourseAssessment = do 
@@ -139,18 +147,23 @@ postNewCourseAssessment = do
   now <- liftIO getCurrentTime
   let visible = True
       a = Assessment title description now evalConfig visible
+      redirectionTarget = Pages.courseManagement ck Pages.AssignmentsContents ()
   case uploadResult of
     [File _name contents] -> do
       users <- userStory $ do
         usernames <- Story.subscribedToCourse ck
         mapM Story.loadUserDesc usernames
       let evaluations = fromUserDescKey (toUserDescKey ud_uid users (parseEvaluations msg evalConfig (readCsv contents)))
-      return $ SaveScoresOfCourseAssessment ck a evaluations
+      return $ Action $ do
+        Story.saveScoresOfCourseAssessment ck a evaluations
+        return $ redirection redirectionTarget
     _ -> do
       evaluations <- read <$> getParameter evaluationsParam
-      return $ if M.null evaluations
-                 then CreateCourseAssessment ck a
-                 else SaveScoresOfCourseAssessment ck a evaluations
+      return $ Action $ do
+        if M.null evaluations
+          then void $ Story.createCourseAssessment ck a
+          else Story.saveScoresOfCourseAssessment ck a evaluations
+        return $ redirection redirectionTarget
 
 toUserDescKey :: Ord k => (UserDesc -> k) -> [UserDesc] -> M.Map k a -> M.Map UserDesc a
 toUserDescKey select users m = foldr f M.empty users
@@ -209,7 +222,8 @@ fillNewGroupAssessmentPreviewPage = do
     usernames <- Story.subscribedToGroup gk
     mapM Story.loadUserDesc usernames
   let evaluations = toUserDescKey ud_uid users (parseEvaluations msg evConfig (readCsv contents))
-  setPageContents $ fillAssessmentTemplate $ PD_PreviewGroupAssessment gk title description evConfig users evaluations
+  setPageContents $ htmlPage (msg_LinkText_GroupAssessmentPreview "New Group Assessment") $
+    fillAssessmentTemplate $ PD_PreviewGroupAssessment gk title description evConfig users evaluations
 
 uploadFile :: ContentHandler [UploadResult]
 uploadFile = do
@@ -234,7 +248,7 @@ uploadFile = do
                       return $ Just body
                     else return $ Nothing
                 return $ case contents of
-                  Just body -> File (unpack fp) body
+                  Just body -> File (B.unpack fp) body
                   _         -> InvalidFile
               _         -> return UnnamedFile
 
@@ -391,11 +405,7 @@ previewTable msg users evaluations = Bootstrap.table $ do
       tableRow user = H.tr $ do
         H.td $ fromString fullname
         H.td $ fromString user_uid
-        H.td $ case M.lookup user evaluations of
-                 Just evaluation -> let scoreInfo = evaluationCata (\result _comment -> (Score_Result (EvaluationKey "") result)) evaluation in
-                                    scoreInfoToIcon msg scoreInfo
-                 Nothing         -> scoreInfoToIcon msg Score_Not_Found
-
+        H.td $ formatEvResultMaybe toLargeIcon msg (evaluationResult <$> M.lookup user evaluations)
           where fullname = ud_fullname user
                 user_uid = uid id . ud_uid $ user
 
@@ -427,7 +437,8 @@ viewAssessmentPage :: GETContentHandler
 viewAssessmentPage = do
   ak <- getParameter assessmentKeyPrm
   aDesc <- userStory $ Story.assessmentDesc ak
-  setPageContents $ viewAssessmentContent aDesc
+  setPageContents $ htmlPage (msg_LinkText_ViewAssessment "View Assessment") $
+    viewAssessmentContent aDesc
 
 viewAssessmentContent :: AssessmentDesc -> IHtml
 viewAssessmentContent aDesc = do
@@ -464,7 +475,8 @@ modifyAssessmentPage = do
     scoreSubmitted <- Story.isThereAScore ak
     cGKey <- Story.courseOrGroupOfAssessment ak
     return (as,cGKey,scoreSubmitted)
-  setPageContents . fillAssessmentTemplate $ PD_ModifyAssessment ak as cGKey scoreSubmitted
+  setPageContents $ htmlPage (msg_LinkText_ModifyAssessment "Modify Assessment") $
+    fillAssessmentTemplate $ PD_ModifyAssessment ak as cGKey scoreSubmitted
 
 postModifyAssessment :: POSTContentHandler
 postModifyAssessment = do
@@ -475,6 +487,7 @@ postModifyAssessment = do
   newDesc <- getParameter descriptionParam
   selectedEvType <- getParameter evConfigParam
   now <- liftIO getCurrentTime
+  ckGk <- userStory $ Story.courseOrGroupOfAssessment ak
   let a = Assessment {
             title         = newTitle
           , description   = newDesc
@@ -482,6 +495,10 @@ postModifyAssessment = do
           , created       = now
           , visible       = True
           }
+      redirectionTarget = either
+        (\ck -> Pages.courseManagement ck Pages.AssignmentsContents ())
+        (\gk -> Pages.groupOverview gk ())
+        ckGk
   case uploadResult of
     [File _name contents] -> do
       users <- userStory $ do
@@ -489,12 +506,16 @@ postModifyAssessment = do
         usernames <- either Story.subscribedToCourse Story.subscribedToGroup cGKey
         mapM Story.loadUserDesc usernames
       let evaluations = fromUserDescKey (toUserDescKey ud_uid users (parseEvaluations msg selectedEvType (readCsv contents)))
-      return $ ModifyAssessmentAndScores ak a evaluations
+      return $ Action $ do
+        Story.modifyAssessmentAndScores ak a evaluations
+        return $ redirection redirectionTarget
     _ -> do
       evaluations <- read <$> getParameter evaluationsParam
-      return $ if M.null evaluations
-                 then ModifyAssessment ak a
-                 else ModifyAssessmentAndScores ak a evaluations
+      return $ Action $ do
+        if M.null evaluations
+          then Story.modifyAssessment ak a
+          else Story.modifyAssessmentAndScores ak a evaluations
+        return $ redirection redirectionTarget
   
 modifyAssessmentPreviewPage :: ViewPOSTContentHandler
 modifyAssessmentPreviewPage = do
@@ -511,5 +532,5 @@ modifyAssessmentPreviewPage = do
     return (as,cGKey,scoreSubmitted,users)
   let [File _name contents] = uploadResult
       evaluations = toUserDescKey ud_uid users (parseEvaluations msg selectedEvType (readCsv contents))
-  setPageContents . fillAssessmentTemplate $ PD_ModifyAssessmentPreview ak as cGKey scoreSubmitted users evaluations
-
+  setPageContents $ htmlPage (msg_LinkText_ModifyAssessmentPreview "Modify Assessment") $
+    fillAssessmentTemplate $ PD_ModifyAssessmentPreview ak as cGKey scoreSubmitted users evaluations

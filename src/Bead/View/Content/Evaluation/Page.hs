@@ -15,13 +15,14 @@ import           Data.Time (UTCTime, getCurrentTime)
 import           Data.Tuple.Utils (snd3, thd3)
 
 import qualified Bead.Controller.Pages as Pages
+import           Bead.Controller.UserStories (UserStory)
 import qualified Bead.Controller.UserStories as Story
 import           Bead.Domain.Entity.Assignment as Assignment
 import           Bead.Domain.Evaluation
 import           Bead.View.Content as C
 import           Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.Content.Comments
-import qualified Bead.View.Content.SubmissionState as St
+import qualified Bead.View.Content.StateVisualization as SV
 import           Bead.View.Content.VisualConstants
 
 import           Text.Blaze (toValue)
@@ -68,7 +69,8 @@ evaluationPage = do
     , submissions = subms
     , latestSubmission = listToMaybe subms
     }
-  setPageContents $ evaluationContent pageData
+  setPageContents $ htmlPage (msg_LinkText_Evaluation "Evaluation") $
+    evaluationContent pageData
 
 modifyEvaluationPage :: GETContentHandler
 modifyEvaluationPage = do
@@ -90,7 +92,8 @@ modifyEvaluationPage = do
   , submissions = subms
   , latestSubmission = listToMaybe subms
   }
-  setPageContents $ evaluationContent pageData
+  setPageContents $ htmlPage (msg_LinkText_ModifyEvaluation "Modify Evaluation") $
+    evaluationContent pageData
 
 evalConfigParam = evalConfigParameter (fieldName evaluationConfigField)
 freeFormEvaluationParam = stringParameter (fieldName evaluationFreeFormField) "Free format evaluation"
@@ -100,11 +103,12 @@ freeFormEvaluationParam = stringParameter (fieldName evaluationFreeFormField) "F
 -- The result of the computation is a UserActon which is a CreateComment or
 -- something that depends on the key end the evaluation itself.
 abstractEvaluationPostHandler
-  :: ContentHandler key
-  -> (key -> C.Evaluation -> UserAction)
+  :: SubmissionKey
+  -> (C.Evaluation -> UserStory ())
+  -> RedirectionTarget
+  -> RedirectionTarget
   -> POSTContentHandler
-abstractEvaluationPostHandler getEvKeyParameter evCommand = do
-  sk <- getParameter submissionKeyPrm
+abstractEvaluationPostHandler sk evCommand onSuccess onFailure = do
   commentText <- getParameter evaluationValuePrm
   config <- getParameter evalConfigParam
   commentOrResult <-
@@ -124,28 +128,34 @@ abstractEvaluationPostHandler getEvKeyParameter evCommand = do
       config
   withEvalOrComment commentOrResult
     (case null commentText of
-      True -> return $
-        ErrorMessage (msg_Evaluation_EmptyCommentAndFreeFormResult "Neither comment nor evaluation was given!")
+      True -> return $ Action $ do
+        Story.putErrorMessage (msg_Evaluation_EmptyCommentAndFreeFormResult "Neither comment nor evaluation was given!")
+        return $ redirection onFailure
       False -> do
         (mrole,mname) <- (getRole &&& getName) <$> userState
         let uname = fromMaybe "???" mname
         case mrole of
-          Nothing -> return $ LogMessage "The user is not logged in" -- Impossible
+          Nothing -> return $ Action $ do
+            Story.logErrorMessage "The user is not logged in" -- Impossible
+            return $ redirection $ Pages.index ()
           Just role -> do
             now <- liftIO $ getCurrentTime
-            return $ SubmissionComment sk Comment {
-               comment = commentText
-             , commentAuthor = uname
-             , commentDate = now
-             , commentType = roleToCommentType role
-             })
+            return $ Action $ do
+              Story.createComment sk Comment {
+                  comment = commentText
+                , commentAuthor = uname
+                , commentDate = now
+                , commentType = roleToCommentType role
+                }
+              return $ redirection onSuccess)
     (\result -> do
-      key <- getEvKeyParameter
       let e = C.Evaluation {
           evaluationResult = result
         , writtenEvaluation = commentText
         }
-      return $ evCommand key e)
+      return $ Action $ do
+        evCommand e
+        return $ redirection onSuccess)
   where
     roleToCommentType = roleCata
       CT_Student
@@ -157,20 +167,25 @@ abstractEvaluationPostHandler getEvKeyParameter evCommand = do
       (const Nothing)
       Nothing
       Nothing
-      (\_username _uid _page _name role _token _timezone _status -> Just role)
+      (\_username _uid _page _name role _token _timezone _status _homePage -> Just role)
 
     getName :: UserState -> Maybe String
     getName = userStateCata
       (const Nothing)
       Nothing
       Nothing
-      (\_username _uid name _lang _role _token _timezone _status -> Just name)
+      (\_username _uid name _lang _role _token _timezone _status _homePage -> Just name)
 
 evaluationPostHandler :: POSTContentHandler
-evaluationPostHandler = abstractEvaluationPostHandler (getParameter submissionKeyPrm) NewEvaluation
+evaluationPostHandler = do
+  sk <-getParameter submissionKeyPrm
+  abstractEvaluationPostHandler sk (Story.newEvaluation sk) (Pages.evaluationTable ()) (Pages.evaluation sk ())
 
 modifyEvaluationPost :: POSTContentHandler
-modifyEvaluationPost = abstractEvaluationPostHandler (getParameter evaluationKeyPrm) ModifyEvaluation
+modifyEvaluationPost = do
+  ek <- getParameter evaluationKeyPrm
+  sk <-getParameter submissionKeyPrm
+  abstractEvaluationPostHandler sk (Story.modifyEvaluation ek) (Pages.evaluationTable ()) (Pages.modifyEvaluation sk ek ())
 
 evaluationFrame :: EvConfig -> I18N -> Html -> Html
 evaluationFrame evConfig msg content = do
@@ -229,10 +244,10 @@ evaluationContent pd = do
         (msg $ msg_Evaluation_Student "Student: ") .|. (eStudent $ sd)
         (msg $ msg_Evaluation_Username "Username: ") .|. (uid Prelude.id $ eUid sd)
         (msg $ msg_Evaluation_SubmissionDate "Date of submission: ") .|. (showDate . tc . thd3 $ eSubmissionInfo sd)
-        let customIconStyle = St.toMediumIcon {
-                St.freeFormPlaceholder = Just $ \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
+        let customIconStyle = SV.toMediumIcon {
+                SV.freeFormPlaceholder = Just $ \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
               }
-          in (msg $ msg_Evaluation_SubmissionInfo "State: ") .|. (St.formatSubmissionState customIconStyle msg . snd3 . eSubmissionInfo $ sd)
+          in (msg $ msg_Evaluation_SubmissionInfo "State: ") .|. (SV.formatSubmissionState customIconStyle msg . snd3 . eSubmissionInfo $ sd)
 
     let (viewTheLatestSubmissionLink, dontEvaluateThisSubmissionLink) =
           maybe
@@ -257,10 +272,10 @@ evaluationContent pd = do
               (msg $ msg_Evaluation_Submitted_Solution_Download "Download")
 
           queueForTestButton =
-            let p = Pages.queueSubmissionForTest submissionKey ()
+            let p = Pages.queueSubmissionForTestWithText submissionKey
             in case hasAssignmentTestCase pd of
-                 HasTestCase         -> Bootstrap.buttonLink (routeOf p) (msg $ linkText p)
-                 DoesNotHaveTestCase -> Bootstrap.disabledButton (msg $ linkText p) (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
+                 HasTestCase         -> Bootstrap.buttonLink (routeOf p) (msg $ Pages.pageValue p)
+                 DoesNotHaveTestCase -> Bootstrap.disabledButton (msg $ Pages.pageValue p) (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
 
       h2 $ fromString $ msg $ msg_Evaluation_Submitted_Solution "Submission"
       Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> downloadSubmissionButton <> queueForTestButton
@@ -341,13 +356,13 @@ submissionList msg userTime submissions currentSubmission =
           Bootstrap.listGroupActiveLinkItem -- In Bootstrap 4, it should not be a link. It is now because 'active' supports only links.
            (evalRoute info)
            (do toMarkup (date info)
-               St.formatSubmissionState St.toBadge msg (submState info)
+               SV.formatSubmissionState SV.toBadge msg (submState info)
            )
       | otherwise =
           Bootstrap.listGroupLinkItem
             (evalRoute info)
             (do toMarkup (date info)
-                St.formatSubmissionState St.toColoredBadge msg (submState info)
+                SV.formatSubmissionState SV.toColoredBadge msg (submState info)
             )
 
     date :: SubmissionInfo -> String
