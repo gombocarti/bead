@@ -278,12 +278,14 @@ evaluationContent pd = do
                  DoesNotHaveTestCase -> Bootstrap.disabledButton (msg $ Pages.pageValue p) (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
 
       h2 $ fromString $ msg $ msg_Evaluation_Submitted_Solution "Submission"
-      Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> downloadSubmissionButton <> queueForTestButton
+      let alwaysVisibleButtons = downloadSubmissionButton <> queueForTestButton
       if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ sd)
-        then
+        then do
+          Bootstrap.buttonGroup alwaysVisibleButtons
           H.p $ fromString . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
             "The submission was uploaded as a compressed file so it could not be displayed verbatim."
-        else
+        else do
+          Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> alwaysVisibleButtons
           H.pre ! A.id (toValue submissionIdent) $ fromString $ eSolution sd
 
     Bootstrap.rowColMd12 $
