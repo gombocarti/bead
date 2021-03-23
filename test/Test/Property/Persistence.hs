@@ -18,6 +18,7 @@ module Test.Property.Persistence (
   , users
   ) where
 
+import Control.Arrow ((&&&))
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad
 import Control.Monad.IO.Class
@@ -639,7 +640,7 @@ groupAdminsTests = test $ testCase "Group admin [key] tests" $ do
         assertTrue (length a'' - length a <= 1) "A group admin is listed multiple times second time."
 
 allAdminsTests :: TestSet ()
-allAdminsTests = test $ testCase "All administrator tests" $ do
+allAdminsTests = test $ testCase "All administrators tests" $ do
   reinitPersistence
   cs <- courses 20
   gs <- groups 200 cs
@@ -652,11 +653,11 @@ allAdminsTests = test $ testCase "All administrator tests" $ do
       testAllAdmins :: Int -> [User] -> [User] -> PropertyM IO ()
       testAllAdmins 0 _ _ = return ()
       testAllAdmins n admins regulars = do
-        let actions = [("regularToAdmin", regularToAdmin), ("adminToAdmin", adminToAdmin), ("adminToRegular", adminToRegular)]        
+        let actions = ("regularToAdmin", regularToAdmin) : if null admins then [] else [("adminToAdmin", adminToAdmin), ("adminToRegular", adminToRegular)]        
         (i, a) <- pick $ elements $ zip [0..] (map fst actions)
         (admins', regulars') <- (snd $ actions !! i) admins regulars
         actualAdmins <- runPersistCmd allAdministrators
-        assertEquals (sortOn u_uid admins') (sortOn u_uid actualAdmins) ("allAdministrators didn't reflect change among administrators made by " ++ a)
+        assertEquals (sort $ map (u_uid &&& u_username) admins') (sort $ map (u_uid &&& u_username) actualAdmins) ("allAdministrators didn't reflect change among administrators made by " ++ a)
         testAllAdmins (n - 1) admins' regulars'
 
       regularToAdmin :: [User] -> [User] -> PropertyM IO ([User], [User])
@@ -1475,49 +1476,58 @@ scoreEvaluationTests = test $ testCase "Evaluated scores" $ do
       return $! evaluationCfg a
 
 assessmentTests = test $ testCase "Assessment tests" $ do
-  let groupOrCourseOf a = runPersistCmd $ do
-        c <- courseOfAssessment a
-        g <- groupOfAssessment a
-        return (c,g)
-
   reinitPersistence
   cs <- courses 100
   gs <- groups 200 cs
   as <- courseAndGroupAssessments 300 300 cs gs
-  quick 1000 $ do
-    (ak, a) <- pick $ elements as
+  runPropertyM $ foldM_ (\as' _ -> testAssessments as') as [1..1000]
 
-    -- All the assessemnt should have at least either a course or group
-    (c,g) <- groupOrCourseOf ak
+  where
+    groupOrCourseOf :: AssessmentKey -> PropertyM IO (Maybe CourseKey, Maybe GroupKey)
+    groupOrCourseOf a = runPersistCmd $ do
+      c <- courseOfAssessment a
+      g <- groupOfAssessment a
+      return (c,g)
 
-    case (c,g) of
-      (Nothing, Nothing) -> fail "There was no course or group of the assessment."
-      (Just _, Just _)   -> fail "There were course and group of assessment."
+    testAssessments :: [(AssessmentKey, Assessment)] -> PropertyM IO [(AssessmentKey, Assessment)]
+    testAssessments as = do
+      (ak, a) <- pick $ elements as
 
-      -- The course of assessment should appear in its course assessment list
-      (Just c, Nothing)  -> do
-        as' <- runPersistCmd $ assessmentsOfCourse c
-        assertTrue (elem (ak, a) as') "The course assessment was not registered in its course."
+      -- All the assessemnt should have either a course or group
+      (c,g) <- groupOrCourseOf ak
 
-      -- The group of the assessment should appear in its group assessment list
-      (Nothing, Just g)  -> do
-        as' <- runPersistCmd $ assessmentsOfGroup g
-        assertTrue (elem ak (map fst as')) "The group assessment was not registered in its group (key)."
-        assertTrue (elem (ak, a) as') "The group assessment was not registered in its group."
+      case (c,g) of
+        (Nothing, Nothing) -> fail "There was no course or group of the assessment."
+        (Just _, Just _)   -> fail "There were course and group of assessment."
 
-    -- All the non scores assessment should have empty score list
-    s <- runPersistCmd $ scoresOfAssessment ak
-    assertEquals s [] "There were some scores for the assessement"
+        -- The course of assessment should appear in its course assessment list
+        (Just c, Nothing)  -> do
+          cas <- runPersistCmd $ assessmentsOfCourse c
+          case lookup ak cas of
+            Nothing -> fail "The course assessment was not registered in its course."
+            Just a' -> assertEquals a' a "The course assessment was different."
+        -- The group of the assessment should appear in its group assessment list
+        (Nothing, Just g)  -> do
+          gas <- runPersistCmd $ assessmentsOfGroup g
+          case lookup ak gas of
+            Nothing -> fail "The group assessment was not registered in its group."
+            Just a' -> assertEquals a' a "The group assessment was different."
 
-    -- The modification of an assessment should be stored properly
-    asm <- pick $ Gen.assessments
-    runPersistCmd $ modifyAssessment ak asm
-    asm' <- runPersistCmd $ loadAssessment ak
-    assertEquals asm asm' "The modification of the assessment has failed."
+      -- All the non scores assessment should have empty score list
+      s <- runPersistCmd $ scoresOfAssessment ak
+      assertEquals s [] "There were some scores for the assessement"
 
-    -- The modification of an assessment should not change its group or course
-    (c',g') <- groupOrCourseOf ak
-    assertEquals (c,g) (c',g') "The course or group of the assessment has changed after modification."
+      -- The modification of an assessment should be stored properly
+      asm <- pick $ Gen.assessments
+      runPersistCmd $ modifyAssessment ak asm
+      asm' <- runPersistCmd $ loadAssessment ak
+      assertEquals asm asm' "The modification of the assessment has failed."
+
+      -- The modification of an assessment should not change its group or course
+      (c',g') <- groupOrCourseOf ak
+      assertEquals (c,g) (c',g') "The course or group of the assessment has changed after modification."
+
+      return $ (ak, asm) : filter (\(ak', _) -> ak' /= ak) as
 
 openSubmissionsTest = test $ testCase "Open submissions list" $ do
   reinitPersistence
