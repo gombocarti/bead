@@ -1188,18 +1188,13 @@ submitSolution ak s = logAction INFO ("submits solution for assignment " ++ show
   authorize P_Create P_Submission
   a <- loadAssignment ak
   checkActiveAssignment a
+  isUsersAssignment ak
   join $ withUserAndPersist $ \u -> do
     let user = u_username u
-    attended <- Persist.isUsersAssignment user ak
-    if attended
-      then do removeUserOpenedSubmissions user ak
-              sk <- Persist.saveSubmission ak user s
-              Persist.queueSubmissionForTest sk
-              return (return sk)
-      else return $ do
-             logMessage INFO . violation $
-               printf "The user tries to submit a solution for an assignment which not belongs to him: (%s)" (assignmentKeyMap id ak)
-             errorPage $ userError nonRelatedAssignment
+    removeUserOpenedSubmissions user ak
+    sk <- Persist.saveSubmission ak user s
+    Persist.queueSubmissionForTest sk
+    return (return sk)
   where
     -- TODO: Change the ABI to remove the unevaluated automatically
     removeUserOpenedSubmissions u ak = do
