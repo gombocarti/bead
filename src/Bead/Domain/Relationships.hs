@@ -439,11 +439,7 @@ data HomePageContents
   | GroupOverviewAsStudent GroupKey
   | CourseManagement CourseKey
   | Administration
-#ifdef TEST
   deriving (Eq, Show, Data)
-#else
-  deriving Data
-#endif
 
 homePageContentsCata :: a -> (GroupKey -> a) -> (GroupKey -> a) -> (GroupKey -> a) -> (CourseKey -> a) -> a -> HomePageContents -> a
 homePageContentsCata welcome studentView groupOverview groupOverviewAsStudent courseManagement administration homePage =
