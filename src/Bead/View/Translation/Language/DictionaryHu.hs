@@ -448,7 +448,6 @@ dictionaryHu = DF.DictionaryFile {
     , msg_ViewUserScore_Teacher <| "Oktató:"
     , msg_ViewUserScore_Assessment <| "Értékelés:"
     , msg_ViewUserScore_Description <| "Leírás:"
-    , msg_TestScripts_TestScripts <| "Tesztelők"
     , msg_TestScripts_NoTestScriptsWereDefined <| "Nincsenek tesztelők a tárgyhoz."
     , msg_NewTestScript_New <| "Új tesztelő létrehozása a tárgyhoz"
     , msg_NewTestScript_Modify <| "Tesztelő módosítása"

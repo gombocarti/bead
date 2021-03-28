@@ -38,7 +38,6 @@ testScriptsContents pd = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 $ do
-      H.h3 $ B.toMarkup $ msg $ Trans.msg_TestScripts_TestScripts "Test scripts"
       i18n msg $ linkButtonToPageBS (Pages.newTestScriptWithText (pdCourse pd))
       case (pdTestScripts pd) of
         []  -> H.p $ B.toMarkup $ msg $ Trans.msg_TestScripts_NoTestScriptsWereDefined "There are no testers for the course."

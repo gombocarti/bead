@@ -460,7 +460,6 @@ labels =
  , "msg_ViewUserScore_Assessment"
  , "msg_ViewUserScore_Description"
 
- , "msg_TestScripts_TestScripts"
  , "msg_TestScripts_NoTestScriptsWereDefined"
 
  , "msg_NewTestScript_New"
