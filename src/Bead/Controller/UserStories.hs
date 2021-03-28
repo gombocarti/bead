@@ -333,6 +333,11 @@ allCourseAdministrators = logAction INFO "lists courses and their admins" $ do
       admins <- Persist.courseAdmins ck
       return (c, admins))
 
+isAdministratorOfCourse :: CourseKey -> UserStory Bool
+isAdministratorOfCourse ck = logAction INFO ("checks whether she is an administrator of the course " ++ show ck) $ do
+  authorize P_Open P_Course
+  withUserAndPersist $ \u -> Persist.isAdministratedCourse (u_username u) ck
+
 allAdministrators :: UserStory [User]
 allAdministrators = logAction INFO "lists all admins" $ do
   authorize P_Open P_Group
@@ -370,10 +375,10 @@ saveTestScript ck ts = logAction INFO ("creates new test script for course: " ++
   authorize P_Create P_TestScript
   join $ withUserAndPersist $ \u -> do
     let user = u_username u
-    cs <- map fst <$> Persist.administratedCourses user
-    case ck `elem` cs of
-      False -> return . errorPage . userError $ msg_UserStoryError_NoCourseAdminOfCourse "The user is not course admin for the course."
-      True -> do
+    isAdmin <- Persist.isAdministratedCourse user ck
+    if not isAdmin
+      then return . errorPage . userError $ msg_UserStoryError_NoCourseAdminOfCourse "The user is not course admin for the course."
+      else do
         Persist.saveTestScript ck ts
         now <- liftIO getCurrentTime
         c   <- Persist.loadCourse ck
@@ -393,11 +398,11 @@ modifyTestScript tsk ts = logAction INFO ("modifies the existing test script: " 
   authorize P_Modify P_TestScript
   join $ withUserAndPersist $ \u -> do
     let user = u_username u
-    cs <- map fst <$> Persist.administratedCourses user
     ck <- Persist.courseOfTestScript tsk
-    case ck `elem` cs of
-      False -> return . errorPage . userError $ msg_UserStoryError_NoAssociatedTestScript "You are trying to modify someone else's test script."
-      True -> do
+    isAdmin <- Persist.isAdministratedCourse user ck
+    if not isAdmin
+      then return . errorPage . userError $ msg_UserStoryError_NoAssociatedTestScript "You are trying to modify someone else's test script."
+      else do
         Persist.modifyTestScript tsk ts
         now <- liftIO getCurrentTime
         c   <- Persist.loadCourse ck
@@ -469,6 +474,7 @@ testScriptInfosOfGroup gk = do
 testScriptInfosOfCourse :: CourseKey -> UserStory [(TestScriptKey, TestScriptInfo)]
 testScriptInfosOfCourse ck = do
   authorize P_Open P_TestScript
+  isAdministratedCourse ck
   persistence $ do
     tsks <- Persist.testScriptsOfCourse ck
     tss  <- mapM loadTestScriptWithKey tsks
@@ -1343,7 +1349,7 @@ openSubmissions = logAction INFO ("lists unevaluated submissions") $ do
 courseSubmissionTable :: CourseKey -> UserStory SubmissionTableInfo
 courseSubmissionTable ck = logAction INFO ("gets submission table for course " ++ show ck) $ do
   authPerms submissionTableInfoPermissions
-  isAdministratedCourse ck
+  isCourseOrGroupAdmin ck
   persistence $ Persist.courseSubmissionTableInfo ck
 
 groupSubmissionTable :: GroupKey -> UserStory SubmissionTableInfo

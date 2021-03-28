@@ -27,7 +27,11 @@ courseManagement :: ViewHandler
 courseManagement = ViewHandler $ do
   contentsParam <- getParameter courseManagementContentsPrm
   ck <- getParameter (customCourseKeyPrm courseKeyParamName)
+  userStory $ Story.isCourseOrGroupAdmin ck
   course <- fmap fst . userStory $ Story.loadCourse ck
+  role <- userStory $ do
+    isAdmin <- Story.isAdministratorOfCourse ck
+    return $ if isAdmin then CourseAdmin else GroupAdmin
   msg <- i18nE
   body <- Pages.courseManagementContentsCata
     courseAdminPage
@@ -38,7 +42,7 @@ courseManagement = ViewHandler $ do
     contentsParam
   setPageContents $ HtmlPage {
       pageTitle = return $ Bootstrap.pageHeader (courseName course) Nothing
-    , pageBody = fmap (navigationTabs msg contentsParam ck <>) body
+    , pageBody = fmap (navigationTabs msg role contentsParam ck <>) body
     }
 
 courseSubmissionsPage :: ContentHandler IHtml
@@ -52,14 +56,22 @@ courseSubmissionsPage = do
   setHomePage $ R.CourseManagement ck
   return $ courseSubmissionsContent now ck stc sti
 
-navigationTabs :: I18N -> Pages.CourseManagementContents -> CourseKey -> H.Html
-navigationTabs msg contents ck = Bootstrap.tab $ mconcat $ map (tabToHtml msg) tabs
+-- Shows accessible tabs. Shows any tabs only when at least 2 of them is accessible to the user.
+navigationTabs :: I18N -> Role -> Pages.CourseManagementContents -> CourseKey -> H.Html
+navigationTabs msg role contents ck =
+  case accessibleTabs of
+    _ : _ : _ -> Bootstrap.tab $ mconcat $ map (tabToHtml msg) accessibleTabs
+    _ -> mempty
   where
-    tabs :: [(Pages.CourseManagementContents, Translation String)]
-    tabs = [ (Pages.GroupManagementContents, msg_LinkText_GroupManagement "Group Management")
-           , (Pages.TestScriptsContents, msg_LinkText_TestScripts "Test Scripts")
-           , (Pages.AssignmentsContents, msg_LinkText_CourseOverview "Course Overview")
-           ]
+    accessibleTabs :: [(Pages.CourseManagementContents, Translation String)]
+    accessibleTabs = [ (c, trans) | (c, trans, accessLevel) <- tabs, role `elem` accessLevel ]
+      where
+        -- Tabs together with whom they are accessible to
+        tabs :: [(Pages.CourseManagementContents, Translation String, [Role])]
+        tabs = [ (Pages.GroupManagementContents, msg_LinkText_GroupManagement "Group Management", [CourseAdmin])
+               , (Pages.TestScriptsContents, msg_LinkText_TestScripts "Test Scripts", [CourseAdmin])
+               , (Pages.AssignmentsContents, msg_LinkText_CourseOverview "Course Overview", [GroupAdmin, CourseAdmin])
+               ]
 
     tabToHtml :: I18N -> (Pages.CourseManagementContents, Translation String) -> H.Html
     tabToHtml msg (tab, text) = toItem (routeOf page) (T.pack . msg $ text)

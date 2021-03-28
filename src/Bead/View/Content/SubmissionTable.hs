@@ -162,7 +162,7 @@ submissionTablePart tableId now ctx s = do
 
         assignmentLinks = submissionTableInfoCata course group s
 
-        course _users as ulines _grps _key =
+        course _users as ulines _grps ckey =
           mapM_ (\(i, info@(ak, a, hasTestCase)) ->
                    let exportAdminedGroups = Pages.exportSubmissionsOfGroupsWithText ak (stcUsername ctx)
                        exportAll = Pages.exportSubmissionsWithText ak
@@ -174,9 +174,15 @@ submissionTablePart tableId now ctx s = do
                                    HasTestCase -> Nothing
                                    DoesNotHaveTestCase -> Just (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
                        queueAllSubmissions = enableIf [hasTest, hasSolutions] (Pages.queueAllSubmissionsForTestWithText ak)
-                       dropdownItems =  queueAllSubmissions : Bootstrap.Separator : exportLinks
-                   in modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems)
+                       dropdownItems = queueAllSubmissions : Bootstrap.Separator : exportLinks
+                   in if courseIsAdmined
+                      then modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems
+                      else viewAssignmentLink msg courseButtonStyle (i, info) dropdownItems)
                 (zip [1..] as)
+
+          where
+            courseIsAdmined :: Bool
+            courseIsAdmined = isAdminedCourse ckey
 
         group _users cgas ulines ckey gkey = mapM_ header (zip [1..] cgas)
           where
@@ -197,11 +203,11 @@ submissionTablePart tableId now ctx s = do
                   (\_ -> -- course assignment
                      if courseIsAdmined
                      then let exportLinks = map (enableIf [hasSolutions]) [exportOneGroup, exportAdminedGroups, exportAll]
-                              dropdownItems =  queueAllSubmissions : Bootstrap.Separator : exportLinks
+                              dropdownItems = queueAllSubmissions : Bootstrap.Separator : exportLinks
                           in modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems
                      else let exportLinks = map (enableIf [hasSolutions]) [exportOneGroup, exportAdminedGroups]
                               dropdownItems = queueAllSubmissions : Bootstrap.Separator : exportLinks
-                          in viewAssignmentLink msg courseButtonStyle ckey (i, info) dropdownItems)
+                          in viewAssignmentLink msg courseButtonStyle (i, info) dropdownItems)
                   (\_ -> -- group assignment
                      let dropdownItems = [queueAllSubmissions, Bootstrap.Separator, enableIf [hasSolutions] exportAll]
                      in modifyAssignmentLink msg groupButtonStyle (i, info) dropdownItems)
@@ -235,8 +241,8 @@ submissionTablePart tableId now ctx s = do
                (show i)
                dropdownItems
 
-    viewAssignmentLink :: I18N -> (String, String) -> CourseKey -> (Int, (AssignmentKey, Assignment, HasTestCase)) -> [MenuItem] -> H.Html
-    viewAssignmentLink msg _buttonStyle@(active, passive) ck (i,(ak,a,_)) dropdownItems =
+    viewAssignmentLink :: I18N -> (String, String) -> (Int, (AssignmentKey, Assignment, HasTestCase)) -> [MenuItem] -> H.Html
+    viewAssignmentLink msg _buttonStyle@(active, passive) (i,(ak,a,_)) dropdownItems =
       H.td $ Bootstrap.customSplitButton
                [if (Assignment.isActive a now) then active else passive]
                (routeOf $ Pages.viewAssignment ak ())

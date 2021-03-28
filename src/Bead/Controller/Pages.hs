@@ -977,6 +977,9 @@ isGroupOverviewAsStudent _ = False
 isCourseManagement (View (CourseManagement _ _ _)) = True
 isCourseManagement _ = False
 
+isCourseManagement_Assignments (View (CourseManagement _ AssignmentsContents _)) = True
+isCourseManagement_Assignments _ = False
+
 isEvaluationTable (View (EvaluationTable _)) = True
 isEvaluationTable _ = False
 
@@ -1162,6 +1165,7 @@ regularPages = [
 groupAdminPages = [
     isGroupOverview
   , isGroupOverviewAsStudent
+  , isCourseManagement_Assignments
   , isEvaluationTable
   , isEvaluation
   , isModifyEvaluation

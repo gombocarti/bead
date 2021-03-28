@@ -48,6 +48,7 @@ modifyTestScript = ModifyHandler postModifyTestScript
 newTestScriptPage :: ContentHandler IHtml
 newTestScriptPage = do
   ck <- getParameter (customCourseKeyPrm courseKeyParamName)
+  userStory $ Story.isAdministratedCourse ck
   return $ pageContent (Create ck)
 
 postNewTestScript :: POSTContentHandler
@@ -59,7 +60,6 @@ postNewTestScript = do
     <*> (replaceCrlf <$> getParameter (stringParameter (fieldName testScriptScriptField) "Test Script"))
   ck <- getParameter (customCourseKeyPrm courseKeyParamName)
   script <- userStory $ do
-    Story.isAdministratedCourse ck
     (course, _groupkeys) <- Story.loadCourse ck
     return (script' $ courseTestScriptType course)
   return $ Action $ do

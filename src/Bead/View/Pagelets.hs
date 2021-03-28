@@ -111,8 +111,8 @@ bootstrapPage contents = do
             nav [i18n msg groupRegistration]
             when (not . null $ adminedGroups) $
               Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedGroups "Groups") $
-                forM_ adminedGroups $ \(_courseKey, course, groups) -> do
-                  H.p $ B.toMarkup $ shortCourseName course
+                forM_ adminedGroups $ \(courseKey, course, groups) -> do
+                  H.p $ courseAssignments courseKey course
                   nav $ map groupNavigationLink groups
             when (not . null $ adminedCourses) $
               Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedCourses "Courses") $
@@ -125,7 +125,6 @@ bootstrapPage contents = do
 
         groupRegistration :: IHtml
         groupRegistration = linkToPage P.groupRegistrationWithText
-          where plus = H.span ! A.class_ "glyphicon glyphicon-plus-sign" $ mempty
 
         studentView :: GroupKey -> Group -> Html
         studentView gk g = Bootstrap.link (routeOf $ P.studentView gk ()) (shortGroupName g)
@@ -135,6 +134,9 @@ bootstrapPage contents = do
 
         courseNavigationLink :: (CourseKey, Course) -> Html
         courseNavigationLink (ck, c) = Bootstrap.link (routeOf $ P.courseManagement ck P.GroupManagementContents ()) (shortCourseName c)
+
+        courseAssignments :: CourseKey -> Course -> Html
+        courseAssignments ck c = Bootstrap.link (routeOf $ P.courseManagement ck P.AssignmentsContents ()) (shortCourseName c)
 
         administration :: IHtml
         administration = linkToPage P.administrationWithText
