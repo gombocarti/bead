@@ -530,6 +530,8 @@ labels =
  , "msg_UserStoryError_NonAdministratedGroup"
  , "msg_UserStoryError_NotCourseOrGroupAdmin"
  , "msg_UserStoryError_NonAdministratedAssignment"
+ , "msg_UserStoryError_unAuthorizedCourseAssignmentModification"
+ , "msg_UserStoryError_unAuthorizedGroupAssignmentModification"
  , "msg_UserStoryError_NonAdministratedAssessment"
  , "msg_UserStoryError_NonRelatedAssignment"
  , "msg_UserStoryError_NonAdministratedSubmission"

@@ -1566,7 +1566,7 @@ assignmentOfSubmission sk = logAction INFO ("gets assignment of submission " ++ 
 modifyAssignment :: AssignmentKey -> Assignment -> TCModification -> UserStory ()
 modifyAssignment ak a tc = logAction INFO ("modifies assignment " ++ show ak) $ do
   authorize P_Modify P_Assignment
-  isAdministratedAssignment ak
+  authorizeAssignmentModification ak
   withUserAndPersist $ \u -> do
     let user = u_username u
     Persist.modifyAssignment ak a
@@ -1690,6 +1690,24 @@ isAdministratedAssignment = guard
   Persist.isAdministratedAssignment
   "The user tries to access an assignment (%s) which is not administrated by him."
   (userError nonAdministratedAssignment)
+
+authorizeAssignmentModification :: AssignmentKey -> UserStory ()
+authorizeAssignmentModification ak = do
+  ckGk <- courseOrGroupOfAssignment ak
+  either course group_ ckGk
+
+  where
+    course :: CourseKey -> UserStory ()
+    course = guard
+      Persist.isAdministratedCourse
+      ("The user tries to modify an assignment (" ++ show ak ++ ") of course %s which is not administrated by him.")
+      (userError unAuthorizedCourseAssignmentModification)
+
+    group_ :: GroupKey -> UserStory ()
+    group_ = guard
+      Persist.isAdminOfGroupOrCourse
+      ("The user tries to modify an assignment (" ++ show ak ++ ") of group %s which is not administrated by him.")
+      (userError unAuthorizedGroupAssignmentModification)
 
 -- Checks if the given assessment is administrated by the actual user and
 -- throws redirects to the error page if not, otherwise do nothing
@@ -1818,6 +1836,8 @@ nonAdministratedCourse = msg_UserStoryError_NonAdministratedCourse "The course i
 nonAdministratedGroup  = msg_UserStoryError_NonAdministratedGroup "This group is not administrated by you."
 notCourseOrGroupAdmin = msg_UserStoryError_NotCourseOrGroupAdmin "You are not an admin in this course."
 nonAdministratedAssignment = msg_UserStoryError_NonAdministratedAssignment "This assignment is not administrated by you."
+unAuthorizedCourseAssignmentModification = msg_UserStoryError_unAuthorizedCourseAssignmentModification "You are not allowed to modify this assignment. You must be an administrator of the course of the assignment."
+unAuthorizedGroupAssignmentModification = msg_UserStoryError_unAuthorizedGroupAssignmentModification "You are not allowed to modify this assignment. You must be an administrator of the group of the assignment."
 nonAdministratedAssessment = msg_UserStoryError_NonAdministratedAssessment "This assessment is not administrated by you."
 nonAdministratedSubmission = msg_UserStoryError_NonAdministratedSubmission "The submission is not administrated by you."
 nonAdministratedTestScript = msg_UserStoryError_NonAdministratedTestScript "The test script is not administrated by you."

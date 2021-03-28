@@ -513,6 +513,8 @@ dictionaryHu = DF.DictionaryFile {
     , msg_UserStoryError_NonAdministratedGroup <| "Nem vagy felelőse a csoportnak."
     , msg_UserStoryError_NotCourseOrGroupAdmin <| "Nem vagy oktatója a kurzusnak."
     , msg_UserStoryError_NonAdministratedAssignment <| "Nem vagy felelőse a feladat csoportjának vagy kurzusának."
+    , msg_UserStoryError_unAuthorizedCourseAssignmentModification <| "Nem módosíthatod a feladatot. Ehhez a feladat kurzusának az oktatója kell lenned."
+    , msg_UserStoryError_unAuthorizedGroupAssignmentModification <| "Nem módosíthatod a feladatot. Ehhez a feladat csoportjának az oktatója kell lenned."
     , msg_UserStoryError_NonAdministratedAssessment <| "Nem vagy felelőse az értékelés csoportjának vagy kurzusának."
     , msg_UserStoryError_NonRelatedAssignment <| "Nem hozzád tartozó feladat."
     , msg_UserStoryError_NonAdministratedSubmission <| "Nem vagy felelőse a megoldás kurzusának vagy csoportjának."

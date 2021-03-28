@@ -172,7 +172,7 @@ modifyAssignmentPage :: GETContentHandler
 modifyAssignmentPage = do
   ak <- getAssignmentKey
   (as,tss,ufs,tc) <- userStory $ do
-    Story.isAdministratedAssignment ak
+    Story.authorizeAssignmentModification ak
     as <- Story.loadAssignment ak
     tss' <- Story.testScriptInfosOfAssignment ak
     ufs  <- map fst <$> Story.listUsersFiles
