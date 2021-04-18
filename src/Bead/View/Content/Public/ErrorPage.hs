@@ -8,8 +8,8 @@ module Bead.View.Content.Public.ErrorPage (
 
 import           Data.ByteString.Char8 (unpack)
 import           Data.Monoid (mempty)
-import           Data.String (fromString)
 
+import qualified Text.Blaze as B
 import qualified Text.Blaze.Html5 as H
 
 import qualified Bead.View.Content.Bootstrap as Bootstrap
@@ -18,7 +18,7 @@ import           Bead.View.I18N (IHtml, getI18N)
 import           Bead.View.RouteOf (indexPath)
 import           Bead.View.Translation
 
-template :: (e -> H.Html) -> Translation String -> Maybe e -> HtmlPage
+template :: (e -> H.Html) -> Translation -> Maybe e -> HtmlPage
 template content title errorMsg =
   HtmlPage {
       pageTitle = do
@@ -36,6 +36,6 @@ template content title errorMsg =
   where
     defaultErrorMsg :: I18N -> H.Html
     defaultErrorMsg msg =
-      fromString $ msg $ msg_ErrorPage_DefaultMsg "Some error happened... :("
+      B.text $ msg $ msg_ErrorPage_DefaultMsg "Some error happened... :("
 
-    loginLink = unpack indexPath
+    loginLink = indexPath

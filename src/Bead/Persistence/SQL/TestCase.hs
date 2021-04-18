@@ -71,13 +71,13 @@ modifyTestCase key testCase = do
   update (toEntityKey key) $ Domain.withTestCase testCase id -- encodeTestCaseType
     $ \name desc value info ->
         let (simple, zipped) = Domain.withTestCaseValue value
-              (\s -> (Just $ Text.pack s, Nothing))
+              (\s -> (Just s, Nothing))
               (\z -> (Nothing, Just z))
-        in [ TestCaseName         =. Text.pack name
-           , TestCaseDescription  =. Text.pack desc
+        in [ TestCaseName         =. name
+           , TestCaseDescription  =. desc
            , TestCaseSimpleValue  =. simple
            , TestCaseZippedValue  =. zipped
-           , TestCaseInfo         =. Text.pack info
+           , TestCaseInfo         =. info
            ]
 
 -- Deletes the link from the test case connected to an assignment

@@ -183,6 +183,7 @@ Library
     blaze-html,
     blaze-markup,
     bytestring,
+    case-insensitive,
     containers,
     deepseq,
     directory,

@@ -23,7 +23,9 @@ import           Data.String (fromString)
 import qualified Data.Time.Clock as UTC
 import qualified Data.Time.Clock.POSIX as Time
 import qualified Data.Time.LocalTime as LocalTime
-import qualified Data.ByteString.Lazy.UTF8 as LBsUTF8
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as LBs
 import           Prelude hiding (zip)
 import           System.FilePath ((</>), (<.>))
@@ -80,7 +82,8 @@ getSubmissionsOfUserInGroup = DataHandler $ do
     username <- Story.uidToUsername uid
     foldrM (loadLastSubmission username) [] asgs
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
-  downloadZip (zipFileName uid) (zipSubmissions convertToLocalTime subms)
+  let zipFileName = E.uid T.pack uid
+  downloadZip zipFileName (zipSubmissions convertToLocalTime subms)
     where
       loadLastSubmission :: Username -> (AssignmentKey, Assignment) -> [(Submission, Assignment)] -> UserStory [(Submission, Assignment)]
       loadLastSubmission u (ak, a) acc = do
@@ -92,9 +95,6 @@ getSubmissionsOfUserInGroup = DataHandler $ do
           Nothing ->
             return acc
 
-      zipFileName :: Uid -> String
-      zipFileName = E.uid (map toLower)
-
       zipSubmissions :: UserTimeConverter -> [(Submission, Assignment)] -> Zip.Archive
       zipSubmissions convertToLocalTime = foldr (zipSubmission convertToLocalTime) Zip.emptyArchive
 
@@ -102,7 +102,7 @@ getSubmissionsOfUserInGroup = DataHandler $ do
       zipSubmission convertToLocalTime (s, a) archive = addSubmissionToArchive fileName convertToLocalTime s archive
         where
           fileName :: String
-          fileName = porcelain (Assignment.name a) <.> submissionExtension s
+          fileName = porcelain (T.unpack $ Assignment.name a) <.> submissionExtension s
 
 getSubmissionsOfAssignmentInGroup :: DataHandler
 getSubmissionsOfAssignmentInGroup = DataHandler $ do
@@ -127,7 +127,7 @@ getSubmissionsOfAssignmentInGroup = DataHandler $ do
           usernames
     return (userSubmissions, asg)
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
-  downloadZip (porcelain (Assignment.name asg)) (zipSubmissions convertToLocalTime userSubmissions)
+  downloadZip (Assignment.name asg) (zipSubmissions convertToLocalTime userSubmissions)
 
   where
     zipSubmissions :: UserTimeConverter -> [(User, Submission)] -> Zip.Archive
@@ -144,11 +144,11 @@ submissionExtension = E.submissionValue (const "txt") (const "zip") . solution
 
 zipAssignmentText :: Assignment -> LocalTime.LocalTime -> Zip.Entry
 zipAssignmentText assignment now =
-  Zip.toEntry (title ++ ".txt") (localTimeInSeconds now) (LBsUTF8.fromString exercise)
+  Zip.toEntry (removeAccents (T.unpack title) <.> "txt") (localTimeInSeconds now) (LBs.fromStrict $ TE.encodeUtf8 exercise)
     where
-      title, exercise :: String
+      title, exercise :: Text
       (title, exercise) = Assignment.assignmentCata
-                            (\name desc _type _start _end _evtype -> (removeAccents name, desc))
+                            (\name desc _type _start _end _evtype -> (name, desc))
                             assignment
 
 zipAssignmentAndSubmissions :: AssignmentKey -> [SubmissionKey] -> ContentHandler File
@@ -158,12 +158,12 @@ zipAssignmentAndSubmissions ak sks = do
   assignment <- userStory (Story.loadAssignment ak)
   let exerciseFile = zipAssignmentText assignment now
       atitle = Assignment.name assignment
-      submissionFolder = removeAccents atitle
+      submissionFolder = removeAccents (T.unpack atitle)
   submissions <- zipSubmissions sks submissionFolder now
   downloadZip atitle (Zip.addEntryToArchive exerciseFile submissions)
 
-downloadZip :: String -> Zip.Archive -> ContentHandler File
-downloadZip filename archive = downloadLazy (filename <.> "zip") MimeZip (Zip.fromArchive archive)
+downloadZip :: Text -> Zip.Archive -> ContentHandler File
+downloadZip filename archive = downloadLazy (filename <> ".zip") MimeZip (Zip.fromArchive archive)
 
 zipSubmissions :: [SubmissionKey] -> String -> LocalTime.LocalTime -> ContentHandler Zip.Archive
 zipSubmissions sks folder now = do
@@ -182,8 +182,10 @@ zipSubmission :: Submission -> SubmissionDesc -> String -> UserTimeConverter -> 
 zipSubmission submission desc folder convertToLocalTime archive =
   addSubmissionToArchive path convertToLocalTime submission archive
     where
-      fname, ext, path :: String
+      fname, ext :: String
       (fname, ext) = submissionFilename desc
+
+      path :: String
       path = (replaceSlash folder </> replaceSlash (removeAccents fname) <.> ext)
 
 addSubmissionToArchive :: String -> UserTimeConverter -> Submission -> Zip.Archive -> Zip.Archive
@@ -201,23 +203,26 @@ zipFeedback :: SubmissionDesc -> String -> LocalTime.LocalTime -> UserTimeConver
 zipFeedback desc folder now convertToLocalTime msg archive =
   Zip.addEntryToArchive (feedbacksFile path) archive
     where
-      fname, path :: String
+      fname :: String
       (fname, _) = submissionFilename desc
-      path = replaceSlash folder </> replaceSlash (removeAccents (concat [fname, "_", msg $ msg_ExportSubmissions_Comments "comments" ])) <.> "txt"
+
+      path :: String
+      path = replaceSlash folder </> replaceSlash (removeAccents (concat [fname, "_", T.unpack . msg $ msg_ExportSubmissions_Comments "comments" ])) <.> "txt"
 
       feedbacksFile :: String -> Zip.Entry
-      feedbacksFile path = Zip.toEntry path (localTimeInSeconds now) (LBsUTF8.fromString $ unlines $ intersperse (replicate 10 '#') feedbacks)
+      feedbacksFile path = Zip.toEntry path (localTimeInSeconds now) (LBs.fromStrict $ TE.encodeUtf8 $ T.unlines $ intersperse (T.replicate 10 "#") feedbacks)
 
-      feedbacks :: [String]
-      feedbacks = map (\cf -> unlines [ "## " ++ authorLine cf
-                                      , ""
-                                      , C.commentOrFeedbackText msg cf
-                                      ])
+      feedbacks :: [Text]
+      feedbacks = map (\cf -> T.unlines
+                                [ "## " <> authorLine cf
+                                , ""
+                                , C.commentOrFeedbackText msg cf
+                                ])
                   $ C.sortDecreasingTime
                   $ C.submissionDescToCFs desc
 
-      authorLine :: C.CommentOrFeedback -> String
-      authorLine cf = unwords [showDate . convertToLocalTime . C.commentOrFeedbackTime $ cf, C.commentOrFeedbackAuthor msg cf]
+      authorLine :: C.CommentOrFeedback -> Text
+      authorLine cf = T.unwords [T.pack . showDate . convertToLocalTime . C.commentOrFeedbackTime $ cf, C.commentOrFeedbackAuthor msg cf]
 
 {-
    This is a workaround. 

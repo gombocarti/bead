@@ -23,7 +23,7 @@ import           Data.Maybe (fromJust, isJust, isNothing)
 import           Data.String (fromString)
 import           Data.Time hiding (TimeZone, timeZoneName)
 import qualified Data.Text as T
-import           Data.Text.Encoding (decodeUtf8)
+import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
 
 import           Snap hiding (Config(..), get)
 import           Snap.Snaplet.Auth as A hiding (createUser)
@@ -44,7 +44,7 @@ import           Bead.View.DataBridge as DataBridge
 import           Bead.View.EmailTemplate
 #endif
 import           Bead.View.ErrorPage
-import           Bead.View.RouteOf (requestRoute)
+import           Bead.View.RouteOf (queryString)
 
 createUser :: Persist.Interpreter -> User -> String -> IO ()
 createUser persist user _password = do
@@ -85,7 +85,7 @@ data RegError
 
 readParameter :: (MonadSnap m) => Parameter a -> m (Maybe a)
 readParameter param = do
-  reqParam <- getParam . B.pack . DataBridge.name $ param
+  reqParam <- getParam . encodeUtf8 . DataBridge.name $ param
   return (reqParam >>= decode param . T.unpack . decodeUtf8)
 
 #ifndef SSO
@@ -159,10 +159,10 @@ registrationRequest config = method GET renderForm <|> method POST saveUserRegDa
         throwSError :: (Monad m) => String -> ErrorT String m a
         throwSError = throwError
 
-  createUserRegAddress :: UserRegKey -> Language -> UserRegistration -> String
+  createUserRegAddress :: UserRegKey -> Language -> UserRegistration -> Text
   createUserRegAddress key (Language language) reg =
     -- TODO: Add the correct address of the server
-    requestRoute (join [emailHostname config, "/reg_final"])
+    queryString (join [emailHostname config, "/reg_final"])
                  [ requestParameter regUserRegKeyPrm key
                  , requestParameter regTokenPrm      (reg_token reg)
                  , requestParameter regUsernamePrm   (Username . reg_username $ reg)

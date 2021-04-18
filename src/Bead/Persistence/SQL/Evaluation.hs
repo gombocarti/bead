@@ -56,7 +56,7 @@ modifyEvaluation :: Domain.EvaluationKey -> Domain.Evaluation -> Persist ()
 modifyEvaluation key ev =
   update (fromDomainKey key) $ Domain.withEvaluation ev $ \result written ->
     [ EvaluationResult  =. encodeEvaluationResult result
-    , EvaluationWritten =. Text.pack written
+    , EvaluationWritten =. written
     ]
 
 -- Returns the submission of the given evaluation

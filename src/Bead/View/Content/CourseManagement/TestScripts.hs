@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Bead.View.Content.CourseManagement.TestScripts (
     testScriptsPage
   ) where
@@ -40,7 +42,7 @@ testScriptsContents pd = do
     Bootstrap.rowColMd12 $ do
       i18n msg $ linkButtonToPageBS (Pages.newTestScriptWithText (pdCourse pd))
       case (pdTestScripts pd) of
-        []  -> H.p $ B.toMarkup $ msg $ Trans.msg_TestScripts_NoTestScriptsWereDefined "There are no testers for the course."
+        []  -> H.p $ B.text $ msg $ Trans.msg_TestScripts_NoTestScriptsWereDefined "There are no testers for the course."
         tScripts -> Bootstrap.unorderedListGroup $ forM_ tScripts $ \(tsk, tsi) ->
           Bootstrap.listGroupLinkItem
             (routeOf (Pages.courseManagement (pdCourse pd) (Pages.ModifyTestScriptContents tsk) ()))

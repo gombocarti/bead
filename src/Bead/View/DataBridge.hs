@@ -5,6 +5,8 @@ import Control.Monad ((>=>), join)
 import Data.Char (toUpper, isSpace)
 import Data.Maybe (fromMaybe)
 import Data.String (fromString)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Time (LocalTime(..))
 import Text.Printf (printf)
 
@@ -42,7 +44,7 @@ data Parameter a = Parameter {
     -- otherwise 'Nothing'
   , decode :: String -> Maybe a
     -- The field name in the request
-  , name  :: String
+  , name  :: Text
     -- The error message when decoding fails
   , decodeError :: String -> String
     -- The error message when the parameter is not present
@@ -50,21 +52,21 @@ data Parameter a = Parameter {
   }
 
 parameterFold
-  :: ((a -> String) -> (String -> Maybe a) -> String -> (String -> String) -> String -> b)
+  :: ((a -> String) -> (String -> Maybe a) -> Text -> (String -> String) -> String -> b)
   -> Parameter a
   -> b
 parameterFold f (Parameter encode decode name decodeError notFound) =
   f encode decode name decodeError notFound
 
 instance SnapFieldName (Parameter a) where
-  fieldName = fromString . name
+  fieldName = name
 
 -- Creates a request parameter value encoding the given value with the
 -- given parameter
 requestParameter :: Parameter a -> a -> ReqParam
 requestParameter p x = parameterFold createValue p
   where
-    createValue encode _ name _ _ = ReqParam (name, encode x)
+    createValue encode _ name _ _ = ReqParam (name, T.pack $ encode x)
 
 mapParameter :: (b -> a) -> (a -> b) -> Parameter a -> Parameter b
 mapParameter f g param = param {
@@ -72,7 +74,7 @@ mapParameter f g param = param {
   , decode = fmap g . decode param
   }
 
-stringParameter :: String -> String -> Parameter String
+stringParameter :: Text -> String -> Parameter String
 stringParameter fieldName paramName = Parameter {
     encode = id
   , decode = Just . id
@@ -81,10 +83,13 @@ stringParameter fieldName paramName = Parameter {
   , notFound    = printf "%s could not be found." paramName
   }
 
-evaluationValuePrm :: Parameter String
-evaluationValuePrm = stringParameter (fieldName evaluationValueField) "Evaluation Value"
+textParameter :: Text -> String -> Parameter Text
+textParameter fieldName paramName = mapParameter T.unpack T.pack (stringParameter fieldName paramName)
 
-customGroupKeyPrm :: String -> Parameter GroupKey
+evaluationValuePrm :: Parameter Text
+evaluationValuePrm = textParameter (fieldName evaluationValueField) "Evaluation Value"
+
+customGroupKeyPrm :: Text -> Parameter GroupKey
 customGroupKeyPrm field = Parameter {
     encode = groupKeyMap id
   , decode = Just . GroupKey
@@ -97,10 +102,10 @@ customGroupKeyPrm field = Parameter {
 groupKeyPrm :: Parameter GroupKey
 groupKeyPrm = customGroupKeyPrm (fieldName groupKeyName)
 
-jsonGroupKeyPrm :: String -> Parameter GroupKey
+jsonGroupKeyPrm :: Text -> Parameter GroupKey
 jsonGroupKeyPrm field = jsonParameter field "group key"
 
-customCourseKeyPrm :: String -> Parameter CourseKey
+customCourseKeyPrm :: Text -> Parameter CourseKey
 customCourseKeyPrm field = Parameter {
     encode = courseKeyMap id
   , decode = Just . CourseKey
@@ -109,7 +114,7 @@ customCourseKeyPrm field = Parameter {
   , notFound    = "The given course key could not be found."
   }
 
-jsonCourseKeyPrm :: String -> Parameter CourseKey
+jsonCourseKeyPrm :: Text -> Parameter CourseKey
 jsonCourseKeyPrm field = jsonParameter field "course key"
 
 -- Represents the CourseKey parameter
@@ -186,7 +191,7 @@ evaluationKeyPrm = Parameter {
   }
 
 -- JSON encodeable parameter, used in POST request parameters only
-jsonParameter :: (Data a, Show a) => String -> String -> Parameter a
+jsonParameter :: (Data a, Show a) => Text -> String -> Parameter a
 jsonParameter field name = Parameter {
     encode = \v -> fromMaybe (error $ concat [name, " jsonParameter: encodeToFay ",show v]) $ encodeToFay v
   , decode = decodeFromFay
@@ -196,9 +201,9 @@ jsonParameter field name = Parameter {
   }
 
 evalConfigPrm :: EvaluationHook -> Parameter EvConfig
-evalConfigPrm = evalConfigParameter . evHiddenValueId
+evalConfigPrm = evalConfigParameter . T.pack . evHiddenValueId
 
-evalConfigParameter :: String -> Parameter EvConfig
+evalConfigParameter :: Text -> Parameter EvConfig
 evalConfigParameter field = Parameter {
     encode = fromMaybe "evalConfigPrm: encodeToFay has failed" . encodeToFay
   , decode = readEvalConfig
@@ -278,7 +283,7 @@ rolePrm = jsonParameter (fieldName userRoleField) "Role"
 uidPrm :: Parameter Uid
 uidPrm = jsonParameter (fieldName userUidField) "User ID"
 
-jsonUsernamePrm :: String -> Parameter Username
+jsonUsernamePrm :: Text -> Parameter Username
 jsonUsernamePrm field =
   let prm = jsonParameter field "Username"
   in prm { decode = decode prm >=> decodeUsr }
@@ -288,7 +293,7 @@ jsonUsernamePrm field =
          then (Just $ transformUsername xs)
          else Nothing
 
-customUsernamePrm :: String -> Parameter Username
+customUsernamePrm :: Text -> Parameter Username
 customUsernamePrm field = Parameter {
     encode = usernameCata id
   , decode = decodeUsr
@@ -334,7 +339,7 @@ uidPrm' = Parameter {
       where
         s' = strip s
 
-emailPrm :: String -> Parameter Email
+emailPrm :: Text -> Parameter Email
 emailPrm field = validateBy isEmailAddress $ Parameter {
     encode = emailCata id
   , decode = Just . Email
@@ -349,7 +354,7 @@ userEmailPrm = emailPrm (fieldName userEmailField)
 regEmailPrm :: Parameter Email
 regEmailPrm = emailPrm (fieldName regEmailAddress)
 
-passwordPrm :: String -> String -> Parameter String
+passwordPrm :: Text -> String -> Parameter String
 passwordPrm fieldName paramName = Parameter {
     encode = id
   , decode = Just
@@ -416,7 +421,7 @@ validateBy v p = p { decode = attachValidator (decode p) }
 -- Produces a Parameter for a read instance for the
 -- given parameter and a name. The name is shown
 -- when decoding error or absence occurs.
-readablePrm :: (Show a, Read a) => String -> String -> Parameter a
+readablePrm :: (Show a, Read a) => Text -> String -> Parameter a
 readablePrm field name = Parameter {
     encode = show
   , decode = readMaybe
@@ -425,7 +430,7 @@ readablePrm field name = Parameter {
   , notFound    = printf "%s could not be found." name
   }
 
-localTimeParam :: String -> String -> Parameter LocalTime
+localTimeParam :: Text -> String -> Parameter LocalTime
 localTimeParam field name = Parameter {
     encode = show
   , decode = readMaybe
@@ -446,7 +451,7 @@ userTimeZonePrm = jsonParameter (fieldName userTimeZoneField) "Time zone"
 regTimeZonePrm :: Parameter TimeZoneName
 regTimeZonePrm = jsonParameter (fieldName regTimeZoneField) "Time zone"
 
-languagePrm :: String -> Parameter Language
+languagePrm :: Text -> Parameter Language
 languagePrm field = Parameter {
     encode = languageCata id
   , decode = Just . Language

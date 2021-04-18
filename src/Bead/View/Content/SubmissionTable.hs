@@ -20,6 +20,8 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.String
 import           Data.Time
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Numeric
 
 import qualified Bead.Domain.Entities as E
@@ -36,6 +38,7 @@ import           Bead.View.Content.StateVisualization (formatSubmissionState, to
 import           Bead.View.Content.VisualConstants
 import qualified Bead.View.DataBridge as Param
 
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
@@ -71,15 +74,16 @@ submissionTable tableId now stb table = submissionTableContextCata html stb wher
     msg <- getI18N
     return $ Bootstrap.rowColMd12 $ do
       i18n msg $ managementMenu courses table
-      fromString $ userCountText msg
+      B.toMarkup $ userCountText msg
       i18n msg $ submissionTablePart tableId now stb table
 
-  userCountText msg = concat ["(", show userCount, " "
-                             , if (userCount == 1)
-                                 then msg $ msg_Home_SubmissionTable_Student "student"
-                                 else msg $ msg_Home_SubmissionTable_Students "students"
-                             , ")"
-                             ]
+  userCountText msg = T.concat
+    ["(", T.pack $ show userCount, " "
+    , if (userCount == 1)
+      then msg $ msg_Home_SubmissionTable_Student "student"
+      else msg $ msg_Home_SubmissionTable_Students "students"
+    , ")"
+    ]
   userCount = length (stiUsers table)
 
 -- Produces the HTML table from the submission table information,
@@ -94,7 +98,7 @@ submissionTablePart _tableId _now _ctx s
     msg <- getI18N
     return $ do
       Bootstrap.rowColMd12 $ Bootstrap.table $ do
-        H.td (fromString $ msg $ msg_Home_SubmissionTable_NoCoursesOrStudents "There are no assignments or students yet.")
+        H.td (B.toMarkup $ msg $ msg_Home_SubmissionTable_NoCoursesOrStudents "There are no assignments or students yet.")
 
 -- Non empty table
 submissionTablePart tableId now ctx s = do
@@ -145,8 +149,8 @@ submissionTablePart tableId now ctx s = do
     headerCell = H.th
 
     assignmentLine msg = H.tr $ do
-      headerCell $ fromString $ msg $ msg_Home_SubmissionTable_StudentName "Name"
-      headerCell $ fromString $ msg $ msg_Home_SubmissionTable_Username "Username"
+      headerCell $ B.toMarkup $ msg $ msg_Home_SubmissionTable_StudentName "Name"
+      headerCell $ B.toMarkup $ msg $ msg_Home_SubmissionTable_Username "Username"
       assignmentLinks
       groupAndAdminHeader
       deleteHeaderCell msg
@@ -155,8 +159,8 @@ submissionTablePart tableId now ctx s = do
         groupAndAdminHeader = submissionTableInfoCata course group s
           where
             course _users _as _ulines _grps _key = do
-              headerCell $ fromString $ msg $ msg_Home_SubmissionTable_Group "Group"
-              headerCell $ fromString $ msg $ msg_Home_SubmissionTable_Admins "Admins"
+              headerCell $ B.toMarkup $ msg $ msg_Home_SubmissionTable_Group "Group"
+              headerCell $ B.toMarkup $ msg $ msg_Home_SubmissionTable_Admins "Admins"
 
             group _users _cgas _ulines _ckey _gkey = mempty
 
@@ -216,13 +220,13 @@ submissionTablePart tableId now ctx s = do
             courseIsAdmined :: Bool
             courseIsAdmined = isAdminedCourse ckey
 
-        enable :: Pages.Page' (Translation String) -> MenuItem
+        enable :: Pages.Page' Translation -> MenuItem
         enable p = Enabled (routeOf p) (msg $ Pages.pageValue p)
 
-        disable :: String -> Pages.Page' (Translation String) -> MenuItem
+        disable :: Text -> Pages.Page' Translation -> MenuItem
         disable reason p = Disabled (msg $ Pages.pageValue p) reason
 
-        enableIf :: [Maybe String] -> Pages.Page' (Translation String) -> MenuItem
+        enableIf :: [Maybe Text] -> Pages.Page' Translation -> MenuItem
         enableIf reasonsToDisable = case catMaybes reasonsToDisable of
                                       [] -> enable
                                       (reason:_) -> disable reason
@@ -260,8 +264,8 @@ submissionTablePart tableId now ctx s = do
     userLine msg s (u, submissions) = do
       H.tr $ do
         let username = ud_username u
-        H.td . fromString $ ud_fullname u
-        H.td . fromString $ uid id $ ud_uid u
+        H.td . B.toMarkup $ ud_fullname u
+        H.td . B.toMarkup $ uid id $ ud_uid u
         submissionCells msg username submissions
         groupInfo username s
         deleteUserCheckbox u
@@ -274,7 +278,7 @@ submissionTablePart tableId now ctx s = do
           course _users _as _ulines grps _key =
             case Map.lookup u grps of
               Nothing -> H.td mempty <> H.td mempty
-              Just (grp, admins) -> H.td (fromString $ groupName grp) <> H.td (fromString $ intercalate "," $ map u_name admins)
+              Just (grp, admins) -> H.td (B.toMarkup $ groupName grp) <> H.td (B.toMarkup $ intercalate "," $ map u_name admins)
 
           group _users _as _ulines _ck _gk = mempty
 
@@ -284,11 +288,12 @@ submissionTablePart tableId now ctx s = do
       H.td . Bootstrap.link route $ formatSubmissionState toLargeIcon msg sState
 
       where
-        route :: String
+        route :: Text
         route = routeOf $ case siEvaluationKey sState of
                             Nothing -> Pages.evaluation sKey ()
                             Just ek -> Pages.modifyEvaluation sKey ek ()
 
+    deleteHeaderCell :: I18N -> H.Html
     deleteHeaderCell msg = submissionTableInfoCata deleteForCourseButton deleteForGroupButton s where
         deleteForCourseButton _us _as _uls _grps _ck =
           headerCell $ submitButtonDanger
@@ -305,13 +310,13 @@ submissionTablePart tableId now ctx s = do
           H.td $ checkBox
             (Param.name delUserFromCoursePrm)
             (encode delUserFromCoursePrm $ ud_username u)
-            False ! A.onclick (fromString (onClick ++ "(this)"))
+            False ! A.onclick (B.toValue (onClick ++ "(this)"))
 
         deleteGroupCheckbox _us _as _uls _ck _gk =
           H.td $ checkBox
             (Param.name delUserFromGroupPrm)
             (encode delUserFromGroupPrm $ ud_username u)
-            False ! A.onclick (fromString (onClick ++ "(this)"))
+            False ! A.onclick (B.toValue (onClick ++ "(this)"))
 
 -- Renders a menu for the creation of the course or group assignment and evaluation export
 -- if the user administrates the given group or course
@@ -340,10 +345,10 @@ managementMenu courses = submissionTableInfoCata courseMenu groupMenu
     navigationWithRoute :: [H.Html] -> H.Html
     navigationWithRoute buttons = Bootstrap.buttonGroup $ mconcat buttons
 
-    button :: I18N -> Pages.Page' (Translation String)-> H.Html
+    button :: I18N -> Pages.Page' Translation-> H.Html
     button msg page = Bootstrap.buttonLink (routeOf page) (msg $ Pages.pageValue page)
 
-    dropdown :: I18N -> [Pages.Page' (Translation String)] -> H.Html
+    dropdown :: I18N -> [Pages.Page' Translation] -> H.Html
     dropdown msg pages = Bootstrap.dropdown
       (msg $ msg_Home_SubmissionTable_ExportEvaluations "Export Evaluations")
       (map (\page -> (Enabled (routeOf page) (msg $ Pages.pageValue page))) pages)
@@ -400,4 +405,4 @@ submissionTableInfoAssignments = submissionTableInfoCata course group where
   course _us as _uls _grps _ck = as
   group _us cgas _uls _ck _gk = map (cgInfoCata id id) cgas
 
-headLine = H.tr . H.th . fromString
+

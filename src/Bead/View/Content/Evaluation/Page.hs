@@ -10,7 +10,8 @@ import           Control.Arrow ((&&&))
 import           Data.Maybe (fromMaybe, listToMaybe)
 import           Data.Monoid
 import           Text.Printf
-import           Data.String (fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Time (UTCTime, getCurrentTime)
 import           Data.Tuple.Utils (snd3, thd3)
 
@@ -25,7 +26,6 @@ import           Bead.View.Content.Comments
 import qualified Bead.View.Content.StateVisualization as SV
 import           Bead.View.Content.VisualConstants
 
-import           Text.Blaze (toValue)
 import           Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 
@@ -96,7 +96,7 @@ modifyEvaluationPage = do
     evaluationContent pageData
 
 evalConfigParam = evalConfigParameter (fieldName evaluationConfigField)
-freeFormEvaluationParam = stringParameter (fieldName evaluationFreeFormField) "Free format evaluation"
+freeFormEvaluationParam = textParameter (fieldName evaluationFreeFormField) "Free format evaluation"
 
 -- Reads the evaluation result, from the parameters and determine if the content
 -- of the text area would be a comment of the textual evaluation of the given submission.
@@ -122,12 +122,12 @@ abstractEvaluationPostHandler sk evCommand onSuccess onFailure = do
             then EvCmtComment
             else EvCmtResult $ percentageResult (fromIntegral percentage / 100))
       (do freeForm <- getParameter freeFormEvaluationParam
-          return $ if (null freeForm)
+          return $ if (T.null freeForm)
             then EvCmtComment
             else EvCmtResult $ freeFormResult freeForm)
       config
   withEvalOrComment commentOrResult
-    (case null commentText of
+    (case T.null commentText of
       True -> return $ Action $ do
         Story.putErrorMessage (msg_Evaluation_EmptyCommentAndFreeFormResult "Neither comment nor evaluation was given!")
         return $ redirection onFailure
@@ -143,7 +143,7 @@ abstractEvaluationPostHandler sk evCommand onSuccess onFailure = do
             return $ Action $ do
               Story.createComment sk Comment {
                   comment = commentText
-                , commentAuthor = uname
+                , commentAuthor = T.pack uname
                 , commentDate = now
                 , commentType = roleToCommentType role
                 }
@@ -189,7 +189,7 @@ modifyEvaluationPost = do
 
 evaluationFrame :: EvConfig -> I18N -> Html -> Html
 evaluationFrame evConfig msg content = do
-  hiddenInput (fieldName evalConfigParam) (encodeToFay' "inputEvalType" evConfig)
+  hiddenInput (fieldName evalConfigParam) (encodeToFay' "inputEvalType" evConfig :: Text)
   withEvConfig evConfig
     (do content
         Bootstrap.formGroup $ evaluationDiv $
@@ -208,20 +208,20 @@ evaluationFrame evConfig msg content = do
                , (False, show False, msg $ msg_Evaluation_Percentage "Percentage: ")
                ]
            Bootstrap.colMd4 $
-             H.input ! A.name (fieldName evaluationPercentagePrm) ! A.type_ "number"
-                     ! A.min (fromString $ show 0) ! A.max (fromString $ show 100)
-                     ! A.value (fromString $ show 0))
-    (do Bootstrap.optionalTextInput (fieldName freeFormEvaluationParam) (msg $ msg_Evaluation_FreeFormEvaluation "Evaluation") ""
-        H.p . fromString $ printf (msg $ msg_Evaluation_FreeForm_Information $ unwords
+             H.input ! A.name (H.toValue $ fieldName evaluationPercentagePrm) ! A.type_ "number"
+                     ! A.min (H.toValue $ show 0) ! A.max (H.toValue $ show 100)
+                     ! A.value (H.toValue $ show 0))
+    (do Bootstrap.optionalTextInput (fieldName freeFormEvaluationParam) (msg $ msg_Evaluation_FreeFormEvaluation "Evaluation") ("" :: Text)
+        H.p $ H.toMarkup (printf (T.unpack $ msg $ msg_Evaluation_FreeForm_Information $ T.unwords
           [ "Note that this text will be used everywhere as the evaluation itself.  Hence it is recommended to keep"
-          , "the length of the text under size %d, otherwise it may not be directly shown." ]) displayableFreeFormResultLength
+          , "the length of the text under size %d, otherwise it may not be directly shown." ]) displayableFreeFormResultLength :: String)
         content)
   where
     binary = EvCmtResult . binaryResult
     evaluationDiv = withEvConfig
       evConfig
       (H.div)
-      (const $ H.div ! A.id (fieldName evaluationPercentageDiv))
+      (const $ H.div ! A.id (H.toValue $ fieldName evaluationPercentageDiv))
       (H.div)
 
 -- * View
@@ -277,19 +277,19 @@ evaluationContent pd = do
                  HasTestCase         -> Bootstrap.buttonLink (routeOf p) (msg $ Pages.pageValue p)
                  DoesNotHaveTestCase -> Bootstrap.disabledButton (msg $ Pages.pageValue p) (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
 
-      h2 $ fromString $ msg $ msg_Evaluation_Submitted_Solution "Submission"
+      h2 $ H.toMarkup $ msg $ msg_Evaluation_Submitted_Solution "Submission"
       let alwaysVisibleButtons = downloadSubmissionButton <> queueForTestButton
       if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ sd)
         then do
           Bootstrap.buttonGroup alwaysVisibleButtons
-          H.p $ fromString . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
+          H.p $ H.toMarkup . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
             "The submission was uploaded as a compressed file so it could not be displayed verbatim."
         else do
           Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> alwaysVisibleButtons
-          H.pre ! A.id (toValue submissionIdent) $ fromString $ eSolution sd
+          H.pre ! A.id (H.toValue submissionIdent) $ H.toMarkup $ eSolution sd
 
     Bootstrap.rowColMd12 $
-      H.p $ fromString . msg $ msg_Evaluation_Info $ concat
+      H.p $ H.toMarkup . msg $ msg_Evaluation_Info $ T.concat
         [ "It is not mandatory to evaluate the submission, it is allowed to comment on it only.  "
         , "The student may answer the comments by further comments.  The submission may be "
         , "evaluated many times."
@@ -310,18 +310,18 @@ evaluationContent pd = do
           hiddenInput (fieldName assignmentKeyField) (paramValue $ eAssignmentKey sd)
           hiddenInput (fieldName evCommentOnlyText) (msg $ msg_Evaluation_New_Comment "New Comment")
         Bootstrap.submitButton
-          (fieldName saveEvalBtn) (fromString . msg $ msg_Evaluation_SaveButton "Submit")
+          (fieldName saveEvalBtn) (H.toMarkup . msg $ msg_Evaluation_SaveButton "Submit")
 
     let subms = submissions pd
     when (not $ null subms) $
       Bootstrap.rowColMd12 $ do
-        H.h2 (fromString . msg $ msg_Submissions_Title "Submissions")
+        H.h2 (H.toMarkup . msg $ msg_Submissions_Title "Submissions")
         submissionList msg tc subms (sbmSubmissionKey pd)
 
     let comments = submissionDescToCFs sd
     when (not $ null comments) $ do
       Bootstrap.rowColMd12 $
-        H.h2 (fromString . msg $ msg_Comments_Title "Comments")
+        H.h2 (H.toMarkup . msg $ msg_Comments_Title "Comments")
       -- Renders the comment area where the user can place a comment
       i18n msg $ commentsDiv "evaluation-comments-" tc comments
   where
@@ -342,7 +342,7 @@ evaluationContent pd = do
     shouldNotEvaluateWarning msg si =
       Bootstrap.link (evalRoute si) $
         Bootstrap.alert Bootstrap.Warning $ H.toMarkup $ msg $ msg_Evaluation_ShouldNotEvaluate $
-        unwords [
+        T.unwords [
           "The evaluation of this submission will not be visible on the student's home page."
         , "It is recommended to evaluate the most recent submission. In order to do so, click on this link."
         ]
@@ -370,7 +370,7 @@ submissionList msg userTime submissions currentSubmission =
     date :: SubmissionInfo -> String
     date = showDate . userTime . submTime
 
-evalRoute :: SubmissionInfo -> String
+evalRoute :: SubmissionInfo -> Text
 evalRoute (sk, st, time) = case siEvaluationKey st of
   Nothing -> routeOf (Pages.evaluation sk ())
   Just ek -> routeOf (Pages.modifyEvaluation sk ek ())

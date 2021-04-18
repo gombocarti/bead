@@ -13,8 +13,8 @@ import           Control.Monad (void)
 data UserAction
   -- Navigation
   = LogMessage String
-  | StatusMessage (Translation String)
-  | ErrorMessage (Translation String)
+  | StatusMessage Translation
+  | ErrorMessage Translation
 
   -- Profiling
   | ChangeUserDetails String TimeZoneName Language

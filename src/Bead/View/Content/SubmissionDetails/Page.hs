@@ -9,8 +9,9 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.List (intercalate)
 import           Data.Monoid
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Time (getCurrentTime, UTCTime)
-import           Data.String (fromString)
 
 import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
@@ -21,7 +22,7 @@ import           Bead.View.Content.Comments
 import           Bead.View.Content.Submission.Common
 import           Bead.View.Markdown
 
-import           Text.Blaze (toValue)
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 as H
 import           Text.Blaze.Html5.Attributes as A
 
@@ -64,7 +65,7 @@ submissionDetailsPostHandler :: POSTContentHandler
 submissionDetailsPostHandler = do
   ak <- getParameter assignmentKeyPrm
   sk <- getParameter submissionKeyPrm
-  c  <- getParameter (stringParameter (fieldName commentValueField) "Comment")
+  c  <- getParameter (textParameter (fieldName commentValueField) "Comment")
   now <- liftIO $ getCurrentTime
   mname <- getName <$> userState
   let uname = case mname of
@@ -78,7 +79,7 @@ submissionDetailsPostHandler = do
   return $ Action $ do
     Story.createComment sk Comment {
         comment = c
-      , commentAuthor = uname
+      , commentAuthor = T.pack uname
       , commentDate = now
       , commentType = CT_Student
       }
@@ -109,7 +110,7 @@ submissionDetailsContent p = do
     Bootstrap.rowColMd12 $ do
       if isProtected
         then do
-          H.p $ fromString . msg $ msg_SubmissionDetails_BallotBox_Info $
+          H.p $ B.toMarkup . msg $ msg_SubmissionDetails_BallotBox_Info $
             "The ballot box mode is active so no solutions can be accessed until the deadline."
         else do
           let downloadSubmissionButton =
@@ -118,31 +119,31 @@ submissionDetailsContent p = do
                   (msg $ msg_SubmissionDetails_Solution_Zip_Link "Download")
           if (Assignment.isZippedSubmissions aspects)
             then do
-              Bootstrap.helpBlock $ fromString . msg $ msg_SubmissionDetails_Solution_Zip_Info $ mconcat
+              Bootstrap.helpBlock $ B.toMarkup . msg $ msg_SubmissionDetails_Solution_Zip_Info $ mconcat
                 [ "The submission was uploaded as a compressed file so it could not be displayed verbatim.  "
                 , "But it may be downloaded as a file by clicking on the link."
                 ]
               downloadSubmissionButton
             else do
-              H.p $ fromString . msg $ msg_SubmissionDetails_Solution_Text_Info $
+              H.p $ B.toMarkup . msg $ msg_SubmissionDetails_Solution_Text_Info $
                 "The submission may be downloaded as a plain text file by clicking on the link."
               Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> downloadSubmissionButton
               H.br
-              H.pre ! A.id (toValue submissionIdent) $ fromString $ sdSubmission info
+              H.pre ! A.id (B.toValue submissionIdent) $ B.toMarkup $ sdSubmission info
     Bootstrap.rowColMd12 $ do
       H.a ! A.name (anchor SubmissionDetailsEvaluationDiv) $ mempty
-      h2 $ fromString $ msg $ msg_SubmissionDetails_Evaluation "Evaluation"
+      h2 $ B.toMarkup $ msg $ msg_SubmissionDetails_Evaluation "Evaluation"
       resolveStatus msg $ sdStatus info
-    Bootstrap.rowColMd12 $ h2 $ fromString $ msg $ msg_Comments_Title "Comments"
+    Bootstrap.rowColMd12 $ h2 $ B.toMarkup $ msg $ msg_Comments_Title "Comments"
     when isProtected $ do
-      H.p $ fromString . msg $ msg_SubmissionDetails_BallotBox_Comment_Info $
+      H.p $ B.toMarkup . msg $ msg_SubmissionDetails_BallotBox_Comment_Info $
         "When ballot box mode is active, no student comments are shown until the deadline."
     postForm (routeOf $ submissionDetails (aKey p) (smKey p)) $ do
-      Bootstrap.textArea (fieldName commentValueField)
-                         (fromString $ msg $ msg_SubmissionDetails_NewComment "New comment")
+      Bootstrap.textArea (fieldName commentValueField :: Text)
+                         (B.toMarkup $ msg $ msg_SubmissionDetails_NewComment "New comment")
                          Bootstrap.Small
                          mempty
-      Bootstrap.submitButton "" (fromString $ msg $ msg_SubmissionDetails_SubmitComment "Submit")
+      Bootstrap.submitButton ("" :: Text) (B.toMarkup $ msg $ msg_SubmissionDetails_SubmitComment "Submit")
     let studentComments = forStudentCFs isProtected $ submissionDetailsDescToCFs info
     when (not $ null studentComments) $ do
       Bootstrap.rowColMd12 hr
@@ -152,9 +153,9 @@ submissionDetailsContent p = do
     submissionDetails ak sk = Pages.submissionDetails ak sk ()
     submissionIdent = "code"
 
-    resolveStatus :: I18N -> Maybe String -> H.Html
-    resolveStatus msg Nothing     = fromString . msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet"
-    resolveStatus _msg (Just str) = fromString str
+    resolveStatus :: I18N -> Maybe Text -> H.Html
+    resolveStatus msg Nothing     = B.toMarkup . msg $ msg_Submission_NotEvaluatedYet "Not evaluated yet"
+    resolveStatus _msg (Just str) = B.toMarkup str
 
 
 invalidSubmission :: IHtml
@@ -162,4 +163,4 @@ invalidSubmission = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 $ p $
-      fromString $ msg $ msg_SubmissionDetails_InvalidSubmission "This submission cannot be accessed by this user."
+      B.toMarkup $ msg $ msg_SubmissionDetails_InvalidSubmission "This submission cannot be accessed by this user."

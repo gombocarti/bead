@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Test.Regression.UserStory where
 
 

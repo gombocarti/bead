@@ -9,7 +9,9 @@ import           Control.Arrow ((&&&))
 import qualified Data.Map as Map
 import           Data.Maybe
 import           Data.String (fromString)
+import           Data.Text (Text)
 
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 hiding (map)
 
 import           Bead.Controller.UserStories (loadUser, doesUserExist, updateUser)
@@ -54,9 +56,9 @@ userDetailForm timeZones user dictionaries = do
   msg <- getI18N
   return $ do
     postForm (routeOf userDetails) $ do
-      Bootstrap.labeledText "" (usernameCata fromString $ u_username user)
+      Bootstrap.labeledText ("" :: Text) (usernameCata fromString $ u_username user)
       userDetailsFields msg
-      Bootstrap.submitButton (fieldName saveChangesBtn) (msg $ msg_UserDetails_SaveButton "Update")
+      Bootstrap.submitButton (fieldName saveChangesBtn :: Text) (msg $ msg_UserDetails_SaveButton "Update")
 
   where
     userDetailsFields msg = do
@@ -101,7 +103,7 @@ userDoesNotExist username = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 $ p $ do
-      (fromString $ msg $ msg_UserDetails_NonExistingUser "No such user:")
+      (B.toMarkup $ msg $ msg_UserDetails_NonExistingUser "No such user:")
       usernameCata fromString username
 
 getRole = getParameter rolePrm

@@ -1,7 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.View.RequestParams where
 
 import Control.Monad (join)
-import Data.String (IsString(..))
+import Data.Text (Text)
+import qualified Data.Text as T
 
 import Bead.Controller.Pages (CourseManagementContents)
 import Bead.Domain.Entities (Username(Username), Uid(Uid))
@@ -12,50 +14,50 @@ import Bead.View.TemplateAndComponentNames
 
 -- Request Parameter Name Constants
 
-assignmentKeyParamName :: IsString s => s
-assignmentKeyParamName = fromString $ fieldName assignmentKeyField
+assignmentKeyParamName :: Text
+assignmentKeyParamName = fieldName assignmentKeyField
 
-assessmentKeyParamName :: IsString s => s
-assessmentKeyParamName = fromString $ fieldName assessmentKeyField
+assessmentKeyParamName :: Text
+assessmentKeyParamName = fieldName assessmentKeyField
 
-submissionKeyParamName :: IsString s => s
-submissionKeyParamName = fromString $ fieldName submissionKeyField
+submissionKeyParamName :: Text
+submissionKeyParamName = fieldName submissionKeyField
 
-scoreKeyParamName :: IsString s => s
-scoreKeyParamName = fromString $ fieldName scoreKeyField
+scoreKeyParamName :: Text
+scoreKeyParamName = fieldName scoreKeyField
 
-evaluationKeyParamName :: IsString s => s
-evaluationKeyParamName = fromString $ fieldName evaluationKeyField
+evaluationKeyParamName :: Text
+evaluationKeyParamName = fieldName evaluationKeyField
 
-languageParamName :: IsString s => s
-languageParamName = fromString $ fieldName changeLanguageField
+languageParamName :: Text
+languageParamName = fieldName changeLanguageField
 
-courseKeyParamName :: IsString s => s
-courseKeyParamName = fromString $ fieldName courseKeyField
+courseKeyParamName :: Text
+courseKeyParamName = fieldName courseKeyField
 
-groupKeyParamName :: IsString s => s
-groupKeyParamName = fromString $ fieldName groupKeyField
+groupKeyParamName :: Text
+groupKeyParamName = fieldName groupKeyField
 
-testScriptKeyParamName :: IsString s => s
-testScriptKeyParamName = fromString $ fieldName testScriptKeyField
+testScriptKeyParamName :: Text
+testScriptKeyParamName = fieldName testScriptKeyField
 
-courseManagementContentsParamName :: IsString s => s
-courseManagementContentsParamName = fromString "course-management-contents"
+courseManagementContentsParamName :: Text
+courseManagementContentsParamName = "course-management-contents"
 
 -- Request Param is a Pair of Strings, which
 -- are key and value representing a parameter in
 -- the GET or POST http request
-newtype ReqParam = ReqParam (String,String)
+newtype ReqParam = ReqParam (Text, Text)
 
 -- Produces a string representing the key value pair
 -- E.g: ReqParam ("name", "rika") = "name=rika"
-queryStringParam :: ReqParam -> String
-queryStringParam (ReqParam (k,v)) = join [k, "=", v]
+queryStringParam :: ReqParam -> Text
+queryStringParam (ReqParam (k,v)) = T.concat [k, "=", v]
 
 -- Values that can be converted into a request param,
 -- only the value of the param is calculated
 class ReqParamValue p where
-  paramValue :: (IsString s) => p -> s
+  paramValue :: p -> Text
 
 -- Values that can be converted into request param,
 -- the name and the value is also calculated
@@ -63,73 +65,73 @@ class (ReqParamValue r) => RequestParam r where
   requestParam :: r -> ReqParam
 
 instance ReqParamValue CourseManagementContents where
-  paramValue = fromString . show
+  paramValue = T.pack . show
 
 instance RequestParam CourseManagementContents where
   requestParam t = ReqParam (courseManagementContentsParamName, paramValue t)
 
 instance ReqParamValue AssignmentKey where
-  paramValue (AssignmentKey a) = fromString a
+  paramValue (AssignmentKey a) = T.pack a
 
 instance RequestParam AssignmentKey where
   requestParam a = ReqParam (assignmentKeyParamName, paramValue a)
 
 instance ReqParamValue AssessmentKey where
-  paramValue (AssessmentKey a) = fromString a
+  paramValue (AssessmentKey a) = T.pack a
 
 instance RequestParam AssessmentKey where
   requestParam a = ReqParam (assessmentKeyParamName, paramValue a)
 
 instance ReqParamValue SubmissionKey where
-  paramValue (SubmissionKey s) = fromString s
+  paramValue (SubmissionKey s) = T.pack s
 
 instance RequestParam SubmissionKey where
   requestParam s = ReqParam (submissionKeyParamName, paramValue s)
 
 instance ReqParamValue ScoreKey where
-  paramValue (ScoreKey s) = fromString s
+  paramValue (ScoreKey s) = T.pack s
 
 instance RequestParam ScoreKey where
   requestParam s = ReqParam (scoreKeyParamName, paramValue s)
 
 instance ReqParamValue GroupKey where
-  paramValue (GroupKey g) = fromString g
+  paramValue (GroupKey g) = T.pack g
 
 instance RequestParam GroupKey where
   requestParam g = ReqParam (groupKeyParamName, paramValue g)
 
 instance ReqParamValue TestScriptKey where
-  paramValue (TestScriptKey t) = fromString t
+  paramValue (TestScriptKey t) = T.pack t
 
 instance RequestParam TestScriptKey where
   requestParam t = ReqParam (testScriptKeyParamName, paramValue t)
 
 instance ReqParamValue CourseKey where
-  paramValue (CourseKey c) = fromString c
+  paramValue (CourseKey c) = T.pack c
 
 instance RequestParam CourseKey where
   requestParam g = ReqParam (courseKeyParamName, paramValue g)
 
 instance ReqParamValue EvaluationKey where
-  paramValue (EvaluationKey e) = fromString e
+  paramValue (EvaluationKey e) = T.pack e
 
 instance RequestParam EvaluationKey where
   requestParam e = ReqParam (evaluationKeyParamName, paramValue e)
 
 instance ReqParamValue Username where
-  paramValue (Username u) = fromString u
+  paramValue (Username u) = T.pack u
 
 instance RequestParam Username where
   requestParam u = ReqParam (fieldName usernameField, paramValue u)
 
 instance ReqParamValue Uid where
-  paramValue (Uid u) = fromString u
+  paramValue (Uid u) = T.pack u
 
 instance RequestParam Uid where
   requestParam u = ReqParam (fieldName userUidField, paramValue u)
 
 instance ReqParamValue Language where
-  paramValue = languageCata fromString
+  paramValue = languageCata T.pack
 
 instance RequestParam Language where
   requestParam l = ReqParam (languageParamName, paramValue l)

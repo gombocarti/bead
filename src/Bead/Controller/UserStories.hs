@@ -43,8 +43,10 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String
 import           Data.Time (UTCTime(..), getCurrentTime)
+import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Data.UUID (UUID)
-import qualified Data.UUID as UUID (toString) 
+import qualified Data.UUID as UUID (toString, toText)
 import qualified Data.UUID.V4 as UUID
 import           Numeric (showHex)
 import           Text.Printf (printf)
@@ -61,30 +63,30 @@ newtype UserError = UserError TransMsg
 userErrorCata f (UserError t) = f t
 
 -- Creates a user error that contains a non-parametrized message
-userError :: Translation String -> UserError
+userError :: Translation -> UserError
 userError = UserError . TransMsg
 
 -- Creates a user error that contains a parametrized message, with one parameter
-userParamError :: Translation String -> String -> UserError
+userParamError :: Translation -> Text -> UserError
 userParamError t p = UserError (TransPrmMsg t p)
 
 -- Creates a user error that contains a parametrized message, with 2 parameters
-userPrm2Error :: Translation String -> String -> String -> UserError
+userPrm2Error :: Translation -> Text -> Text -> UserError
 userPrm2Error t p1 p2 = UserError (TransPrm2Msg t p1 p2)
 
 -- Creates a user error that contains a parametrized message, with 3 parameters
-userPrm3Error :: Translation String -> String -> String -> String -> UserError
+userPrm3Error :: Translation -> Text -> Text -> Text -> UserError
 userPrm3Error t p1 p2 p3 = UserError (TransPrm3Msg t p1 p2 p3)
 
 -- Translates the given user error with the given translation function,
 -- applying the parameters if necessary to the parametrized messages
-translateUserError :: (Translation String -> String) -> UserError -> String
+translateUserError :: (Translation -> Text) -> UserError -> Text
 translateUserError = userErrorCata . translateMessage
 
 userErrorNoMsg :: UserError
 userErrorNoMsg = userError (msg_UserStoryError_UnknownError "Unknown Error: No message.")
 
-userErrorWithMsg :: String -> UserError
+userErrorWithMsg :: Text -> UserError
 userErrorWithMsg msg = userParamError (msg_UserStoryError_Message "Some error happened: %s") msg
 
 -- The User Story Context contains a service context and the localization transformation.
@@ -145,7 +147,7 @@ createUser newUser = do
   authorize P_Create P_User
   persistence $ Persist.saveUser newUser
   logger      <- asksLogger
-  liftIO $ log logger INFO $ "User is created: " ++ show (u_username newUser)
+  liftIO $ log logger INFO $ "User is created: " <> Text.pack (show (u_username newUser))
 
 -- Updates the current user's full name, timezone and language in the persistence layer
 changeUserDetails :: String -> TimeZoneName -> Language -> UserStory ()
@@ -536,7 +538,7 @@ createGroupAdmin user gk = logAction INFO "sets user as a group admin of a group
                 let affected = cas \\ [admin]
                 Persist.notifyUsers (Notification.Notification msg now Notification.System) affected
                 return $ putStatusMessage $ msg_UserStory_SetGroupAdmin "The user has become a teacher."
-        else return . CME.throwError $ userParamError (msg_UserStoryError_NoGroupAdmin "%s is not a group admin!") $ uname
+        else return . CME.throwError $ userParamError (msg_UserStoryError_NoGroupAdmin "%s is not a group admin!") $ Text.pack uname
 
 -- Unsubscribes the student from the given group (and course) if the group is one of the student's group
 -- and the sutdent did not submit any solutions for the assignments of the group. In that
@@ -685,7 +687,7 @@ testCaseModificationForAssignment u ak = tcModificationCata noModification fileO
   noModification = return ()
 
   fileOverwrite tsk uf = do
-      let usersFileName = usersFile id id uf
+      let usersFileName = Text.pack $ usersFile id id uf
           testCase = TestCase {
               tcName        = usersFileName
             , tcDescription = usersFileName
@@ -731,7 +733,7 @@ testCaseCreationForAssignment u ak = tcCreationCata noCreation fileCreation text
   noCreation = return ()
 
   fileCreation tsk usersfile = do
-      let usersFileName = usersFile id id usersfile
+      let usersFileName = Text.pack $ usersFile id id usersfile
           testCase = TestCase {
               tcName        = usersFileName
             , tcDescription = usersFileName
@@ -759,10 +761,10 @@ createGroupAssignment :: GroupKey -> Assignment -> TCCreation -> UserStory Assig
 createGroupAssignment gk a tc = logAction INFO msg $ do
   authorize P_Open   P_Group
   authorize P_Create P_Assignment
-  when (null $ Assignment.name a) $
+  when (Text.null $ Assignment.name a) $
     errorPage . userError $ msg_UserStoryError_EmptyAssignmentTitle
       "Assignment title is empty."
-  when (null $ Assignment.desc a) $
+  when (Text.null $ Assignment.desc a) $
     errorPage . userError $ msg_UserStoryError_EmptyAssignmentDescription
       "Assignment description is empty."
 
@@ -802,10 +804,10 @@ createCourseAssignment :: CourseKey -> Assignment -> TCCreation -> UserStory Ass
 createCourseAssignment ck a tc = logAction INFO msg $ do
   authorize P_Open P_Course
   authorize P_Create P_Assignment
-  when (null $ Assignment.name a) $
+  when (Text.null $ Assignment.name a) $
     errorPage . userError $ msg_UserStoryError_EmptyAssignmentTitle
       "Assignment title is empty."
-  when (null $ Assignment.desc a) $
+  when (Text.null $ Assignment.desc a) $
     errorPage . userError $ msg_UserStoryError_EmptyAssignmentDescription
       "Assignment description is empty."
 
@@ -925,7 +927,7 @@ modifyAssessment ak a = logAction INFO ("modifies assessment " ++ show ak) $ do
                   _            -> return []
     Persist.notifyUsers (Notification.Notification msg now $ Notification.Assessment ak) affected
     when (hasScore && Assessment.evaluationCfg a /= Assessment.evaluationCfg new) $
-      void . return . putStatusMessage . msg_UserStory_AssessmentEvalTypeWarning $ concat
+      void . return . putStatusMessage . msg_UserStory_AssessmentEvalTypeWarning $ Text.concat
         [ "The evaluation type of the assessment is not modified. "
         , "A score is already submitted."
         ]
@@ -1080,17 +1082,17 @@ scoreBoardOfGroup gk = logAction INFO ("gets scoreboard of group " ++ show gk) $
   persistence $ Persist.scoreBoardOfGroup gk
 
 -- Puts the given status message to the actual user state
-putStatusMessage :: Translation String -> UserStory ()
+putStatusMessage :: Translation -> UserStory ()
 putStatusMessage = changeUserState . SC.setStatus . SmNormal
 
 -- Puts the given message as the error status message to the actual user state
-putErrorMessage :: Translation String -> UserStory ()
+putErrorMessage :: Translation -> UserStory ()
 putErrorMessage = changeUserState . SC.setStatus . SmError
 
 -- Logs the error message into the logfile and, also throw as an error
 errorPage :: UserError -> UserStory a
 errorPage e = do
-  logMessage ERROR $ translateUserError trans e
+  logMessageText ERROR $ translateUserError trans e
   CME.throwError e
 
 -- * Low level user story functionality
@@ -1112,24 +1114,24 @@ authorize p o = do
     Left RegRole -> case elem (p,o) regPermObjects of
       True  -> return ()
       False -> errorPage $ userPrm2Error
-        (msg_UserStoryError_RegistrationProcessError $ unlines [
+        (msg_UserStoryError_RegistrationProcessError $ Text.unlines [
            "During the registration process some internal error happened ",
            "and tries to reach other processes %s %s."])
-        (show p) (show o)
+        (Text.pack . show $ p) (Text.pack . show $ o)
 
     Left TestAgentRole -> case elem (p,o) testAgentPermObjects of
       True -> return ()
       False -> errorPage $ userPrm2Error
-        (msg_UserStoryError_TestAgentError $ unlines [
+        (msg_UserStoryError_TestAgentError $ Text.unlines [
            "During the automated testing process some internal error happened ",
            "and tries to reach other processes %s %s."])
-        (show p) (show o)
+        (Text.pack . show $ p) (Text.pack . show $ o)
 
     Right r -> case permission r p o of
       True  -> return ()
       False -> errorPage $ userPrm3Error
         (msg_UserStoryError_AuthenticationNeeded "Authentication needed %s %s %s")
-          (show r) (show p) (show o)
+          (Text.pack . show $ r) (Text.pack . show $ p) (Text.pack . show $ o)
   where
     regPermObjects = [
         (P_Create, P_User),    (P_Open, P_User)
@@ -1147,7 +1149,10 @@ logErrorMessage = logMessage ERROR
 
 -- | Log a message through the log subsystem
 logMessage :: LogLevel -> String -> UserStory ()
-logMessage level msg = do
+logMessage lvl msg = logMessageText lvl (Text.pack msg)
+
+logMessageText :: LogLevel -> Text -> UserStory ()
+logMessageText level msg = do
   CMS.get >>=
     SC.userStateCata
       userNotLoggedIn
@@ -1156,12 +1161,12 @@ logMessage level msg = do
       loggedIn
   where
     logMsg prefix =
-      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ unwords [prefix, msg]))
+      asksLogger >>= (\lgr -> (liftIO $ log lgr level $ Text.unwords [prefix, msg]))
 
     userNotLoggedIn _  = logMsg "[USER NOT LOGGED IN]"
     registration       = logMsg "[REGISTRATION]"
     testAgent          = logMsg "[TEST AGENT]"
-    loggedIn _ u _ _ _ uuid _ _ _ = logMsg (unwords [Entity.uid id u, UUID.toString uuid])
+    loggedIn _ u _ _ _ uuid _ _ _ = logMsg (Text.unwords [Text.pack $ Entity.uid id u, UUID.toText uuid])
 
 
 -- | Change user state
@@ -1479,7 +1484,7 @@ createComment sk c = logAction INFO ("comments on " ++ show sk) $ do
               let Comment { commentAuthor = author, commentDate = now, comment = body } = c
               let maxLength   = 100
               let maxLines    = 5
-              let trimmedBody = (init $ unlines $ take maxLines $ lines $ take maxLength body) ++ "..."
+              let trimmedBody = (Text.init $ Text.unlines $ take maxLines $ Text.lines $ Text.take maxLength body) <> "..."
               let msg = Notification.NE_CommentCreated author (withSubmissionKey sk id) trimmedBody
               ak <- Persist.assignmentOfSubmission sk
               mck <- Persist.courseOfAssignment ak
@@ -1806,7 +1811,7 @@ persistence m = do
       logMessage ERROR $ concat ["Exception in persistence layer: ", err, " XID: ", xid]
       CME.throwError $ userParamError
         (msg_UserStoryError_XID "Some internal error happened, XID: %s")
-        xid
+        (Text.pack xid)
     (Right (Left e)) -> do
       -- No exception but error processing the persistence command
       up <- userPart
@@ -1814,7 +1819,7 @@ persistence m = do
       logMessage ERROR $ concat ["Persistence error: ", e, "XID: ", xid]
       CME.throwError $ userParamError
         (msg_UserStoryError_XID "Some internal error happened, XID: %s")
-        xid
+        (Text.pack xid)
     (Right (Right x)) -> return x -- Everything went fine
   where
     showSomeException :: SomeException -> String

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Bead.View.Content.Assignment.Data where
 
+import           Data.Text (Text)
 import           Data.Time (UTCTime)
 import           Bead.View.Content
 
@@ -64,13 +65,13 @@ data PageData
     , pdTCModificationPreview :: TCModificationParameters
     }
 
-type TCModificationParameters = (Maybe (Maybe TestScriptKey), Maybe (Either () (UsersFile FilePath)), Maybe String)
+type TCModificationParameters = (Maybe (Maybe TestScriptKey), Maybe (Either () (UsersFile FilePath)), Maybe Text)
 
 tcmpTextTestCase (_,_,t) = t
 tcmpFileTestCase (_,t,_) = t
 tcmpTestScriptKey (k,_,_) = k
 
-type TCCreationParameters = (Maybe (Maybe TestScriptKey), Maybe (UsersFile FilePath), Maybe String)
+type TCCreationParameters = (Maybe (Maybe TestScriptKey), Maybe (UsersFile FilePath), Maybe Text)
 
 tccTestScriptKey (k,_,_) = k
 tccFileTestCase  (_,t,_) = t

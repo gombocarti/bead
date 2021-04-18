@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Bead.Daemon.LDAP (
     LDAPDaemon(..)
   , LDAPDaemonConfig(..)
@@ -13,6 +15,7 @@ import           Control.Concurrent.STM
 import           Control.Monad (join)
 import qualified Data.Map as Map
 import           Data.Maybe
+import qualified Data.Text as T
 import           System.FilePath ((</>))
 
 import           Bead.Controller.Logging
@@ -54,7 +57,7 @@ startLDAPDaemon logger config = do
           n <- modifyTVar add1 noOfRequests
           writeTChan queryQueue (user,resultEnvelope)
           return $ do
-            log logger INFO $ concat ["There are ", show n, " queries waiting in the LDAP queue."]
+            log logger INFO $ T.concat ["There are ", T.pack $ show n, " queries waiting in the LDAP queue."]
             atomically $ readTMVar resultEnvelope
 
   let uid_key = uidKey config
@@ -76,7 +79,7 @@ startLDAPDaemon logger config = do
   let attrs = [uid_key, name_key, email_key]
 
   let loop daemon_id = do
-        log logger INFO $ concat ["LDAP Daemon ", daemon_id, " is waiting"]
+        log logger INFO $ T.concat ["LDAP Daemon ", daemon_id, " is waiting"]
         join $ atomically $ do
           modifyTVar sub1 noOfRequests
           (user,resultEnvelope) <- readTChan queryQueue
@@ -87,14 +90,14 @@ startLDAPDaemon logger config = do
                                   , queryUsernameKey = usernameKey config
                                   }
             queryResult <- waitCatch =<< async (Query.query querySettings user attrs)
-            log logger INFO $ concat ["LDAP Daemon ", daemon_id, " queries attributes for ", user]
+            log logger INFO $ T.concat ["LDAP Daemon ", daemon_id, " queries attributes for ", T.pack user]
             atomically $ putTMVar resultEnvelope $ case queryResult of
               Left  someError  -> LDAPError $ show someError
               Right result     -> Query.queryResult queryOK queryInvalid queryError result
             loop daemon_id
 
   -- Start the workers
-  sequence_ $ map (forkIO . loop . show) [1 .. workers config]
+  sequence_ $ map (forkIO . loop . T.pack . show) [1 .. workers config]
   return $! LDAPDaemon query
     where
       sub1 x = x - 1

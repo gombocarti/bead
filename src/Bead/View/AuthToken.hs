@@ -49,7 +49,7 @@ data Cookie
     , cookieRole :: E.Role             -- User's role
     , cookieUuid :: UUID             -- Token for the active user session
     , cookieTimezone :: E.TimeZoneName -- Timezone of the user
-    , cookieStatus :: Maybe (E.StatusMessage (Translation String)) -- The last status message
+    , cookieStatus :: Maybe (E.StatusMessage Translation) -- The last status message
     , cookieHomePage :: R.HomePageContents
     }
 #ifdef TEST
@@ -57,7 +57,7 @@ data Cookie
 #endif
 
 cookieCata :: (E.Language -> a)
-           -> (E.Username -> E.Uid -> String -> E.Language -> E.Role -> UUID -> E.TimeZoneName -> Maybe (E.StatusMessage (Translation String)) -> R.HomePageContents -> a)
+           -> (E.Username -> E.Uid -> String -> E.Language -> E.Role -> UUID -> E.TimeZoneName -> Maybe (E.StatusMessage Translation) -> R.HomePageContents -> a)
            -> Cookie
            -> a
 cookieCata notLoggedIn loggedIn cookie =

@@ -8,8 +8,10 @@ import           Control.Monad
 import           Data.Function (on)
 import qualified Data.HashSet as HashSet
 import           Data.List (intercalate, sortBy)
-import           Data.String (fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
 
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 as H hiding (map)
 
 import           Bead.Controller.UserStories (availableGroups, attendedGroups)
@@ -62,44 +64,44 @@ groupRegistrationContent desc = do
   return $ do
     let registeredGroups = groupsRegistered desc
     Bootstrap.rowColMd12 $ do
-      H.h3 $ fromString $ msg $ msg_GroupRegistration_RegisteredCourses "Registered courses"
+      H.h3 $ B.toMarkup $ msg $ msg_GroupRegistration_RegisteredCourses "Registered courses"
       i18n msg $ groupsAlreadyRegistered registeredGroups
     when (not . null $ registeredGroups) $ Bootstrap.rowColMd12 $ do
-      H.p $ (fromString . msg $ msg_GroupRegistration_Warning $ concat
+      H.p $ (B.toMarkup . msg $ msg_GroupRegistration_Warning $ T.concat
         [ "It is possible to quit from a group or move between groups until a submission is "
         , "submitted.  Otherwise, the teacher of the given group should be asked to undo the "
         , "group registration."
         ])
     Bootstrap.rowColMd12 $ do
-      H.h3 $ (fromString . msg $ msg_GroupRegistration_NewGroup "New group")
+      H.h3 $ (B.toMarkup . msg $ msg_GroupRegistration_NewGroup "New group")
     i18n msg $ groupsForTheUser (groups desc)
 
 groupsAlreadyRegistered :: [(Course, GroupKey, Group, [User], Bool)] -> IHtml
 groupsAlreadyRegistered ds = do
   msg <- getI18N
   return $ nonEmpty ds
-    (fromString . msg $ msg_GroupRegistration_NoRegisteredCourses
-      "No registered courses.  Choose a group.")
+    (B.toMarkup . msg $ msg_GroupRegistration_NoRegisteredCourses
+      "No registered courses. Choose a group.")
     (Bootstrap.table $ do
       thead $ H.tr $ do
-        H.th . fromString . msg $ msg_GroupRegistration_Group "Group"
-        H.th . fromString . msg $ msg_GroupRegistration_Admin "Teacher"
-        H.th . fromString . msg $ msg_GroupRegistration_Unsubscribe "Unregister"
+        H.th . B.toMarkup . msg $ msg_GroupRegistration_Group "Group"
+        H.th . B.toMarkup . msg $ msg_GroupRegistration_Admin "Teacher"
+        H.th . B.toMarkup . msg $ msg_GroupRegistration_Unsubscribe "Unregister"
       tbody $ mapM_ (groupLine msg) ds)
   where
     unsubscribeFromCourse k = Pages.unsubscribeFromCourse k ()
 
     groupLine msg (course, key, grp, admins, hasSubmission) = do
       H.tr $ do
-        H.td $ fromString (fullGroupName course grp)
-        H.td $ fromString $ intercalate ", " (map u_name . sortUsersByName $ admins)
+        H.td $ B.toMarkup (fullGroupName course grp)
+        H.td $ B.toMarkup $ intercalate ", " (map u_name . sortUsersByName $ admins)
         H.td $
           if hasSubmission
-            then (fromString . msg $ msg_GroupRegistration_NoUnsubscriptionAvailable
+            then (B.toMarkup . msg $ msg_GroupRegistration_NoUnsubscriptionAvailable
               "Unregistration is not allowed.")
             else postForm (routeOf $ unsubscribeFromCourse key) $
                    Bootstrap.smallSubmitButton
-                     (fieldName unsubscribeFromCourseSubmitBtn)
+                     (fieldName unsubscribeFromCourseSubmitBtn :: Text)
                      (msg $ msg_GroupRegistration_Unsubscribe "Unregister")
 
 groupsForTheUser :: [(Course, GroupKey, Group, [User])] -> IHtml
@@ -107,18 +109,18 @@ groupsForTheUser gs = do
   msg <- getI18N
   return $
     nonEmpty gs
-      (Bootstrap.rowColMd12 $ p $ fromString . msg $ msg_GroupRegistration_NoAvailableCourses "There are no available groups yet.") $
+      (Bootstrap.rowColMd12 $ p $ B.toMarkup . msg $ msg_GroupRegistration_NoAvailableCourses "There are no available groups yet.") $
       postForm (routeOf groupRegistration) $ do
         Bootstrap.selectionWithPlaceholder
           (fieldName groupRegistrationField)
           (msg $ msg_GroupRegistration_SelectGroup "Select course and group")
           (map (\(c, gk, g, admins) -> (gk, descriptive c g admins)) . sortCoursesAndAdmins $ gs)
-        Bootstrap.submitButton (fieldName regGroupSubmitBtn) (msg $ msg_GroupRegistration_Register "Register")
+        Bootstrap.submitButton (fieldName regGroupSubmitBtn :: Text) (msg $ msg_GroupRegistration_Register "Register")
   where
     groupRegistration = Pages.groupRegistration ()
 
-    descriptive :: Course -> Group -> [User] -> String
-    descriptive c g admins = unwords [fullGroupName c g, "/", intercalate ", " (map u_name admins)]
+    descriptive :: Course -> Group -> [User] -> Text
+    descriptive c g admins = T.unwords [fullGroupName c g, "/", T.intercalate ", " (map (T.pack . u_name) admins)]
 
     sortCoursesAndAdmins :: [(Course, GroupKey, Group, [User])] -> [(Course, GroupKey, Group, [User])]
     sortCoursesAndAdmins = sortBy (compareHun `on` (courseName . fst4)) . map (\(c, gk, g, admins) -> (c, gk, g, sortUsersByName admins))

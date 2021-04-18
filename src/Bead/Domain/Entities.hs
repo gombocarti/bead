@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.Domain.Entities (
     AuthFailure(..)
   , Submission(..)
@@ -103,11 +104,13 @@ import           Control.Applicative
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Lazy.UTF8 as BLUTF8
 import           Data.Data
 import           Data.Hashable (Hashable)
 import           Data.List (findIndex, sortBy)
 import           Data.Maybe (fromMaybe)
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import           Data.Time (UTCTime(..), LocalTime, defaultTimeLocale)
 import           Data.Time.Format (formatTime)
 import           GHC.Generics (Generic)
@@ -126,7 +129,7 @@ import           Test.Tasty.TestSet hiding (shrink)
 #endif
 
 data SubmissionValue
-  = SimpleSubmission String
+  = SimpleSubmission Text
   | ZippedSubmission ByteString
   deriving (Eq, Show)
 
@@ -152,7 +155,7 @@ submissionCata f (Submission sub subPostDate) = f sub subPostDate
 withSubmission s f = submissionCata f s
 
 submissionValueToByteString :: SubmissionValue -> BL.ByteString
-submissionValueToByteString = submissionValue BLUTF8.fromString BL.fromStrict
+submissionValueToByteString = submissionValue (BL.fromStrict . TE.encodeUtf8) BL.fromStrict
 
 evaluationResultCata
   binary
@@ -166,7 +169,7 @@ evaluationResultCata
 -- | Evaluation of a submission
 data Evaluation = Evaluation {
     evaluationResult  :: EvResult
-  , writtenEvaluation :: String
+  , writtenEvaluation :: Text
   } deriving (Eq, Read, Show)
 
 -- | Template function for the evaluation
@@ -182,12 +185,12 @@ resultString = evResultCata
     (TransMsg $ msg_Domain_EvalFailed "Failed")))
   (\p -> case point p of
     Nothing -> TransMsg $ msg_Domain_EvalNoResultError "No evaluation result, some internal error happened!"
-    Just q  -> TransPrmMsg (msg_Domain_EvalPercentage "%s%%") (show . round $ 100.0 * q))
+    Just q  -> TransPrmMsg (msg_Domain_EvalPercentage "%s%%") (T.pack . show . round $ 100.0 * q))
   (freeForm (TransPrmMsg (msg_Domain_FreeForm "Evaluation: %s")))
 
 evaluationToFeedback :: UTCTime -> User -> Evaluation -> Feedback
 evaluationToFeedback t u e = Feedback info t where
-  info = Evaluated (evaluationResult e) (writtenEvaluation e) (u_name u)
+  info = Evaluated (evaluationResult e) (writtenEvaluation e) (T.pack $ u_name u)
 
 -- Course or Group info. Some information is attached to
 -- course or group
@@ -206,8 +209,8 @@ cgInfoCata
 
 -- | A course represent a course at the university
 data Course = Course {
-    courseName :: String
-  , courseDesc :: String
+    courseName :: Text
+  , courseDesc :: Text
   , courseTestScriptType :: TestScriptType
   } deriving (Eq, Show, Ord)
 
@@ -219,20 +222,20 @@ courseAppAna name desc test =
 
 -- | Groups are registered under the courses
 data Group = Group {
-    groupName  :: String
-  , groupDesc  :: String
+    groupName  :: Text
+  , groupDesc  :: Text
   } deriving (Eq, Show, Ord)
 
 groupCata group (Group name desc)
   = group name desc
 
-shortCourseName :: Course -> String
+shortCourseName :: Course -> Text
 shortCourseName = courseName
 
-fullGroupName :: Course -> Group -> String
-fullGroupName c g = unwords [courseName c, "-", groupName g]
+fullGroupName :: Course -> Group -> Text
+fullGroupName c g = T.unwords [courseName c, "-", groupName g]
 
-shortGroupName :: Group -> String
+shortGroupName :: Group -> Text
 shortGroupName = groupName
 
 -- * Authorization and authentication
@@ -494,10 +497,10 @@ instance Arbitrary TestScriptType where
 -- Test Script defines a scripts that can be integrated with the
 -- testing framework for the given course.
 data TestScript = TestScript {
-    tsName :: String -- The name of the script
-  , tsDescription :: String -- The short description of the script
-  , tsNotes :: String -- The notes for the creator of the test cases, which are associated with the script
-  , tsScript :: String -- The script itself that will be subsctituated to the test frameworks shell script
+    tsName :: Text -- The name of the script
+  , tsDescription :: Text -- The short description of the script
+  , tsNotes :: Text -- The notes for the creator of the test cases, which are associated with the script
+  , tsScript :: Text -- The script itself that will be subsctituated to the test frameworks shell script
   , tsType :: TestScriptType -- The type of the test script
   } deriving (Eq, Show, Read)
 
@@ -603,6 +606,17 @@ instance CompareHun UserDesc where
     case compareHun fullname fullname' of
       EQ -> compareHun username username'
       other -> other
+
+instance CompareHun Text where
+  compareHun t1 t2 =
+    case (T.uncons t1, T.uncons t2) of
+      (Nothing, Nothing) -> EQ
+      (Nothing, _) -> LT
+      (_, Nothing) -> GT
+      (Just (c1, t1'), Just (c2, t2')) ->
+        case compareHun c1 c2 of
+          EQ -> compareHun t1' t2'
+          result -> result
 
 sortHun :: [String] -> [String]
 sortHun = sortBy compareHun

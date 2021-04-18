@@ -10,12 +10,14 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
 import           Data.List (intersperse, partition)
 import           Data.Maybe (listToMaybe)
-import           Data.String (fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Time
 
 import           Snap.Util.FileUploads
 import           System.Directory (doesFileExist)
 import           System.FilePath.Posix (takeExtension)
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 as H
 import           Text.Blaze.Html5.Attributes as A
 
@@ -127,7 +129,7 @@ submissionPostHandler = do
     newSubmission ak as up =
       if (not $ Assignment.isZippedSubmissions as)
         then do
-           subm <- getParameter (stringParameter (fieldName submissionTextField) "Submission text")
+           subm <- getParameter (textParameter (fieldName submissionTextField) "Submission text")
            return $ void $ submit $ SimpleSubmission subm
         else
           case uploadedFile of
@@ -173,7 +175,7 @@ assignmentNotAvailableYetContent :: IHtml
 assignmentNotAvailableYetContent = do
   msg <- getI18N
   return $ Bootstrap.rowColMd12 $ Bootstrap.alert Bootstrap.Danger $
-    fromString $ msg $ msg_Submission_AssignmentNotAvailableYet "The assignment is not available yet. Check back later."
+    B.toMarkup $ msg $ msg_Submission_AssignmentNotAvailableYet "The assignment is not available yet. Check back later."
 
 submissionContent :: PageData -> IHtml
 submissionContent p = do
@@ -218,10 +220,10 @@ submissionContent p = do
     aspects = Assignment.aspects $ asValue p
 
     limitReached :: I18N -> H.Html
-    limitReached msg = Bootstrap.alert Bootstrap.Danger $ H.p $ fromString $ msg $
+    limitReached msg = Bootstrap.alert Bootstrap.Danger $ H.p $ B.toMarkup $ msg $
       msg_Submission_LimitReached "Submission limit is reached."
 
-    infoOnTestCase :: Translation String
+    infoOnTestCase :: Translation
     infoOnTestCase = case asHasTestCase p of
                        HasTestCase -> msg_SubmissionWillBeTested "The submission will be automatically tested."
                        DoesNotHaveTestCase -> msg_AssignmentDoesntHaveTestCase "The assignment does not have test case."
@@ -230,7 +232,7 @@ submissionContent p = do
     submissionForm msg =
       if (Assignment.isActive (asValue p) (asNow p))
         then do
-          h2 $ fromString $ msg $ msg_Submission_Solution "Solution"
+          h2 $ B.toMarkup $ msg $ msg_Submission_Solution "Solution"
           postForm (routeOf submission) `withId` (rFormId C.submissionForm) ! A.enctype "multipart/form-data" $ do
             assignmentPassword msg
             if (Assignment.isZippedSubmissions aspects)
@@ -238,23 +240,23 @@ submissionContent p = do
                 Bootstrap.formGroup $ do
                   Bootstrap.helpBlock $
                     (msg $ msg_Submission_Info_File
-                      "Please select a file with .zip extension to submit.  Note that the maximum file size in kilobytes: ") ++
-                    (fromString $ show $ asMaxFileSize p)
+                      "Please select a file with .zip extension to submit.  Note that the maximum file size in kilobytes: ") <>
+                    (T.pack $ show $ asMaxFileSize p)
                   fileInput (fieldName submissionFileField)
               else
-                Bootstrap.textArea (fieldName submissionTextField) "" Bootstrap.Medium ""
+                Bootstrap.textArea (fieldName submissionTextField :: Text) ("" :: Text) Bootstrap.Medium ""
             -- alert has 20px spacing at the bottom
-            Bootstrap.submitButton (fieldName submitSolutionBtn) (fromString $ msg $ msg_Submission_Submit "Submit") ! A.style "margin-bottom: 20px;"
+            Bootstrap.submitButton (fieldName submitSolutionBtn :: Text) (msg $ msg_Submission_Submit "Submit") ! A.style "margin-bottom: 20px;"
         else
-          Bootstrap.alert Bootstrap.Danger $ H.p $ fromString . msg $
+          Bootstrap.alert Bootstrap.Danger $ H.p $ B.toMarkup . msg $
             msg_Submission_SubmissionFormDeadlineReached "Deadline is reached."
 
     assignmentPassword :: I18N -> H.Html
     assignmentPassword msg =
       when (Assignment.isPasswordProtected aspects) $ do
-        H.p $ fromString . msg $ msg_Submission_Info_Password
+        H.p $ B.toMarkup . msg $ msg_Submission_Info_Password
           "This assignment can only accept submissions by providing the password."
-        Bootstrap.passwordInput (fieldName submissionPwdField) (msg $ msg_Submission_Password "Password for the assignment:")
+        Bootstrap.passwordInput (fieldName submissionPwdField :: Text) (msg $ msg_Submission_Password "Password for the assignment:")
 
     userSubmissionInfo :: I18N -> [SubmissionInfo] -> H.Html
     userSubmissionInfo msg submissions =
@@ -265,13 +267,13 @@ submissionContent p = do
       | not $ null submissions =
           Bootstrap.rowColMd12 $ Bootstrap.listGroupHeightLimit 4 $ mapM_ line submissions
       | otherwise =
-          Bootstrap.rowColMd12 $ H.p $ fromString $ msg $ msg_Submission_NoSubmittedSolutions "There are no submissions."
+          Bootstrap.rowColMd12 $ H.p $ B.toMarkup $ msg $ msg_Submission_NoSubmittedSolutions "There are no submissions."
 
     submissionLine :: I18N -> SubmissionInfo -> H.Html
     submissionLine msg (sk, state, time) = do
       Bootstrap.listGroupLinkItem
         (routeOf $ submissionDetails (asKey p) sk)
-        (do fromString . showDate $ (asTimeConv p) time
+        (do B.toMarkup . showDate $ (asTimeConv p) time
             SV.formatSubmissionState SV.toColoredBadge msg state
         )
         where

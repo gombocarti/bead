@@ -65,33 +65,33 @@ notificationReference
 -- but that is needed for implementing a flexible way of
 -- internationalization.
 data NotificationEvent
-  = NE_CourseAdminCreated String
+  = NE_CourseAdminCreated Text
     -- course name
-  | NE_CourseAdminAssigned String String
+  | NE_CourseAdminAssigned Text String
     -- course name, assignee
-  | NE_TestScriptCreated String String
+  | NE_TestScriptCreated String Text
     -- creator, course name
-  | NE_TestScriptUpdated String String String
+  | NE_TestScriptUpdated String Text Text
     -- editor, test script name, course name
-  | NE_RemovedFromGroup String String
+  | NE_RemovedFromGroup Text String
     -- group name, deletor
-  | NE_GroupAdminCreated String String String
+  | NE_GroupAdminCreated Text String Text
     -- course name, creator, group name
-  | NE_GroupAssigned String String String String
+  | NE_GroupAssigned Text Text String String
     -- group name, course name, assignor, assignee
-  | NE_GroupCreated String String String
+  | NE_GroupCreated Text String Text
     -- course name, creator, group name
-  | NE_GroupAssignmentCreated String String String String
+  | NE_GroupAssignmentCreated String Text Text Text
     -- creator, group name, course name, assignment name
-  | NE_CourseAssignmentCreated String String String
+  | NE_CourseAssignmentCreated String Text Text
     -- creator, course name, assignment name
-  | NE_GroupAssessmentCreated String String String String
+  | NE_GroupAssessmentCreated String Text Text Text
     -- creator, group name, course name, assessment title
-  | NE_CourseAssessmentCreated String String String
+  | NE_CourseAssessmentCreated String Text Text
     -- creator, course name, assessment title
-  | NE_AssessmentUpdated String String
+  | NE_AssessmentUpdated String Text
     -- editor, assessment title
-  | NE_AssignmentUpdated String String
+  | NE_AssignmentUpdated String Text
     -- editor, assignment name
   | NE_EvaluationCreated String String
     -- evaluator, submission id
@@ -99,7 +99,7 @@ data NotificationEvent
     -- editor, assessment id
   | NE_AssignmentEvaluationUpdated String String
     -- editor, submission id
-  | NE_CommentCreated String String String
+  | NE_CommentCreated Text String Text
     -- commenter, submission id, body
   deriving (Eq, Show, Read, Data, Typeable)
 

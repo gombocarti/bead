@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Test.Unit.Persistence (
     tests
   ) where
@@ -31,6 +32,8 @@ import Control.Monad (join, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.Maybe
 import Data.List ((\\), isSuffixOf)
+import Data.Text (Text)
+import qualified Data.Text.IO as TIO
 import Data.Time.Clock
 import Data.Tuple.Utils (thd3)
 import System.Directory
@@ -132,13 +135,13 @@ test_feedbacks = testCase "Create and delete test feedbacks" $ do
     waitALittle :: IO ()
     waitALittle = threadDelay (1 * 10^5) -- 0.1s
     
-    dumpFeedback :: String -> String -> Maybe String -> Maybe String -> Maybe String -> IO ()
+    dumpFeedback :: String -> String -> Maybe Text -> Maybe Text -> Maybe String -> IO ()
     dumpFeedback d sk private public result = do
       let sdir = testIncoming </> d
       createDirectory sdir
       writeFile (sdir </> "id") sk
-      maybe (return ()) (writeFile (sdir </> "private")) private
-      maybe (return ()) (writeFile (sdir </> "public")) public
+      maybe (return ()) (TIO.writeFile (sdir </> "private")) private
+      maybe (return ()) (TIO.writeFile (sdir </> "public")) public
       maybe (return ()) (writeFile (sdir </> "result")) result
       waitALittle
 

@@ -9,7 +9,8 @@ import           Control.Monad
 import           Control.Arrow ((***), (&&&))
 import           Data.Function (on)
 import           Data.List (intercalate, sortBy)
-import           Data.String (fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Tuple.Utils (snd3)
 
 import qualified Bead.Controller.Pages as Pages
@@ -82,12 +83,12 @@ groupAdministratorsTable i18n groups = do
   let groups' = sortBy (compareHun `on` (groupName . snd3)) groups
   Bootstrap.row $ Bootstrap.colMd12  $ Bootstrap.table $ do
     H.thead $ H.tr $ do
-      H.th (fromString . i18n $ msg_CourseAdmin_GroupAdmins_Group "Group")
-      H.th (fromString . i18n $ msg_CourseAdmin_GroupAdmins_Admins "Group Admins")
+      H.th (H.toMarkup . i18n $ msg_CourseAdmin_GroupAdmins_Group "Group")
+      H.th (H.toMarkup . i18n $ msg_CourseAdmin_GroupAdmins_Admins "Group Admins")
     H.tbody $ forM_ groups' $ \(gk, group_, admins) -> do
       H.tr $ do
-        H.td (fromString $ groupName group_)
-        H.td (fromString . intercalate ", " $ Prelude.map u_name admins)
+        H.td (H.toMarkup $ groupName group_)
+        H.td (H.toMarkup . intercalate ", " $ Prelude.map u_name admins)
 
 courseAdminContent :: PageData -> IHtml
 courseAdminContent info = do
@@ -96,37 +97,37 @@ courseAdminContent info = do
     Bootstrap.row $ do
       -- New Group for the course
       Bootstrap.colMd12 $ do
-        H.h3 $ (fromString $ msg $ msg_CourseAdmin_CreateGroup "New group for the course")
+        H.h3 $ (H.toMarkup $ msg $ msg_CourseAdmin_CreateGroup "New group for the course")
         postForm (routeOf createGroup) $ do
           Bootstrap.textInput (fieldName groupNameField) (msg $ msg_Input_Group_Name "Title") ""
           Bootstrap.textInput (fieldName groupDescField) (msg $ msg_Input_Group_Description "Description") ""
-          Bootstrap.submitButton (fieldName createGroupBtn) (fromString $ msg $ msg_CourseAdmin_CreateCourse "Create group")
+          Bootstrap.submitButton (fieldName createGroupBtn) (msg $ msg_CourseAdmin_CreateCourse "Create group")
           H.hr
       -- Assign teacher to the group
       Bootstrap.colMd12 $ do
-        H.h3 $ (fromString $ msg $ msg_CourseAdmin_AssignAdmin "Assign teacher to the group")
-        nonEmpty groups (H.p $ fromString . msg $ msg_CourseAdmin_NoGroups "There are no groups.") $
-          nonEmpty groupAdmins (H.p $ fromString . msg $ msg_CourseAdmin_NoGroupAdmins "There are no teachers.") $
+        H.h3 $ (H.toMarkup $ msg $ msg_CourseAdmin_AssignAdmin "Assign teacher to the group")
+        nonEmpty groups (H.p $ H.toMarkup . msg $ msg_CourseAdmin_NoGroups "There are no groups.") $
+          nonEmpty groupAdmins (H.p $ H.toMarkup . msg $ msg_CourseAdmin_NoGroupAdmins "There are no teachers.") $
           postForm (routeOf assignGroupAdmin) $ do
             Bootstrap.selection (fieldName selectedGroup) (const False) groups
             Bootstrap.selection (fieldName selectedGroupAdmin) (const False) groupAdmins
-            Bootstrap.submitButton (fieldName assignGroupAdminBtn) (fromString $ msg $ msg_CourseAdmin_AssignAdmin_Button "Assign")
+            Bootstrap.submitButton (fieldName assignGroupAdminBtn) (msg $ msg_CourseAdmin_AssignAdmin_Button "Assign")
 
     when (not . null $ groups) $ do
       Bootstrap.row $ Bootstrap.colMd12 $ H.hr
       Bootstrap.row $ Bootstrap.colMd12 $ H.p $
-        fromString $ msg $ msg_CourseAdmin_GroupAdmins_Info
+        H.toMarkup $ msg $ msg_CourseAdmin_GroupAdmins_Info
           "The following table contains the course related groups and group admins."
 
     -- Group Administrators table
     groupAdministratorsTable msg (pdGroups info)
 
   where
-    groups :: [(GroupKey, String)]
+    groups :: [(GroupKey, Text)]
     groups = map (\(gk, grp, admins) -> (gk, shortGroupName grp)) (pdGroups info)
 
-    groupAdmins :: [(Username, String)]
-    groupAdmins = Prelude.map (u_username &&& userLongname) (pdGroupAdmins info)
+    groupAdmins :: [(Username, Text)]
+    groupAdmins = Prelude.map (u_username &&& (T.pack . userLongname)) (pdGroupAdmins info)
 
     userLongname :: User -> String
     userLongname u = concat [ u_name u, " - ", usernameCata Prelude.id $ u_username u ]
@@ -135,5 +136,5 @@ courseAdminContent info = do
     assignGroupAdmin = Pages.assignGroupAdmin (pdCourseKey info) ()
 
 getGroup = Group
-  <$> getParameter (stringParameter (fieldName groupNameField) "Group name")
-  <*> getParameter (stringParameter (fieldName groupDescField) "Group description")
+  <$> getParameter (textParameter (fieldName groupNameField) "Group name")
+  <*> getParameter (textParameter (fieldName groupDescField) "Group description")

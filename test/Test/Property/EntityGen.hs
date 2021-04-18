@@ -14,20 +14,24 @@ import           Test.Tasty.Arbitrary
 
 import           Control.Monad (join, liftM)
 import           Control.Applicative ((<$>),(<*>),pure)
-import           Data.String (fromString)
+import           Data.String (IsString, fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import           Data.UUID (UUID)
 import qualified Data.UUID as UUID
 
 import qualified Data.ByteString.Char8 as BS (pack)
 
-word = listOf1 $ elements ['a' .. 'z' ]
+word :: IsString s => Gen s
+word = fromString <$> (listOf1 $ elements ['a' .. 'z' ])
 numbers = listOf1 $ elements ['0' .. '9']
 
-manyWords :: Gen String
+manyWords :: IsString s => Gen s
 manyWords = do
   w <- word
   ws <- manyWords'
-  return $ unwords [w, ws]
+  return $ fromString $ unwords [w, ws]
 
   where
     manyWords' = listOf1 $ elements ['a' .. 'z']
@@ -120,17 +124,17 @@ homePages = oneof [ return $ R.Welcome
                   , return R.Administration
                   ]
 
-statusMessages :: Gen (Maybe (StatusMessage (Translation String)))
+statusMessages :: Gen (Maybe (StatusMessage Translation))
 statusMessages = do
   severity <- elements [SmNormal, SmError]
   message <- translations
   elements [Nothing, Just (severity message)]
     where
-      translations :: Gen (Translation String)
+      translations :: Gen Translation
       translations = do
         n <- elements [1..20]
         s <- manyWords
-        return $ T (n, s)
+        return $ T (n, T.pack s)
 
 courseKeys :: Gen CourseKey
 courseKeys = R.CourseKey <$> vectorOf 4 digits
@@ -159,10 +163,13 @@ courses =
 groupKeys :: Gen GroupKey
 groupKeys = R.GroupKey <$> vectorOf 4 digits
 
+groupCodes :: Gen String
 groupCodes = word
 
+groupNames :: Gen Text
 groupNames = manyWords
 
+groupDescs :: Gen Text
 groupDescs = manyWords
 
 groupUsers' = liftM (map Username) (listOf1 word)
@@ -181,10 +188,13 @@ assignments start end = assignmentAna
   (return end)
   evaluationConfigs
 
+assignmentNames :: Gen Text
 assignmentNames = manyWords
 
+assignmentDescs :: Gen Text
 assignmentDescs = manyWords
 
+assignmentTCss :: IsString s => Gen s
 assignmentTCss = manyWords
 
 assignmentTypeGen = oneof [
@@ -199,11 +209,12 @@ evaluationConfigs = oneof [
   , percentageConfig <$> percentage
   ]
 
+passwords :: IsString s => Gen s
 passwords = word
 
 solutionValues = oneof [
     SimpleSubmission <$> solutionTexts
-  , ZippedSubmission . fromString <$> solutionTexts
+  , ZippedSubmission . TE.encodeUtf8 <$> solutionTexts
   ]
 
 submissions date = Submission
@@ -218,6 +229,7 @@ comments date = Comment
   <*> (return date)
   <*> commentTypes
 
+solutionTexts :: Gen Text
 solutionTexts = manyWords
 
 commentTexts = manyWords

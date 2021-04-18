@@ -8,7 +8,6 @@ import           Data.String (fromString)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time (UTCTime, getCurrentTime)
-import qualified Text.Blaze as B
 import qualified Text.Blaze.Html5 as H
 
 import qualified Bead.Controller.UserStories as Story
@@ -63,24 +62,24 @@ navigationTabs msg role contents ck =
     _ : _ : _ -> Bootstrap.tab $ mconcat $ map (tabToHtml msg) accessibleTabs
     _ -> mempty
   where
-    accessibleTabs :: [(Pages.CourseManagementContents, Translation String)]
+    accessibleTabs :: [(Pages.CourseManagementContents, Translation)]
     accessibleTabs = [ (c, trans) | (c, trans, accessLevel) <- tabs, role `elem` accessLevel ]
       where
         -- Tabs together with whom they are accessible to
-        tabs :: [(Pages.CourseManagementContents, Translation String, [Role])]
+        tabs :: [(Pages.CourseManagementContents, Translation, [Role])]
         tabs = [ (Pages.GroupManagementContents, msg_LinkText_GroupManagement "Group Management", [CourseAdmin])
                , (Pages.TestScriptsContents, msg_LinkText_TestScripts "Test Scripts", [CourseAdmin])
                , (Pages.AssignmentsContents, msg_LinkText_CourseOverview "Course Overview", [GroupAdmin, CourseAdmin])
                ]
 
-    tabToHtml :: I18N -> (Pages.CourseManagementContents, Translation String) -> H.Html
-    tabToHtml msg (tab, text) = toItem (routeOf page) (T.pack . msg $ text)
+    tabToHtml :: I18N -> (Pages.CourseManagementContents, Translation) -> H.Html
+    tabToHtml msg (tab, text) = toItem (routeOf page) (msg $ text)
 
       where
         page :: Pages.PageDesc
         page = Pages.courseManagement ck tab ()
 
-        toItem :: String -> Text -> H.Html
+        toItem :: Text -> Text -> H.Html
         toItem
           | tab == (activeTabOf contents) = Bootstrap.tabItemActive
           | otherwise = Bootstrap.tabItem
@@ -98,7 +97,7 @@ courseSubmissionsContent now ck c s = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 $
-      H.p $ fromString . msg $ msg_Home_SubmissionTable_Info $ concat
+      H.p $ H.toMarkup . msg $ msg_Home_SubmissionTable_Info $ T.concat
         [ "Assignments may be modified by clicking on their identifiers if you have rights for the modification (their names are shown in the tooltip).  "
         , "Students may be unregistered from the courses or the groups by checking the boxes in the Remove column "
         , "then clicking on the button."

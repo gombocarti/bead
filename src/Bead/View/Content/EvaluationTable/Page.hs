@@ -9,7 +9,8 @@ import           Data.List (sortOn)
 import           Data.Maybe (fromMaybe)
 import           Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import           Data.String (fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Time (UTCTime)
 import           Data.Tuple.Utils (snd3, thd3)
 
@@ -21,6 +22,7 @@ import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import qualified Bead.View.Content.StateVisualization as SV
 
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 as H hiding (link, map)
 import qualified Text.Blaze.Html5.Attributes as A
 
@@ -40,22 +42,22 @@ evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup rela
   return $ do
     noUnevaluatedSubmission msg admincourse admingroup related
     when (not $ null admingroup) $ Bootstrap.rowColMd12 $ do
-      H.h4 $ fromString . msg $ msg_EvaluationTable_GroupAssignment "Group assignments"
-      fromString . msg $ msg_EvaluationTable_GroupAssignmentInfo $ concat
+      H.h4 $ B.toMarkup . msg $ msg_EvaluationTable_GroupAssignment "Group assignments"
+      B.toMarkup . msg $ msg_EvaluationTable_GroupAssignmentInfo $ T.concat
         [ "Submissions for group assignments sent by the users who correspond "
         , "the groups administrated by you."
         ]
       evaluationTable msg (sortSubmissions admingroup) isGroup
     when (not $ null admincourse) $ Bootstrap.rowColMd12 $ do
-      H.h4 $ fromString . msg $ msg_EvaluationTable_CourseAssignment "Course assignments"
-      fromString . msg $ msg_EvaluationTable_CourseAssignmentInfo $ concat
+      H.h4 $ B.toMarkup . msg $ msg_EvaluationTable_CourseAssignment "Course assignments"
+      B.toMarkup . msg $ msg_EvaluationTable_CourseAssignmentInfo $ T.concat
         [ "Submissions for course assignments sent by the users who correspond "
         , "the courses of groups administrated by you."
         ]
       evaluationTable msg (sortSubmissions admincourse) isCourse
     when (not $ null related) $ Bootstrap.rowColMd12 $ do
-      H.h4 $ fromString . msg $ msg_EvaluationTable_MiscCourseAssignment "Miscellaneous Course assignments"
-      fromString . msg $ msg_EvaluationTable_MiscCourseAssignmentInfo $ concat
+      H.h4 $ B.toMarkup . msg $ msg_EvaluationTable_MiscCourseAssignment "Miscellaneous Course assignments"
+      B.toMarkup . msg $ msg_EvaluationTable_MiscCourseAssignmentInfo $ T.concat
         [ "Submissions for course assignments sent by the users who correspond "
         , "the courses of groups administrated by you, but not your students."
         ]
@@ -66,9 +68,9 @@ evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup rela
 
     noUnevaluatedSubmission :: I18N -> [SMVal] -> [SMVal] -> [SMVal] -> H.Html
     noUnevaluatedSubmission msg ac ag rl = Bootstrap.rowColMd12 $ if (and [null ac, null ag, null rl])
-      then (H.p $ fromString $ msg $ msg_EvaluationTable_EmptyUnevaluatedSolutions "There are no unevaluated submissions.")
+      then (H.p $ B.toMarkup $ msg $ msg_EvaluationTable_EmptyUnevaluatedSolutions "There are no unevaluated submissions.")
       else
-        H.p $ fromString . msg $ msg_EvaluationTable_Info $ concat
+        H.p $ B.toMarkup . msg $ msg_EvaluationTable_Info $ T.concat
           [ "Only the last unevaluated submission is shown per student. The "
           , "other submissions may be accessed through the submission table "
           , "on the home page."
@@ -79,24 +81,24 @@ evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup rela
       when (not $ null ks) $ Bootstrap.rowColMd12 $ do
         Bootstrap.table $ do
           thead $ H.tr $ do
-            H.th (fromString . msg $ msg_EvaluationTable_Link "Link")
-            H.th (fromString . msg $ msg_EvaluationTable_Assignment "Assignment")
-            H.th (fromString . msg $ msg_EvaluationTable_Username "Username")
-            H.th (fromString . msg $ msg_EvaluationTable_Student "Student")
-            H.th (fromString . msg $ msg_EvaluationTable_Course "Course")
-            when isGroup $ H.th (fromString . msg $ msg_EvaluationTable_Group "Group")
-            H.th (fromString . msg $ msg_EvaluationTable_DateOfSubmission "Date")
-            H.th (fromString. msg $ msg_EvaluationTable_SubmissionInfo "State")
+            H.th (B.toMarkup . msg $ msg_EvaluationTable_Link "Link")
+            H.th (B.toMarkup . msg $ msg_EvaluationTable_Assignment "Assignment")
+            H.th (B.toMarkup . msg $ msg_EvaluationTable_Username "Username")
+            H.th (B.toMarkup . msg $ msg_EvaluationTable_Student "Student")
+            H.th (B.toMarkup . msg $ msg_EvaluationTable_Course "Course")
+            when isGroup $ H.th (B.toMarkup . msg $ msg_EvaluationTable_Group "Group")
+            H.th (B.toMarkup . msg $ msg_EvaluationTable_DateOfSubmission "Date")
+            H.th (B.toMarkup. msg $ msg_EvaluationTable_SubmissionInfo "State")
           tbody $ forM_ ks (submissionInfo tc msg isGroup)
 
 submissionInfo tc msg isGroup (key, desc) = H.tr $ do
   H.td $ Bootstrap.link (routeOf (evaluation key)) (msg $ msg_EvaluationTable_Solution "Submission")
-  H.td . fromString . Assignment.name . eAssignment $ desc
-  uid (H.td . fromString) $ eUid desc
-  H.td . fromString . eStudent $ desc
-  H.td . fromString . eCourse $ desc
-  when isGroup $ H.td . fromString . fromMaybe "" . eGroup $ desc
-  H.td . fromString . showDate . tc $ submissionPostTime desc
+  H.td . B.toMarkup . Assignment.name . eAssignment $ desc
+  uid (H.td . B.toMarkup) $ eUid desc
+  H.td . B.toMarkup . eStudent $ desc
+  H.td . B.toMarkup . eCourse $ desc
+  when isGroup $ H.td . B.toMarkup . fromMaybe "" . eGroup $ desc
+  H.td . B.toMarkup . showDate . tc $ submissionPostTime desc
   H.td . SV.formatSubmissionState SV.toMediumIcon msg . snd3 . eSubmissionInfo $ desc
   where
     evaluation k = Pages.evaluation k ()
@@ -108,7 +110,7 @@ submissionInfo tc msg isGroup (key, desc) = H.tr $ do
 
 -- |The key for the ordering consists of a course name, a group name (possibly empty), and
 -- the time of the assignment
-type SMKey = (String, Maybe String, UTCTime)
+type SMKey = (Text, Maybe Text, UTCTime)
 
 type SMVal = (SubmissionKey, SubmissionDesc)
 

@@ -8,6 +8,8 @@ module Bead.View.DictionaryFile (
 
 import Bead.View.Translation.Base (Translation)
 
+import Data.Text (Text)
+
 data DictionaryFile
   = DictionaryFile {
     langCode :: String -- The name of the language for a dictionary
@@ -27,9 +29,9 @@ dictionaryFileCata f (DictionaryFile langCode langName entries) =
 -- A dictionary file entry is just a translation value,
 -- which represents the translation key and the translated
 -- value for that key
-type Entry = Translation String
+type Entry = Translation
 
-(<|) :: (String -> Translation String) -> String -> Translation String
+(<|) :: (Text -> Translation) -> Text -> Translation
 (<|) = ($)
 
 infixr 0 <|
