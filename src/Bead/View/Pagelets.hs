@@ -41,11 +41,11 @@ import           Bead.View.Translation
 
 -- * Definitions
 
-css :: String -> Html
-css c = H.link ! A.type_ "text/css" ! A.href (fromString c) ! A.rel "stylesheet"
+css :: Text -> Html
+css c = H.link ! A.type_ "text/css" ! A.href (B.toValue c) ! A.rel "stylesheet"
 
-js :: String -> Html
-js j = H.script ! A.src (fromString j) $ mempty
+js :: Text -> Html
+js j = H.script ! A.src (B.toValue j) $ mempty
 
 bootStrapDocument :: Entity.PageSettings -> IHtml -> IHtml
 bootStrapDocument settings body' = do
@@ -71,13 +71,13 @@ bootStrapDocument settings body' = do
         css "/bootstrap-datetimepicker.min.css"
         js "/bootstrap-datetimepicker.min.js"
         when (needsSyntaxHighlight settings) $
-          css ('/' : snd syntaxHighlightCss)
+          css ("/" <> T.pack (snd syntaxHighlightCss))
         when (needsLatex settings) $ do
           css "/katex/katex.min.css"
-          js  "/katex/katex.min.js"
+          js  "/katex/katex.min.js" ! A.defer ""
           css "/katex/contrib/copy-tex.min.css"
-          js  "/katex/contrib/copy-tex.min.js"
-          H.script $ fromString 
+          js  "/katex/contrib/copy-tex.min.js" ! A.defer ""
+          H.script $ B.text
             "document.addEventListener(\"DOMContentLoaded\", function () {\n  var mathElements = document.getElementsByClassName(\"math\");\n  for (var i = 0; i < mathElements.length; i++) {\n    var texText = mathElements[i].firstChild;\n    if (mathElements[i].tagName == \"SPAN\") { katex.render(texText.data, mathElements[i], { displayMode: mathElements[i].classList.contains(\"display\"), throwOnError: false } );\n  }}});"
       H.body $ body
 
