@@ -61,8 +61,14 @@ copyToClipboardForCodeBlocks msg bs = foldrM addCopyButton [] bs
     addCopyButton (CodeBlock (_, classes, kv) code) blocks =
       state (\n ->
                let ident = "code-" ++ show n
-               in ((RawBlock "html" (renderMarkup $ copyToClipboardButton msg ident) : CodeBlock (ident, classes, kv) code : blocks), n + 1))
+               in ((RawBlock "html" (renderMarkup $ copyToClipboardButton msg ident) : CodeBlock (ident, classes, removeTopMargin : kv) code : blocks), n + 1))
     addCopyButton b blocks = return (b : blocks)
+
+    -- Removes the margin above highlighted code blocks introduced by Pandoc's
+    -- highlighting css. The margin pushes away copy to clipboard buttons from
+    -- their respective code blocks.
+    removeTopMargin :: (String, String)
+    removeTopMargin = ("style", "margin-top: 0;")
 
 headersToDiv :: MarkupM a -> MarkupM a
 headersToDiv (Parent tag open close contents)
