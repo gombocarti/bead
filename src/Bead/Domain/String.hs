@@ -4,14 +4,15 @@ module Bead.Domain.String
   ( removeAccents
   , replaceSlash
   , porcelain
-  , porcelainBS
+  , porcelainText
   ) where
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as BC
 import           Data.Char (toUpper, toLower, isSpace, isLetter, isAscii, isDigit)
 import qualified Data.Map as Map
 import           Data.String.Utils (replace)
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 -- | Converts hungarian accute accented letters into ones without accents,
 -- in order to be compatible with zip managers and to avoid errors and
@@ -19,8 +20,8 @@ import           Data.String.Utils (replace)
 removeAccents :: String -> String
 removeAccents = map removeAccent
 
-removeAccentsBS :: ByteString -> ByteString
-removeAccentsBS = BC.map removeAccent
+removeAccentsText :: Text -> Text
+removeAccentsText = T.map removeAccent
 
 removeAccent :: Char -> Char
 removeAccent c = case Map.lookup c conversion of
@@ -53,11 +54,11 @@ replaceSlash = replace "/" "_"
 porcelain :: String -> String
 porcelain = map toLower . filter isWhiteListChar . map replaceSpaces . removeAccents
 
-porcelainBS :: ByteString -> ByteString
-porcelainBS = BC.map toLower . BC.filter isWhiteListChar . BC.map replaceSpaces . removeAccentsBS
+porcelainText :: Text -> Text
+porcelainText = T.map toLower . T.filter isWhiteListChar . T.map replaceSpaces . removeAccentsText
 
 isWhiteListChar :: Char -> Bool
-isWhiteListChar c = isAscii c && (isDigit c || isLetter c || c `elem` ("_-()" :: String))
+isWhiteListChar c = isAscii c && (isDigit c || isLetter c || c `elem` ("_-()." :: String))
 
 replaceSpaces :: Char -> Char
 replaceSpaces c

@@ -41,7 +41,7 @@ import qualified Bead.Controller.ServiceContext as SC
 import qualified Bead.Controller.Pages as P
 import qualified Bead.Controller.UserStories as S
 import           Bead.Domain.Entities as E
-import           Bead.Domain.String (porcelainBS)
+import           Bead.Domain.String (porcelainText)
 import qualified Bead.View.AuthToken as Auth
 import           Bead.View.BeadContext
 import           Bead.View.Common
@@ -138,7 +138,7 @@ serve = blaze
 downloadFile :: File -> BeadHandler ()
 downloadFile (fname, mime, writeContents) = do
   modifyResponse $
-    setHeader "Content-Disposition" (CI.foldCase $ BC.concat ["attachment; filename=\"", escapeQuotes . porcelainBS . TE.encodeUtf8 $ fname, "\""])
+    setHeader "Content-Disposition" (CI.foldCase $ BC.concat ["attachment; filename=\"", escapeQuotes . TE.encodeUtf8 . porcelainText $ fname, "\""])
   modifyResponse $
     setHeader "Content-Type" contentType
   writeContents

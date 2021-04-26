@@ -104,6 +104,8 @@ getSubmissionsOfUserInGroup = DataHandler $ do
           fileName :: String
           fileName = porcelain (T.unpack $ Assignment.name a) <.> submissionExtension s
 
+-- This one is intended for scripts. Therefore file name
+-- consists only of uid and user full name is not included.
 getSubmissionsOfAssignmentInGroup :: DataHandler
 getSubmissionsOfAssignmentInGroup = DataHandler $ do
   ak <- getParameter assignmentKeyPrm
