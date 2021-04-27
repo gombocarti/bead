@@ -10,14 +10,15 @@ module Bead.Persistence.Relations (
   , groupSubmissionTableInfo
   , userAssignmentsAssessments
   , allAssignmentsOfGroup
-  , userSubmissionInfos
+  , userSubmissionInfos  
   , userLastSubmission
+  , checkSimilarityMoss
   , courseAndGroupOfAssignment
   , courseOrGroupOfAssignment
   , courseOrGroupOfAssessment
   , groupsOfUsersCourse
   , removeOpenedSubmission
-  , deleteUserFromCourse -- Deletes a user from a course, searching the roup id for the unsubscription
+  , deleteUserFromCourse -- Deletes a user from a course, searching the group id for the unsubscription
   , isThereASubmissionForGroup -- Checks if the user submitted any solutions for the group
   , isThereASubmissionForCourse -- Checks if the user submitted any solutions for the course
   , testScriptInfo -- Calculates the test script information for the given test key
@@ -41,8 +42,9 @@ related information is computed.
 -}
 
 import           Control.Applicative
-import           Control.Arrow ((&&&), Kleisli(Kleisli), runKleisli)
-import           Control.Monad (foldM, forM, when)
+import           Control.Arrow ((&&&))
+import           Control.Concurrent (forkIO)
+import           Control.Monad (foldM, forM, when, void)
 import           Control.Monad.IO.Class
 import           Data.Bifunctor (second)
 import           Data.Function (on)
@@ -165,8 +167,6 @@ submissionDesc sk = do
   submission <- loadSubmission sk
   un <- usernameOfSubmission sk
   user <- loadUser un
-  let u = u_name user
-  let uid = u_uid user
   info <- submissionInfo sk
   ak <- assignmentOfSubmission sk
   asg <- loadAssignment ak
@@ -179,12 +179,10 @@ submissionDesc sk = do
     Left ck  -> do
       course <- loadCourse ck
       return SubmissionDesc {
-          eCourse   = courseName course
+          eCourse   = course
         , eGroup    = Nothing
-        , eStudent  = u
-        , eUsername = un
-        , eUid      = uid
-        , eSolution = submissionValue id (const "zipped") (solution submission)
+        , eStudent  = user
+        , eSolution = submission
         , eSubmissionInfo = info
         , eAssignment     = asg
         , eAssignmentKey  = ak
@@ -194,16 +192,13 @@ submissionDesc sk = do
         }
     Right gk -> do
       group <- loadGroup gk
-      let gname = groupName group
       ck   <- courseOfGroup gk
-      cname <- courseName <$> loadCourse ck
+      course <- loadCourse ck
       return SubmissionDesc {
-          eCourse   = cname
-        , eGroup    = Just $ groupName group
-        , eStudent  = u
-        , eUsername = un
-        , eUid      = uid
-        , eSolution = submissionValue id (const "zipped") (solution submission)
+          eCourse   = course
+        , eGroup    = Just group
+        , eStudent  = user
+        , eSolution = submission
         , eSubmissionInfo = info
         , eAssignment     = asg
         , eAssignmentKey  = ak
@@ -273,6 +268,30 @@ userSubmissionInfos u ak = do
   us <- userSubmissions u ak
   infos <- mapM submissionInfo  us
   return $ sortSbmDescendingByTime infos
+
+-- * Similarity check
+
+checkSimilarityMoss :: FilePath -> ProgrammingLanguage -> AssignmentKey -> Interpreter -> Persist MossScriptInvocationKey
+checkSimilarityMoss mossScriptPath prLang ak interpreter = do
+  ckOrGk <- courseOrGroupOfAssignment ak
+  us <- either subscribedToCourse subscribedToGroup ckOrGk
+  submissions <- foldM loadUserAndSubmission [] us
+  invocationKey <- newMossScriptInvocationKey ak
+  liftIO $ forkIO $ do
+    (exitCode, output) <- uploadForMoss mossScriptPath prLang submissions
+    void $ runPersist interpreter $ saveMossScriptInvocation invocationKey (outputToMossScriptInvocation exitCode output)
+  return invocationKey
+
+  where
+    loadUserAndSubmission :: [(User, Submission)] -> Username -> Persist [(User, Submission)]
+    loadUserAndSubmission submissions u = do
+      user <- loadUser u
+      mSk <- lastSubmission ak u
+      case mSk of
+        Nothing -> return submissions
+        Just sk -> do
+          s <- loadSubmission sk
+          return $ (user, s) : submissions
 
 submissionEvalStr :: SubmissionKey -> Persist (Maybe Text)
 submissionEvalStr sk = do

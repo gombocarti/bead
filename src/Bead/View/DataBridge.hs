@@ -131,6 +131,19 @@ courseManagementContentsPrm = Parameter {
   , notFound = printf "%s could not be found." (name courseManagementContentsPrm)
   }
 
+-- Represents MossScriptInvocationKey parameter
+mossScriptInvocationKeyPrm :: Parameter MossScriptInvocationKey
+mossScriptInvocationKeyPrm = Parameter {
+    encode = mossScriptInvocationKey id
+  , decode = Just . MossScriptInvocationKey
+  , name = mossScriptInvocationKeyParamName
+  , decodeError = \m -> printf "%s could not be decoded: %s." (name mossScriptInvocationKeyPrm) m
+  , notFound = printf "%s could not be found." (name mossScriptInvocationKeyPrm)
+  }  
+
+programmingLanguagePrm :: Text -> Parameter ProgrammingLanguage
+programmingLanguagePrm field = jsonParameter field "programming language"
+
 -- Represents the AssessmentKey parameter
 assessmentKeyPrm :: Parameter AssessmentKey
 assessmentKeyPrm = Parameter {

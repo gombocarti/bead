@@ -147,7 +147,7 @@ copyFiles skips src dst = do
 
 generateSyntaxHighlightCss :: Initializer b v ()
 generateSyntaxHighlightCss = do
-  staticDir <- (</> "static") <$> getSnapletFilePath
+  staticDir <- getStaticDirectory
   let (css, path) = syntaxHighlightCss
   liftIO $ do
     createDirectoryIfMissing False staticDir

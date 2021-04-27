@@ -205,7 +205,6 @@ instance DomainKey Domain.AssignmentKey where
   fromDomainKey = domainKeyToEntityKey $ \(Domain.AssignmentKey k) -> k
   toDomainKey   = entityToDomainKey Domain.AssignmentKey "entityKeyToAssignmentKey"
 
-
 instance DomainKey Domain.SubmissionKey where
   type EntityForKey Domain.SubmissionKey = Submission
   fromDomainKey = domainKeyToEntityKey $ \(Domain.SubmissionKey k) -> k
@@ -284,6 +283,11 @@ instance DomainValue Domain.Feedback where
     Domain.Feedback
       (decodeFeedbackInfo $ feedbackInfo ent)
       (feedbackDate ent)
+
+instance DomainKey Domain.MossScriptInvocationKey where
+  type EntityForKey Domain.MossScriptInvocationKey = MossScriptInvocation
+  fromDomainKey = domainKeyToEntityKey $ \(Domain.MossScriptInvocationKey k) -> k
+  toDomainKey   = entityToDomainKey Domain.MossScriptInvocationKey "entityToMossReportKey"
 
 instance DomainKey Domain.AssessmentKey where
   type EntityForKey Domain.AssessmentKey = Assessment

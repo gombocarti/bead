@@ -77,6 +77,8 @@ module Bead.View.RouteOf (
   , modifyAssessmentPreviewPath
   , viewAssessmentPath
   , notificationsPath
+  , viewMossScriptOutputPath
+  , similarityCheckMossPath
   , staticPath
   , pageRequestParams
 #ifdef TEST
@@ -288,6 +290,12 @@ viewAssessmentPath = "/view-assessment"
 notificationsPath :: RoutePath
 notificationsPath = "/notifications"
 
+viewMossScriptOutputPath :: RoutePath
+viewMossScriptOutputPath = "/view-moss-script-output"
+
+similarityCheckMossPath :: RoutePath
+similarityCheckMossPath = "/similarity-check-moss"
+
 submissionTablePath :: RoutePath
 submissionTablePath = "/rest/submission-table"
 
@@ -363,6 +371,8 @@ pageRoutePath = constantsP
     modifyAssessmentPreviewPath
     viewAssessmentPath
     notificationsPath
+    viewMossScriptOutputPath
+    similarityCheckMossPath
     submissionTablePath
     usersInGroupPath
 
@@ -432,6 +442,8 @@ pageRequestParams = liftsP
   (\ak _ -> [requestParam ak]) -- modifyAssessmentPreview
   (\ak _ -> [requestParam ak]) -- viewAssessment
   (c []) -- notifications
+  (\mk _ -> [requestParam mk]) -- viewMossScriptOutput
+  (\ak _ -> [requestParam ak]) -- similarityCheckMoss
   (\gk _ -> [requestParam gk]) -- submissionTable
   (\gk _ -> [requestParam gk]) -- usersInGroup
     where

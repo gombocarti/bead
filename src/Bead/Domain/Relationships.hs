@@ -23,6 +23,7 @@ import GHC.Generics (Generic)
 
 import Bead.Domain.Entities
 import Bead.Domain.Evaluation
+import qualified Bead.Domain.Entity.Assignment as Assignment
 
 #ifdef TEST
 import Test.Tasty.Arbitrary
@@ -92,12 +93,10 @@ calcSubLimitTests = group "calcSubLimit" $ do
 #endif
 
 data SubmissionDesc = SubmissionDesc {
-    eCourse   :: Text
-  , eGroup    :: Maybe Text
-  , eStudent  :: String
-  , eUsername :: Username
-  , eUid      :: Uid
-  , eSolution :: Text
+    eCourse   :: Course
+  , eGroup    :: Maybe Group
+  , eStudent  :: User
+  , eSolution :: Submission
   , eSubmissionInfo :: SubmissionInfo
   , eAssignmentKey   :: AssignmentKey
   , eAssignment      :: Assignment
@@ -105,6 +104,13 @@ data SubmissionDesc = SubmissionDesc {
   , eComments :: Map CommentKey Comment
   , eFeedbacks :: [Feedback]
   }
+
+-- | Returns a pair of filename and extension from a `SubmissionDesc`.
+submissionFilename :: User -> Submission -> (String, String)
+submissionFilename u s = (basename, ext)
+    where
+      basename = concat [u_name u, " (", uid id . u_uid $ u, ")"]
+      ext = submissionValue (const "txt") (const "zip") (solution s)
 
 submissionDescPermissions = ObjectPermissions [
     (P_Open, P_Group), (P_Open, P_Course)
@@ -314,6 +320,12 @@ submissionKeyMap :: (String -> a) -> SubmissionKey -> a
 submissionKeyMap f (SubmissionKey s) = f s
 
 withSubmissionKey s f = submissionKeyMap f s
+
+newtype MossScriptInvocationKey = MossScriptInvocationKey String
+  deriving (Eq, Show)
+
+mossScriptInvocationKey :: (String -> a) -> MossScriptInvocationKey -> a
+mossScriptInvocationKey f (MossScriptInvocationKey k) = f k
 
 -- Key for a given Test Script in the persistence layer
 newtype TestScriptKey = TestScriptKey String

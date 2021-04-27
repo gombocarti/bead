@@ -119,7 +119,7 @@ seeMoreComment i18n id_ t (n, c) =
             maybe mempty (\ac -> H.div ! A.id (anchor ac) $ mempty) (anchorValue c)
             Bootstrap.badge badgeText
       in
-        Bootstrap.panel Nothing $ do
+        Bootstrap.panel Nothing Nothing $ do
           heading
           H.pre ! A.class_ "comment" $ do
             B.toMarkup preview

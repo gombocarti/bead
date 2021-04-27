@@ -48,6 +48,7 @@ import Bead.Persistence.Relations
 import Bead.Persistence.SQL.FileSystem (testOutgoing)
 
 import qualified Test.Property.EntityGen as Gen
+import Test.Property.Common (quick, check, success)
 
 import Bead.Domain.Entities
 import qualified Bead.Domain.Entity.Assignment as Assignment
@@ -88,6 +89,21 @@ modification name save modify load gen = do
   v' <- runPersistCmd $ load k
   assertEquals v v' (name ++ ": Modifed and load was different")
   return k
+
+mossScriptInvocationSaveAndLoad :: AssignmentKey -> PropertyM IO MossScriptInvocationKey
+mossScriptInvocationSaveAndLoad ak = do
+  saveAndLoadIdenpotent
+    "MossScriptInvocation"
+    (\msi -> do
+        key <- newMossScriptInvocationKey ak
+        saveMossScriptInvocation key msi
+        return key)
+    (\key -> do
+        result <- loadMossScriptInvocation key
+        case result of
+          (Just msi, _) -> return msi
+          (Nothing, _) -> fail $ "Moss script invocation not found: " ++ show key)
+    Gen.mossScriptInvocations
 
 assignmentSaveAndLoad = saveAndLoadIdenpotent
   "Assignment"
@@ -186,9 +202,6 @@ evaluationGroupSaveAndLoad = do
   saveAndLoadIdenpotent
     "Evaluation" (saveSubmissionEvaluation sk) (loadEvaluation) (Gen.evaluations cfg)
 
-success :: Int -> Args
-success n = stdArgs { maxSuccess = n, chatty = False }
-
 massTest = testCase "Mass Test" massPersistenceTest
 
 massTestParallel = testCase "Mass Test Parallel" $ do
@@ -254,7 +267,16 @@ groups n cs = do
     run $ insertListRef list gk
   listInRef list
 
--- Generate and store the given numner of assignment and assign them to random groups,
+mossScriptInvocations :: Int -> [AssignmentKey] -> IO [MossScriptInvocationKey]
+mossScriptInvocations n aks = do
+  list <- createListRef
+  quick n $ do
+    ak <- pick $ elements aks
+    msik <- mossScriptInvocationSaveAndLoad ak
+    run $ insertListRef list msik
+  listInRef list
+
+-- Generate and store the given number of assignment and assign them to random groups,
 -- from the given list, returns all the created assignment keys
 groupAssignmentGen :: Int -> [GroupKey] -> IO [AssignmentKey]
 groupAssignmentGen n gs = do
@@ -494,19 +516,8 @@ massPersistenceTest = do
 runPropertyM :: Testable a => PropertyM IO a -> IO ()
 runPropertyM = quick 1
 
-quick :: Testable a => Int -> PropertyM IO a -> IO ()
-quick n p = check (return ()) $ quickCheckWithResult (success n) $ monadicIO p
-
 quickWithCleanUp :: Testable b => IO a -> Int -> PropertyM IO b -> IO a
 quickWithCleanUp cleanup n p = check cleanup $ quickCheckWithResult (success n) $ monadicIO p
-
-check :: IO a -> IO QuickCheck.Result -> IO a
-check cleanup m = do
-  x <- m
-  case x of
-    s@(Success {}) -> cleanup
-    f@(Failure {}) -> cleanup >> (fail $ reason f)
-    other          -> cleanup >> (fail $ output other)
 
 -- The test are at very high level, we must see if basic load
 -- properties are hold.
@@ -688,6 +699,16 @@ allAdminsTests = test $ testCase "All administrators tests" $ do
         runPersistCmd $ updateUser u'
         return ((filter (\u'' -> u_uid u'' /= u_uid u) admins), (u' : regulars))
 
+
+-- Tests that saving and loading do not change a MossScriptInvocaton
+mossScriptInvocationSaveLoadTest :: TestSet ()
+mossScriptInvocationSaveLoadTest = test $ testCase "MossScriptInvocation save and load test" $ do
+  reinitPersistence
+  cs <- courses 20
+  gs <- groups 200 cs
+  as <- courseAndGroupAssignments 25 25 cs gs
+  void $ mossScriptInvocations 250 as
+
 courseAndGroupAssignments :: Int -> Int -> [CourseKey] -> [GroupKey] -> IO [AssignmentKey]
 courseAndGroupAssignments cn gn cs gs = do
   cas <- courseAssignmentGen cn cs
@@ -837,10 +858,9 @@ submissionDescTest = test $ testCase "Every submission has some kind of descript
   quick 500 $ do
     sk <- pick $ elements ss
     desc <- runPersistCmd $ submissionDesc sk
-    assertFalse (T.null $ eCourse desc) "Course name was empty"
-    maybe (return ()) (flip assertFalse "Group name was empty" . T.null) $ eGroup desc
-    assertNonEmpty (eStudent desc) "Student name was empty"
-    assertFalse (T.null $ eSolution desc) "Solution was empty"
+    assertFalse (T.null . courseName $ eCourse desc) "Course name was empty"
+    maybe (return ()) (flip assertFalse "Group name was empty" . T.null . shortGroupName) $ eGroup desc
+    assertNonEmpty (u_name $ eStudent desc) "Student name was empty"
     assertFalse (T.null . Assignment.name . eAssignment $ desc) "Assignment title was empty"
     assertEmpty (Map.toList $ eComments desc) "The comment list was not empty"
 

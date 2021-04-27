@@ -19,14 +19,13 @@ import qualified Text.Blaze as B
 import           Text.Blaze.Html5 hiding (link, option, map)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
-import           Text.Blaze.Html5.Attributes hiding (id, span)
 import           Text.Pandoc.Highlighting (styleToCss, pygments)
 
 
 import qualified Bead.Controller.UserStories as S
 import qualified Bead.Controller.Pages as P
 import           Bead.Controller.ServiceContext as SC (UserState, getStatus, clearStatus, uid, fullNameInState)
-import           Bead.Domain.Entities as Entity (statusMessage, uid, PageSettings(needsLatex, needsSyntaxHighlight), Course, Group, shortCourseName, shortGroupName, isAdmin)
+import           Bead.Domain.Entities as Entity (statusMessage, uid, PageSettings(needsLatex, needsSyntaxHighlight), httpEquiv, Course, Group, shortCourseName, shortGroupName, isAdmin)
 import           Bead.Domain.Relationships (CourseKey, GroupKey)
 import           Bead.View.BeadContext (BeadHandler')
 import qualified Bead.View.Content.Bootstrap as Bootstrap
@@ -60,6 +59,7 @@ bootStrapDocument settings body' = do
         H.meta ! A.name "viewport" ! A.content "width=device-width, initial-scale=1.0"
         H.meta ! A.name "description" ! A.content ""
         H.meta ! A.name "author" ! A.content ""
+        httpEquiv settings
         js "/jquery.js"
         css "/jquery-ui.css"
         js "/jquery-ui.js"
@@ -107,18 +107,18 @@ bootstrapPage contents = do
           msg <- getI18N
           return $ do
             when (not . null $ subscribedCourses) $
-              Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_RegisteredCourses "Registered courses") $
+              Bootstrap.panel Nothing (Just $ B.toMarkup $ msg $ msg_Navigation_RegisteredCourses "Registered courses") $
                 forM_ subscribedCourses $ \(_courseKey, course, groupKey, group_) -> do
                   H.p $ B.toMarkup $ shortCourseName course
                   nav [studentView groupKey group_]
             nav [i18n msg groupRegistration]
             when (not . null $ adminedGroups) $
-              Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedGroups "Groups") $
+              Bootstrap.panel Nothing (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedGroups "Groups") $
                 forM_ adminedGroups $ \(courseKey, course, groups) -> do
                   H.p $ courseAssignments courseKey course
                   nav $ map groupNavigationLink groups
             when (not . null $ adminedCourses) $
-              Bootstrap.panel (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedCourses "Courses") $
+              Bootstrap.panel Nothing (Just $ B.toMarkup $ msg $ msg_Navigation_AdminedCourses "Courses") $
                 nav $ map courseNavigationLink adminedCourses
 
       where
@@ -369,7 +369,7 @@ linkButtonToPageBS p = do
 linkToPageBlank :: P.Page' Translation -> IHtml
 linkToPageBlank p = do
   msg <- getI18N
-  return $ Bootstrap.link (routeOf p) (msg $ P.pageValue p) ! A.target "_blank" ! A.id (B.toValue $ fieldName p)
+  return $ Bootstrap.linkNewTab (routeOf p) (msg $ P.pageValue p) ! A.id (B.toValue $ fieldName p)
 
 -- Produces a HTML-link with the given route text and title
 linkWithTitle :: String -> String -> String -> Html
@@ -385,28 +385,28 @@ publicHeader :: IHtml
 publicHeader = do
   msg <- getI18N
   return $ do
-    H.div ! class_ "navbar navbar-default" $ do
+    H.div ! A.class_ "navbar navbar-default" $ do
       H.style ".body{padding-top:70px}"
-      H.div ! class_ "container" $ do
-        H.div ! class_ "navbar-header" $ do
-         span ! class_ "navbar-brand" $ "BE-AD"
+      H.div ! A.class_ "container" $ do
+        H.div ! A.class_ "navbar-header" $ do
+         span ! A.class_ "navbar-brand" $ "BE-AD"
 
 bootstrapHeader :: UserState -> Int -> IHtml
 bootstrapHeader s newNotifs = do
   msg <- getI18N
   return $ do
-        H.div ! class_ "navbar navbar-default navbar-fixed-top" $ do
+        H.div ! A.class_ "navbar navbar-default navbar-fixed-top" $ do
             H.style ".body{padding-top:70px}"
             Bootstrap.containerFullWidth $ do
-                H.div ! class_ "navbar-header" $ do
-                    Bootstrap.link (routeOf home) ("BE-AD" :: Html) ! class_ "navbar-brand"
-                    button ! type_ "button" ! class_ "navbar-toggle" ! dataAttribute "toggle" "collapse" ! dataAttribute "target" ".navbar-collapse" $ do
-                        H.span ! class_ "sr-only" $ "Toggle navigation"
-                        H.span ! class_ "icon-bar" $ mempty
-                        H.span ! class_ "icon-bar" $ mempty
-                        H.span ! class_ "icon-bar" $ mempty
-                H.div ! class_ "collapse navbar-collapse navbar-ex1-collapse" $ do
-                    ul ! class_ "nav navbar-nav navbar-right" $ do
+                H.div ! A.class_ "navbar-header" $ do
+                    Bootstrap.link (routeOf home) ("BE-AD" :: Html) ! A.class_ "navbar-brand"
+                    button ! A.type_ "button" ! A.class_ "navbar-toggle" ! dataAttribute "toggle" "collapse" ! dataAttribute "target" ".navbar-collapse" $ do
+                        H.span ! A.class_ "sr-only" $ "Toggle navigation"
+                        H.span ! A.class_ "icon-bar" $ mempty
+                        H.span ! A.class_ "icon-bar" $ mempty
+                        H.span ! A.class_ "icon-bar" $ mempty
+                H.div ! A.class_ "collapse navbar-collapse navbar-ex1-collapse" $ do
+                    ul ! A.class_ "nav navbar-nav navbar-right" $ do
                         li $ H.a userId
                         li $ do (I18N.i18n msg $
                                     if newNotifs > 0

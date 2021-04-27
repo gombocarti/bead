@@ -173,19 +173,22 @@ zipSubmissions sks folder now = do
   msg <- i18nE
   foldM
     (\archive sk -> do
-        (submission, desc) <- userStory (Story.getSubmission sk)
-        let addSubmission = zipSubmission submission desc folder convertToLocalTime
+        desc <- userStory $ Story.submissionDescription sk
+        let addSubmission = zipSubmission desc folder convertToLocalTime
             addFeedback = zipFeedback desc folder now convertToLocalTime msg
         return (addSubmission (addFeedback archive)))
     Zip.emptyArchive
     sks
 
-zipSubmission :: Submission -> SubmissionDesc -> String -> UserTimeConverter -> Zip.Archive -> Zip.Archive
-zipSubmission submission desc folder convertToLocalTime archive =
+zipSubmission :: SubmissionDesc -> String -> UserTimeConverter -> Zip.Archive -> Zip.Archive
+zipSubmission desc folder convertToLocalTime archive =
   addSubmissionToArchive path convertToLocalTime submission archive
     where
+      submission :: Submission
+      submission = eSolution desc
+
       fname, ext :: String
-      (fname, ext) = submissionFilename desc
+      (fname, ext) = submissionFilename (eStudent desc) submission
 
       path :: String
       path = (replaceSlash folder </> replaceSlash (removeAccents fname) <.> ext)
@@ -206,7 +209,7 @@ zipFeedback desc folder now convertToLocalTime msg archive =
   Zip.addEntryToArchive (feedbacksFile path) archive
     where
       fname :: String
-      (fname, _) = submissionFilename desc
+      (fname, _) = submissionFilename (eStudent desc) (eSolution desc)
 
       path :: String
       path = replaceSlash folder </> replaceSlash (removeAccents (concat [fname, "_", T.unpack . msg $ msg_ExportSubmissions_Comments "comments" ])) <.> "txt"
