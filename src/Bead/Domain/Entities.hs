@@ -11,6 +11,9 @@ module Bead.Domain.Entities (
   , submissionValue
   , withSubmissionValue
   , submissionValueToByteString
+  , MossScriptInvocation(..)
+  , mossScriptInvocationCata
+  , outputToMossScriptInvocation
   , evaluationResultCata
   , Evaluation(..)
   , evaluationCata
@@ -53,6 +56,8 @@ module Bead.Domain.Entities (
   , userRegInfoCata
   , Language(..)
   , languageCata
+  , ProgrammingLanguage(..)
+  , programmingLanguages
   , Uid(..)
   , uid
   , User(..)
@@ -84,6 +89,9 @@ module Bead.Domain.Entities (
   , PageSettings(..)
   , defaultPageSettings
   , enableFullMarkdownRendering
+  , setHttpEquiv
+  , httpEquiv
+  , HttpEquiv(..)
   , CompareHun(..)
   , sortHun
   , StatusMessage(..)
@@ -100,6 +108,11 @@ module Bead.Domain.Entities (
 #endif
   ) where
 
+import           Data.Char (isSpace)
+import           Data.Bifunctor (first)
+import           Text.Blaze.Html5 ((!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
 import           Control.Applicative
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BC
@@ -114,6 +127,7 @@ import qualified Data.Text.Encoding as TE
 import           Data.Time (UTCTime(..), LocalTime, defaultTimeLocale)
 import           Data.Time.Format (formatTime)
 import           GHC.Generics (Generic)
+import           System.Exit (ExitCode(ExitSuccess, ExitFailure))
 
 import           Bead.Domain.Entity.Assessment
 import           Bead.Domain.Entity.Assignment
@@ -156,6 +170,59 @@ withSubmission s f = submissionCata f s
 
 submissionValueToByteString :: SubmissionValue -> BL.ByteString
 submissionValueToByteString = submissionValue (BL.fromStrict . TE.encodeUtf8) BL.fromStrict
+
+data MossScriptInvocation
+  = MossScriptInvocationSuccess {
+        mossOutput :: Text
+      , mossReportUrl :: Text
+      }
+  | MossScriptInvocationFailure {
+        mossOutput :: Text
+      , mossExitCode :: ExitCode
+      }
+  | MossScriptInvocationNotInterpretableOutput {
+        mossOutput :: Text
+      }
+    deriving (Eq, Show)
+
+mossScriptInvocationCata :: (Text -> Text -> a) -> (Text -> ExitCode -> a) -> (Text -> a) -> MossScriptInvocation -> a
+mossScriptInvocationCata success failure notInterpretable invocation =
+  case invocation of
+    MossScriptInvocationSuccess output reportUrl -> success output reportUrl
+    MossScriptInvocationFailure output exitCode -> failure output exitCode
+    MossScriptInvocationNotInterpretableOutput output -> notInterpretable output
+
+outputToMossScriptInvocation :: ExitCode -> String -> MossScriptInvocation
+outputToMossScriptInvocation ExitSuccess scriptOutput =
+  let scriptOutput' = T.pack scriptOutput
+  in case findUrl scriptOutput' of
+       (output, url)
+         | not (T.null url) -> MossScriptInvocationSuccess output url
+         | otherwise -> MossScriptInvocationNotInterpretableOutput scriptOutput'
+
+  where
+    findUrl :: Text -> (Text, Text)
+    findUrl t = case T.breakOnEnd urlSignature t of
+                  (pre, post)
+                    | T.null pre -> ("", "")
+                    | T.isSuffixOf http pre -> (T.dropEnd (T.length http) pre, urlLine http post)
+                    | T.isSuffixOf https pre -> (T.dropEnd (T.length https) pre, urlLine https post)
+                    | otherwise -> findUrl (T.dropEnd (T.length urlSignature) pre)
+
+      where
+        urlLine :: Text -> Text -> Text
+        urlLine prefix t = T.append prefix (T.takeWhile (not . isSpace) t)
+
+        urlSignature :: Text
+        urlSignature = "://"
+
+        http :: Text
+        http = "http://"
+
+        https :: Text
+        https = "https://"
+
+outputToMossScriptInvocation exitCode scriptOutput = MossScriptInvocationFailure (T.pack scriptOutput) exitCode
 
 evaluationResultCata
   binary
@@ -398,6 +465,94 @@ languageCata f (Language l) = f l
 
 instance Hashable Language
 
+-- Programming languages
+
+data ProgrammingLanguage = ProgrammingLanguage {
+    prHumanReadable :: Text
+  , prMossParameter :: String
+  } deriving (Show, Data)
+
+c :: ProgrammingLanguage
+c = ProgrammingLanguage { prHumanReadable = "C" , prMossParameter = "c" }
+
+cpp :: ProgrammingLanguage
+cpp = ProgrammingLanguage { prHumanReadable = "C++" , prMossParameter = "cpp" }
+
+java :: ProgrammingLanguage
+java = ProgrammingLanguage { prHumanReadable = "Java" , prMossParameter = "java" }
+
+ml :: ProgrammingLanguage
+ml = ProgrammingLanguage { prHumanReadable = "ML" , prMossParameter = "ml" }
+
+pascal :: ProgrammingLanguage
+pascal = ProgrammingLanguage { prHumanReadable = "Pascal" , prMossParameter = "pascal" }
+
+ada :: ProgrammingLanguage
+ada = ProgrammingLanguage { prHumanReadable = "Ada" , prMossParameter = "ada" }
+
+lisp :: ProgrammingLanguage
+lisp = ProgrammingLanguage { prHumanReadable = "Lisp" , prMossParameter = "lisp" }
+
+scheme :: ProgrammingLanguage
+scheme = ProgrammingLanguage { prHumanReadable = "Scheme" , prMossParameter = "scheme" }
+
+haskell :: ProgrammingLanguage
+haskell = ProgrammingLanguage { prHumanReadable = "Haskell" , prMossParameter = "haskell" }
+
+fortran :: ProgrammingLanguage
+fortran = ProgrammingLanguage { prHumanReadable = "Fortran" , prMossParameter = "fortran" }
+
+vhdl :: ProgrammingLanguage
+vhdl = ProgrammingLanguage { prHumanReadable = "VHDL" , prMossParameter = "vhdl" }
+
+perl :: ProgrammingLanguage
+perl = ProgrammingLanguage { prHumanReadable = "Perl" , prMossParameter = "perl" }
+
+matlab :: ProgrammingLanguage
+matlab = ProgrammingLanguage { prHumanReadable = "Matlab" , prMossParameter = "matlab" }
+
+python :: ProgrammingLanguage
+python = ProgrammingLanguage { prHumanReadable = "Python" , prMossParameter = "python" }
+
+mips_assembly :: ProgrammingLanguage
+mips_assembly = ProgrammingLanguage { prHumanReadable = "MIPS Assembly" , prMossParameter = "mips" }
+
+prolog :: ProgrammingLanguage
+prolog = ProgrammingLanguage { prHumanReadable = "Prolog" , prMossParameter = "prolog" }
+
+spice :: ProgrammingLanguage
+spice = ProgrammingLanguage { prHumanReadable = "Spice" , prMossParameter = "spice" }
+
+visualBasic :: ProgrammingLanguage
+visualBasic = ProgrammingLanguage { prHumanReadable = "Visual Basic" , prMossParameter = "vb" }
+
+csharp :: ProgrammingLanguage
+csharp = ProgrammingLanguage { prHumanReadable = "C#" , prMossParameter = "csharp" }
+
+modula2 :: ProgrammingLanguage
+modula2 = ProgrammingLanguage { prHumanReadable = "Modula2" , prMossParameter = "modula2" }
+
+a8086_assembly :: ProgrammingLanguage
+a8086_assembly = ProgrammingLanguage { prHumanReadable = "A8086 Assembly" , prMossParameter = "a8086" }
+
+javascript :: ProgrammingLanguage
+javascript = ProgrammingLanguage { prHumanReadable = "Javascript" , prMossParameter = "javascript" }
+
+plsql :: ProgrammingLanguage
+plsql = ProgrammingLanguage { prHumanReadable = "PL/SQL" , prMossParameter = "plsql" }
+
+verilog :: ProgrammingLanguage
+verilog = ProgrammingLanguage { prHumanReadable = "Verilog" , prMossParameter = "verilog" }
+
+-- Languages supported by Moss
+programmingLanguages :: [ProgrammingLanguage]
+programmingLanguages =
+  [ c, cpp, java, ml, pascal, ada, lisp, scheme
+  , haskell, fortran, vhdl, perl, matlab, python, mips_assembly
+  , prolog, spice, visualBasic, csharp, modula2, a8086_assembly
+  , javascript, plsql, verilog
+  ]
+
 -- User ID is unique identifier for the user, which
 -- can be different than the username
 newtype Uid = Uid String
@@ -639,20 +794,42 @@ statusMessage
     SmNormal x -> normal x
     SmError x -> err x
 
+data HttpEquiv
+  = Reload Int -- ^ Reload current page after specified seconds
+
+httpEquivCata :: (Int -> a)  -> HttpEquiv -> a
+httpEquivCata reload h =
+  case h of
+    Reload n -> reload n
+
+httpEquiv :: PageSettings -> H.Html
+httpEquiv =
+  maybe
+    mempty
+    (\equiv -> H.meta ! httpEquivCata
+      (\seconds -> A.httpEquiv "refresh" <> A.content (H.toValue . T.pack . show $ seconds))
+      equiv)
+  . enableHttpEquiv
+
 -- | PageSettings controls how a HTML page is rendered.
 data PageSettings = PageSettings { needsLatex :: Bool
                                  , needsSyntaxHighlight :: Bool
+                                 , enableHttpEquiv :: Maybe HttpEquiv
                                  }
 
 defaultPageSettings :: PageSettings
 defaultPageSettings = PageSettings { needsLatex = False
                                    , needsSyntaxHighlight = False
+                                   , enableHttpEquiv = Nothing
                                    }
 
 enableFullMarkdownRendering :: PageSettings -> PageSettings
 enableFullMarkdownRendering s = s { needsLatex = True
                                   , needsSyntaxHighlight = True
                                   }
+
+setHttpEquiv :: HttpEquiv -> PageSettings -> PageSettings
+setHttpEquiv h s = s { enableHttpEquiv = Just h }
 
 #ifdef TEST
 

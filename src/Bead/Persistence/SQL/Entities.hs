@@ -126,6 +126,12 @@ UserRegistration
   timeout  UTCTime sqltype="datetime(6)"
   deriving Show
 
+MossScriptInvocation
+  exitCode  Int Maybe
+  output    Text Maybe
+  reportUrl Text Maybe
+  deriving Show
+
 -- Connections between objects
 
 -- Submission -> [Feedback]
@@ -256,6 +262,14 @@ UserSubmissionOfAssignment
   assignment AssignmentId
   user       UserId
   UniqueUserSubmissionOfAssignmentTriplet submission assignment user
+  deriving Show
+
+-- MossReport -> Assignment
+AssignmentOfMossInvocation
+  mossInvocation MossScriptInvocationId
+  assignment AssignmentId
+  UniqueReport mossInvocation
+  UniqueReportAssignmentPair mossInvocation assignment
   deriving Show
 
 -- Assignment -> User -> [Submission]

@@ -21,10 +21,12 @@ import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           Data.UUID.V4 (nextRandom)
 import           System.Directory
 import qualified System.Directory as Dir
+import           System.Exit (ExitCode)
 import           System.FilePath
 import           System.IO
 import           System.Posix.Types (COff(..))
 import           System.Posix.Files (FileStatus, getFileStatus, fileSize, modificationTimeHiRes)
+import           System.Process (readCreateProcessWithExitCode, cwd, proc)
 import           Text.Read (readEither)
 
 import           Bead.Domain.Entities
@@ -44,6 +46,7 @@ testOutgoing, testIncoming :: FilePath
 testOutgoing = joinPath [data_, "test-outgoing"]
 testIncoming = joinPath [data_, "test-incoming"]
 user = joinPath [data_, "user"]
+plagiarism = joinPath [data_, "plagiarism"]
 
 fsDirs :: [FilePath]
 fsDirs = [
@@ -51,6 +54,7 @@ fsDirs = [
   , testOutgoing
   , testIncoming
   , user
+  , plagiarism
   ]
 
 fileLoad :: (MonadIO io) => FilePath -> io String
@@ -259,6 +263,30 @@ testFeedbacks = liftIO (createFeedbacks =<< sortOnModificationTime =<< processab
             case f contents of
               Right info -> do
                 timestamp <- fileModificationInUTCTime <$> getFileStatus (path </> file)
-                return  $ Feedback info timestamp
+                return $ Feedback info timestamp
               Left err ->
                 throwIO $ userError $ concat ["Non-parseable data in file ", file, ": ", err]
+
+uploadForMoss :: FilePath -> ProgrammingLanguage -> [(User, Submission)] -> IO (ExitCode, String)
+uploadForMoss mossScriptPath prLang subms = do
+  d <- (plagiarism </>) . show <$> nextRandom
+  createDirectoryIfMissing True d
+  files <- foldM (saveSubmissions d) [] subms
+  let moss = (proc mossScriptPath ("-l" : prMossParameter prLang : files)) { cwd = Just d }
+  (exitCode, stdout, stderr) <- readCreateProcessWithExitCode moss ""
+  return (exitCode, stderr ++ "\n" ++ stdout)
+
+  where
+    saveSubmissions :: FilePath -> [FilePath] -> (User, Submission) -> IO [FilePath]
+    saveSubmissions dir ps (u, subm) = do
+    let saveSimple sol = do
+          let (fname, ext) = submissionFilename u subm
+              nameInDir = fname <.> ext
+              submPath = dir </> nameInDir
+          fileSaveText submPath sol
+          return nameInDir
+    submissionValue
+      (\s -> do path <- saveSimple s
+                return $ path : ps)
+      (\_ -> return ps)
+      (solution subm)

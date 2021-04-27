@@ -23,6 +23,8 @@ import qualified Data.UUID as UUID
 
 import qualified Data.ByteString.Char8 as BS (pack)
 
+import System.Exit (ExitCode(ExitFailure))
+
 word :: IsString s => Gen s
 word = fromString <$> (listOf1 $ elements ['a' .. 'z' ])
 numbers = listOf1 $ elements ['0' .. '9']
@@ -36,6 +38,9 @@ manyWords = do
   where
     manyWords' = listOf1 $ elements ['a' .. 'z']
 
+manyLines :: Gen String
+manyLines = unlines <$> listOf1 manyWords
+
 usernames :: Gen Username
 usernames = liftM Username (vectorOf 6 $ oneof [capital, digits])
   where
@@ -43,6 +48,12 @@ usernames = liftM Username (vectorOf 6 $ oneof [capital, digits])
 
 digits :: Gen Char
 digits = elements ['0' .. '9']
+
+urls :: Gen String
+urls = do
+  protocol <- elements ["http", "https"]
+  address <- listOf1 $ elements ("/_&=%" ++ ['0'..'9'] ++ ['a'..'z'] ++ ['A'..'Z'])
+  return $ concat [protocol, "://", address]
 
 uids = fmap (usernameCata Uid) usernames
 
@@ -179,6 +190,25 @@ groups = Group
   <*> groupDescs
 
 timeZones = elements [utcZoneInfo, cetZoneInfo]
+
+exitCodesFailure :: Gen ExitCode
+exitCodesFailure = ExitFailure <$> suchThat arbitrary (/= 0)
+
+mossScriptInvocations = oneof [successful, unsuccessful, notInterpretable]
+  where
+    successful = do
+      output <- manyLines
+      url <- urls
+      return $ MossScriptInvocationSuccess (T.pack output) (T.pack url)
+
+    unsuccessful = do
+      output <- manyLines
+      exitCode <- exitCodesFailure
+      return $ MossScriptInvocationFailure (T.pack output) exitCode
+
+    notInterpretable = do
+      output <- manyLines
+      return $ MossScriptInvocationNotInterpretableOutput (T.pack output)
 
 assignments start end = assignmentAna
   assignmentNames

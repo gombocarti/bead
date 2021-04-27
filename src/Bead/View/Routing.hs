@@ -491,6 +491,8 @@ routeToPageMap = Map.fromList [
   , (modifyAssessmentPreviewPath, \ps -> P.modifyAssessmentPreview <$> assessmentKey ps <*> unit)
   , (viewAssessmentPath, \ps -> P.viewAssessment <$> assessmentKey ps <*> unit)
   , (notificationsPath, j $ P.notifications ())
+  , (viewMossScriptOutputPath, \ps -> P.viewMossScriptOutput <$> mossScriptInvocationKey ps <*> unit)
+  , (similarityCheckMossPath, \ps -> P.similarityCheckMoss <$> assignmentKey ps <*> unit)
   , (submissionTablePath, \ps -> P.submissionTable <$> groupKey ps <*> unit)
   , (usersInGroupPath, \ps -> P.usersInGroup <$> groupKey ps <*> unit)
   ] where
@@ -508,6 +510,7 @@ routeToPageMap = Map.fromList [
       username      = fmap (Username . BS.unpack) . value (fieldName usernameField)
       uid           = fmap (Uid . BS.unpack) . value (fieldName userUidField)
       courseManagementContents = value courseManagementContentsParamName >=> readMaybe . BS.unpack
+      mossScriptInvocationKey = fmap (MossScriptInvocationKey . BS.unpack) . value mossScriptInvocationKeyParamName
 
       -- Returns Just x if only one x corresponds to the key in the request params
       -- otherwise Nothing

@@ -586,6 +586,8 @@ labels =
  , "msg_LinkText_ModifyAssessmentPreview"
  , "msg_LinkText_ViewAssessment"
  , "msg_LinkText_Notifications"
+ , "msg_LinkText_SimilarityCheckMoss"
+ , "msg_LinkText_ViewMossScriptOutput"
 
  , "msg_Domain_EvalPassed"
  , "msg_Domain_EvalFailed"
@@ -596,6 +598,17 @@ labels =
  , "msg_SeeMore_SeeMore"
 
  , "msg_Markdown_NotFound"
+
+ , "msg_Moss_Info"
+ , "msg_Moss_ProgrammingLanguage"
+ , "msg_Moss_ChooseProgrammingLanguage"
+ , "msg_Moss_Submit"
+ , "msg_Moss_ReportIsDone"
+ , "msg_Moss_ErrorDuringSending"
+ , "msg_Moss_ReportIsNotYetReady"
+ , "msg_Moss_WeAreRefreshingThePage"
+ , "msg_Moss_EveryNSeconds"
+ , "msg_Moss_PleaseBePatient"
 
  , "msg_Notifications_NoNotifications"
 

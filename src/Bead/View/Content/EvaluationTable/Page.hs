@@ -94,10 +94,10 @@ evaluationTableContent tc = openedSubmissionsCata $ \admincourse admingroup rela
 submissionInfo tc msg isGroup (key, desc) = H.tr $ do
   H.td $ Bootstrap.link (routeOf (evaluation key)) (msg $ msg_EvaluationTable_Solution "Submission")
   H.td . B.toMarkup . Assignment.name . eAssignment $ desc
-  uid (H.td . B.toMarkup) $ eUid desc
-  H.td . B.toMarkup . eStudent $ desc
-  H.td . B.toMarkup . eCourse $ desc
-  when isGroup $ H.td . B.toMarkup . fromMaybe "" . eGroup $ desc
+  uid (H.td . B.toMarkup) . u_uid $ eStudent desc
+  H.td . B.toMarkup . u_name . eStudent $ desc
+  H.td . B.toMarkup . shortCourseName . eCourse $ desc
+  when isGroup $ H.td . B.toMarkup . maybe "" shortGroupName . eGroup $ desc
   H.td . B.toMarkup . showDate . tc $ submissionPostTime desc
   H.td . SV.formatSubmissionState SV.toMediumIcon msg . snd3 . eSubmissionInfo $ desc
   where
@@ -118,7 +118,7 @@ type SMVal = (SubmissionKey, SubmissionDesc)
 type SMap = Map SMKey [SMVal]
 
 descToKey :: SMVal -> SMKey
-descToKey (_k,d) = (eCourse d, eGroup d, eAssignmentDate d)
+descToKey (_k,d) = (courseName $ eCourse d, shortGroupName <$> eGroup d, eAssignmentDate d)
 
 insertSMap :: SMVal -> SMap -> SMap
 insertSMap v m =

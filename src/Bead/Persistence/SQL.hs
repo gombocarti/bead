@@ -10,6 +10,7 @@ module Bead.Persistence.SQL (
   , module Bead.Persistence.SQL.FileSystem
   , module Bead.Persistence.SQL.Group
   , module Bead.Persistence.SQL.MySQL
+  , module Bead.Persistence.SQL.Moss
   , module Bead.Persistence.SQL.Notification
 #ifndef SSO
   , module Bead.Persistence.SQL.Registration
@@ -32,9 +33,10 @@ import Bead.Persistence.SQL.Course
 import Bead.Persistence.SQL.Entities (Persist)
 import Bead.Persistence.SQL.Evaluation
 import Bead.Persistence.SQL.Feedback
-import Bead.Persistence.SQL.FileSystem (testIncoming, testFeedbacks, finalizeTestFeedback, insertTestFeedback)
+import Bead.Persistence.SQL.FileSystem (testIncoming, testFeedbacks, finalizeTestFeedback, insertTestFeedback, uploadForMoss)
 import Bead.Persistence.SQL.Group
 import Bead.Persistence.SQL.MySQL
+import Bead.Persistence.SQL.Moss
 import Bead.Persistence.SQL.Notification
 #ifndef SSO
 import Bead.Persistence.SQL.Registration

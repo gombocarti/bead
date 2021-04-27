@@ -57,7 +57,7 @@ evaluationPage = do
   tc <- userTimeZoneToLocalTimeConverter
   (hasTestCase, subms) <- userStory $ do
     ak <- Story.assignmentOfSubmission sk
-    infos <- Story.submissionInfos (eUsername sd) ak
+    infos <- Story.submissionInfos (u_username . eStudent $ sd) ak
     hasTestCase <- Story.hasAssignmentTestCase ak
     return (hasTestCase, infos)
   let pageData = PageData {
@@ -80,7 +80,7 @@ modifyEvaluationPage = do
   tc <- userTimeZoneToLocalTimeConverter
   (hasTestCase, subms) <- userStory $ do
     ak <- Story.assignmentOfSubmission sk
-    infos <- Story.submissionInfos (eUsername sd) ak
+    infos <- Story.submissionInfos (u_username . eStudent $ sd) ak
     hasTestCase <- Story.hasAssignmentTestCase ak
     return (hasTestCase, infos)
   let pageData = PageData {
@@ -235,14 +235,14 @@ evaluationContent pd = do
     Bootstrap.rowColMd12 $ Bootstrap.table $
       H.tbody $ do
         let aName = assignmentCata (\name _ _ _ _ _ -> name)
-        (msg $ msg_Evaluation_Course "Course: ") .|. (eCourse $ sd)
+        (msg $ msg_Evaluation_Course "Course: ") .|. (shortCourseName . eCourse $ sd)
         (msg $ msg_Evaluation_Assignment "Assignment: ") .|. (aName . eAssignment $ sd)
         maybe
           mempty
-          (\group -> (msg $ msg_Evaluation_Group "Group: ") .|. group)
+          (\group -> (msg $ msg_Evaluation_Group "Group: ") .|. shortGroupName group)
           (eGroup sd)
-        (msg $ msg_Evaluation_Student "Student: ") .|. (eStudent $ sd)
-        (msg $ msg_Evaluation_Username "Username: ") .|. (uid Prelude.id $ eUid sd)
+        (msg $ msg_Evaluation_Student "Student: ") .|. (u_name . eStudent $ sd)
+        (msg $ msg_Evaluation_Username "Username: ") .|. (uid Prelude.id . u_uid . eStudent $ sd)
         (msg $ msg_Evaluation_SubmissionDate "Date of submission: ") .|. (showDate . tc . thd3 $ eSubmissionInfo sd)
         let customIconStyle = SV.toMediumIcon {
                 SV.freeFormPlaceholder = Just $ \msg -> msg $ msg_SubmissionState_FreeFormEvaluated "Evaluated"
@@ -279,14 +279,14 @@ evaluationContent pd = do
 
       h2 $ H.toMarkup $ msg $ msg_Evaluation_Submitted_Solution "Submission"
       let alwaysVisibleButtons = downloadSubmissionButton <> queueForTestButton
-      if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ sd)
-        then do
-          Bootstrap.buttonGroup alwaysVisibleButtons
-          H.p $ H.toMarkup . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
-            "The submission was uploaded as a compressed file so it could not be displayed verbatim."
-        else do
-          Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> alwaysVisibleButtons
-          H.pre ! A.id (H.toValue submissionIdent) $ H.toMarkup $ eSolution sd
+          simple sol = do
+            Bootstrap.buttonGroup $ copyToClipboardButton msg submissionIdent <> alwaysVisibleButtons
+            H.pre ! A.id (H.toValue submissionIdent) $ H.toMarkup sol
+          zipped sol = do
+            Bootstrap.buttonGroup alwaysVisibleButtons
+            H.p $ H.toMarkup . msg $ msg_Evaluation_Submitted_Solution_Zip_Info
+              "The submission was uploaded as a compressed file so it could not be displayed verbatim."
+      submissionValue simple zipped (solution . eSolution $ sd)
 
     Bootstrap.rowColMd12 $
       H.p $ H.toMarkup . msg $ msg_Evaluation_Info $ T.concat

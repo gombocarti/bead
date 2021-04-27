@@ -44,6 +44,9 @@ testScriptKeyParamName = fieldName testScriptKeyField
 courseManagementContentsParamName :: Text
 courseManagementContentsParamName = "course-management-contents"
 
+mossScriptInvocationKeyParamName :: Text
+mossScriptInvocationKeyParamName = "moss-script-invocation-key"
+
 -- Request Param is a Pair of Strings, which
 -- are key and value representing a parameter in
 -- the GET or POST http request
@@ -69,6 +72,12 @@ instance ReqParamValue CourseManagementContents where
 
 instance RequestParam CourseManagementContents where
   requestParam t = ReqParam (courseManagementContentsParamName, paramValue t)
+
+instance ReqParamValue MossScriptInvocationKey where
+  paramValue (MossScriptInvocationKey k) = T.pack k
+
+instance RequestParam MossScriptInvocationKey where
+  requestParam k = ReqParam (mossScriptInvocationKeyParamName, paramValue k)
 
 instance ReqParamValue AssignmentKey where
   paramValue (AssignmentKey a) = T.pack a

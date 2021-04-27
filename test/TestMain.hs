@@ -8,6 +8,7 @@ import qualified Test.Unit.Module
 import qualified Test.Unit.Persistence
 import qualified Test.Unit.UserStory
 import qualified Test.View
+import qualified Test.Property.Domain
 import qualified Test.Property.Persistence
 import qualified Test.Regression.UserStory
 
@@ -19,6 +20,7 @@ main = do
     Test.Unit.UserStory.tests
     Test.View.tests
     Test.Regression.UserStory.tests
+    Test.Property.Domain.tests
     Test.Property.Persistence.tests
 
 {-

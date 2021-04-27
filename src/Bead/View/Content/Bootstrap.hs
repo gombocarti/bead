@@ -139,8 +139,7 @@ tabItemActive route text = tabItem route text ! class_ "active"
 badge :: ToMarkup a => a -> H.Html
 badge text = H.span ! class_ "badge" $ toMarkup text
 
-alert color = H.div ! class_ (toValue $ "alert alert-" ++ alertColor)
-  where alertColor = alertAlgebra "success" "info" "warning" "danger" color
+alert color = H.div ! class_ (toValue $ "alert alert-" ++ alertToColor color)
 
 -- | Creates a caret sign
 caret = H.span ! class_ "caret" $ mempty
@@ -218,6 +217,9 @@ link :: (ToValue b, ToMarkup a) => b -> a -> H.Html
 link ref text =
   a ! href (toValue ref)
     $ toMarkup text
+
+linkNewTab :: (ToValue b, ToMarkup a) => b -> a -> H.Html
+linkNewTab ref text = link ref text ! A.target "_blank"
 
 -- | Creates a dropdown button
 customDropdownButton custom text =
@@ -566,6 +568,9 @@ alertAlgebra
     Warning -> warning
     Danger  -> danger
 
+alertToColor :: Alert -> String
+alertToColor = alertAlgebra "success" "info" "warning" "danger"
+
 -- HTML helpers
 
 optionTag :: Text -> Text -> Bool -> Html
@@ -605,11 +610,12 @@ selectionOptionalPart name attrs def = foldl (!) (selectOptionalTag name) attrs 
   where
     option (v,t) = optionTag (encode "selection" v) t (def v)
 
-panel :: Maybe Html -> Html -> Html
-panel heading body = H.div
-                       ! class_ "panel panel-default"
-                       $ do maybe mempty (H.div ! class_ "panel-heading") heading
-                            H.div ! class_ "panel-body" $ body
+panel :: Maybe Alert -> Maybe Html -> Html -> Html
+panel color heading body =
+  H.div
+    ! class_ (toValue ("panel panel-" ++ maybe "default" alertToColor color))
+    $ do maybe mempty (H.div ! class_ "panel-heading") heading
+         H.div ! class_ "panel-body" $ body
 
 -- Collapsible
 

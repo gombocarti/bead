@@ -10,6 +10,7 @@ module Bead.View.Content.All (
 import qualified Bead.Controller.Pages as Pages hiding (invariants)
 import Bead.View.Content
 import qualified Bead.View.ContentHandler as ContentHandler (logout)
+import Bead.View.Content.CheckSimilarity.Moss (checkSimilarityMoss, viewMossReport)
 import Bead.View.Content.Profile.Page
 import Bead.View.Content.StudentView.Page
 import Bead.View.Content.GroupOverview.Page
@@ -110,6 +111,8 @@ pageContent = Pages.constantsP
   modifyAssessmentPreview
   viewAssessment
   notifications
+  viewMossReport
+  checkSimilarityMoss
   submissionTable
   usersInGroup
   where
