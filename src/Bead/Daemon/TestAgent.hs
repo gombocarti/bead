@@ -4,6 +4,8 @@ module Bead.Daemon.TestAgent where
 import           Control.Exception
 import           Control.Concurrent
 
+import           Data.Text (pack)
+
 import qualified Bead.Controller.Logging as L
 import           Bead.Controller.ServiceContext as S
 import           Bead.Controller.UserStories (runUserStory, testAgentFeedbacks)
@@ -25,7 +27,7 @@ startTestCommentsAgent logger initWait wait context = do
 
     someException :: SomeException -> IO ()
     someException e = do
-      (L.log logger L.ERROR (show e)) `catch` (loggerException e)
+      (L.log logger L.ERROR (pack . show $ e)) `catch` (loggerException e)
       return ()
       where
         loggerException :: SomeException -> SomeException -> IO ()

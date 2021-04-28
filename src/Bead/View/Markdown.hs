@@ -36,14 +36,14 @@ import           Text.Blaze.Renderer.String (renderMarkup)
 -- It also assigns unique identifiers and Copy to Clipboard buttons to code blocks.
 -- Identifiers are unique in context of single markdown document but not
 -- over multiple documents.
-markdownToHtml :: I18N -> String -> Html
+markdownToHtml :: I18N -> Text -> Html
 markdownToHtml msg = either (string . show) id . runPure . (wrt . transform <=< rd)
   where
     wrt :: Pandoc -> PandocPure Html
     wrt = writeHtml5 writerOpts
 
-    rd :: String -> PandocPure Pandoc
-    rd = readMarkdown readerOpts . T.pack
+    rd :: Text -> PandocPure Pandoc
+    rd = readMarkdown readerOpts
 
     transform :: Pandoc -> Pandoc
     transform p = evalState (walkM (copyToClipboardForCodeBlocks msg) p) 0
@@ -61,8 +61,14 @@ copyToClipboardForCodeBlocks msg bs = foldrM addCopyButton [] bs
     addCopyButton (CodeBlock (_, classes, kv) code) blocks =
       state (\n ->
                let ident = "code-" ++ show n
-               in ((RawBlock "html" (renderMarkup $ copyToClipboardButton msg ident) : CodeBlock (ident, classes, kv) code : blocks), n + 1))
+               in ((RawBlock "html" (renderMarkup $ copyToClipboardButton msg ident) : CodeBlock (ident, classes, removeTopMargin : kv) code : blocks), n + 1))
     addCopyButton b blocks = return (b : blocks)
+
+    -- Removes the margin above highlighted code blocks introduced by Pandoc's
+    -- highlighting css. The margin pushes away copy to clipboard buttons from
+    -- their respective code blocks.
+    removeTopMargin :: (String, String)
+    removeTopMargin = ("style", "margin-top: 0;")
 
 headersToDiv :: MarkupM a -> MarkupM a
 headersToDiv (Parent tag open close contents)

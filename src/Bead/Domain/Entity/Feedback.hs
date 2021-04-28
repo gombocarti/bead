@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.Domain.Entity.Feedback (
     Feedback(..)
   , feedback
@@ -14,6 +15,8 @@ module Bead.Domain.Entity.Feedback (
 
 import           Control.Applicative
 import           Data.Data
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Time (UTCTime(..))
 
 import           Bead.Domain.Func
@@ -33,11 +36,11 @@ data FeedbackInfo
   | TestResult { testResult :: Bool }
     -- ^ Indicates that the submission has passed the automated test scripts
     -- or not, True means that the submission is passed.
-  | MessageForStudent { studentComment :: String }
+  | MessageForStudent { studentComment :: Text }
     -- ^ Represents a message that can be viewed by the student
-  | MessageForAdmin { adminComment :: String }
+  | MessageForAdmin { adminComment :: Text }
     -- ^ Represents a message that can be view by the admin of the course or group
-  | Evaluated { evalResult :: EvResult, evalComment :: String, evalAuthor :: String }
+  | Evaluated { evalResult :: EvResult, evalComment :: Text, evalAuthor :: Text }
     -- ^ Stores the evaluation result at a time, to be able to show later on, if the
     -- evaluation changes over time.
   deriving (Data, Eq, Read, Show, Typeable)

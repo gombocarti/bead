@@ -15,6 +15,7 @@ module Bead.View.ContentHandler (
   , downloadText
   , beadHandler
   , logMessage
+  , logMessageText
   , withUserState
   , changeUserState
   , userStory
@@ -63,6 +64,7 @@ import qualified Text.Blaze as B
 import           Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.UTF8  as BU
 import qualified Data.ByteString.Lazy  as LB
@@ -104,7 +106,7 @@ import           Bead.View.Translation
 
 import           Bead.View.Fay.JSON.ServerSide
 
-newtype ContentError = ContentError (Maybe String)
+newtype ContentError = ContentError (Maybe Text)
 
 contentError
   nothing
@@ -114,11 +116,15 @@ contentError
     (ContentError (Just msg)) -> msg
 
 contentHandlerError :: String -> ContentError
-contentHandlerError = ContentError . Just
+contentHandlerError = contentHandlerErrorText . T.pack
 
-contentHandlerErrorMap :: (Maybe String -> a) -> ContentError -> a
+contentHandlerErrorText :: Text -> ContentError
+contentHandlerErrorText = ContentError . Just
+
+contentHandlerErrorMap :: (Maybe Text -> a) -> ContentError -> a
 contentHandlerErrorMap f (ContentError x) = f x
 
+contentHandlerErrorMsg :: ContentError -> Text
 contentHandlerErrorMsg = contentHandlerErrorMap (maybe "Unknown message" id)
 
 {-
@@ -152,7 +158,7 @@ data HtmlPage = HtmlPage {
   , pageBody   :: IHtml
   }
 
-htmlPage :: Translation String -> IHtml -> HtmlPage
+htmlPage :: Translation -> IHtml -> HtmlPage
 htmlPage title body = HtmlPage {
     pageTitle = do
       msg <- getI18N
@@ -175,15 +181,15 @@ redirectTo = return . redirection
 
 -- | A file to be downloaded consists of a filename, a mime info and
 --   the means to write its contents into a response.
-type File = (String, Mime, BeadHandler ())
+type File = (Text, Mime, BeadHandler ())
 
-downloadStrict :: String -> Mime -> B.ByteString -> ContentHandler File
+downloadStrict :: Text -> Mime -> B.ByteString -> ContentHandler File
 downloadStrict filename mime contents = return (filename, mime, writeBS contents)
 
-downloadLazy :: String -> Mime -> LB.ByteString -> ContentHandler File
+downloadLazy :: Text -> Mime -> LB.ByteString -> ContentHandler File
 downloadLazy filename mime contents = return (filename, mime, writeLBS contents)
 
-downloadText :: String -> Text -> ContentHandler File
+downloadText :: Text -> Text -> ContentHandler File
 downloadText filename contents = return (filename, MimePlainText, writeText contents)
 
 -- Data types for handling form submissions and modification requests
@@ -194,7 +200,10 @@ newtype Action = Action {
 
 -- | The 'logMessage' logs a message at a given level using the service context logger
 logMessage :: LogLevel -> String -> BeadHandler' b ()
-logMessage lvl msg = do
+logMessage lvl msg = logMessageText lvl (T.pack msg)
+
+logMessageText :: LogLevel -> Text -> BeadHandler' b ()
+logMessageText lvl msg = do
   context <- getServiceContext
   liftIO $ L.log (SC.logger context) lvl msg
 
@@ -267,17 +276,16 @@ userTimeZoneToUTCTimeConverter = withUserTimeZoneContext zoneInfoToUTCTimeSafe
 foundTimeZones :: BeadHandler' b [TimeZoneName]
 foundTimeZones = zoneInfos <$> getTimeZoneConverter
 
-{-# SPECIALIZE i18nE :: ContentHandler (Translation String -> String) #-}
-i18nE :: (IsString s) => ContentHandler (Translation String -> s)
+i18nE :: ContentHandler (Translation -> Text)
 i18nE = do
   lang <- userLanguage
   -- If the dictionary is not found for the language stored in session
   -- the identical dictionary is returned. The fromString is necessary
   -- for the Attribute names and values used in html templating engines
   d <- beadHandler . withDictionary . getDictionary $ lang
-  return (fromString . (unDictionary $ maybe idDictionary id d)) -- TODO: I18N
+  return (unDictionary $ maybe idDictionary id d) -- TODO: I18N
 
-i18nH :: BeadHandler' v (Translation String -> String)
+i18nH :: BeadHandler' v (Translation -> Text)
 i18nH = do
   cookie <- fst <$> getCookie
   let lang = Auth.cookieLanguage cookie
@@ -297,7 +305,7 @@ decodeParamValue param value = do
 
 getParameter :: Parameter a -> ContentHandler' b a
 getParameter param = do
-  reqParam <- lift . getParam . B.pack . name $ param
+  reqParam <- lift . getParam . TE.encodeUtf8 . name $ param
   maybe
     (throwError . contentHandlerError $ notFound param) -- TODO: I18N
     (decodeParamValue param)
@@ -305,7 +313,7 @@ getParameter param = do
 
 getParameterWithDefault :: a -> Parameter a -> ContentHandler' b a
 getParameterWithDefault defValue param = do
-  reqParam <- lift . getParam . B.pack . name $ param
+  reqParam <- lift . getParam . TE.encodeUtf8 . name $ param
   maybe
     (throwError . contentHandlerError $ notFound param) -- TODO: I18N
     (\bs -> if (B.null bs)
@@ -324,7 +332,7 @@ getParameterValues param = do
   maybe
     (throwError . contentHandlerError $ notFound param) -- TODO: I18N
     (mapM (decodeParamValue param))
-    (Map.lookup (fromString paramName) params)
+    (Map.lookup (TE.encodeUtf8 paramName) params)
 
 -- Calculates a Just value named and decoded by the given paramater,
 -- supposing that the parameter are optional, if it not presented
@@ -333,11 +341,11 @@ getOptionalParameter :: Parameter a -> ContentHandler' b (Maybe a)
 getOptionalParameter param = do
   params <- lift getParams
   let paramName = name param
-  case Map.lookup (fromString paramName) params of
+  case Map.lookup (TE.encodeUtf8 paramName) params of
     Nothing  -> return Nothing
-    Just []  -> throwError . contentHandlerError $ concat [paramName, " contains zero values."] -- TODO: I18N
+    Just []  -> throwError . contentHandlerErrorText $ T.concat [paramName, " contains zero values."] -- TODO: I18N
     Just [x] -> Just <$> decodeParamValue param x
-    Just (_:_) -> throwError . contentHandlerError $ concat [paramName, " has more than one value."] -- TODO: I18N
+    Just (_:_) -> throwError . contentHandlerErrorText $ T.concat [paramName, " has more than one value."] -- TODO: I18N
 
 -- Calculates a Just value named and decoded by the given paramater,
 -- supposing that the parameter are optional, if it not presented
@@ -346,20 +354,20 @@ getOptionalOrNonEmptyParameter :: Parameter a -> ContentHandler' b (Maybe a)
 getOptionalOrNonEmptyParameter param = do
   params <- lift getParams
   let paramName = name param
-  case Map.lookup (fromString paramName) params of
+  case Map.lookup (TE.encodeUtf8 paramName) params of
     Nothing  -> return Nothing
-    Just []  -> throwError . contentHandlerError $ concat [paramName, " contains zero values."] -- TODO: I18N
+    Just []  -> throwError . contentHandlerErrorText $ T.concat [paramName, " contains zero values."] -- TODO: I18N
     Just [x] -> case B.null x of
                   True  -> return Nothing
                   False -> Just <$> decodeParamValue param x
-    Just (_:_) -> throwError . contentHandlerError $ concat [paramName, " has more than one value."] -- TODO: I18N
+    Just (_:_) -> throwError . contentHandlerErrorText $ T.concat [paramName, " has more than one value."] -- TODO: I18N
 
 
-getJSONParam :: (Data a) => String -> String -> ContentHandler a
+getJSONParam :: (Data a) => Text -> Text -> ContentHandler a
 getJSONParam param msg = do
-  x <- lift . getParam . B.pack $ param
+  x <- lift . getParam . TE.encodeUtf8 $ param
   case x of
-    Nothing -> throwError . contentHandlerError $ msg
+    Nothing -> throwError . contentHandlerErrorText $ msg
     Just y  -> case decodeFromFay . B.unpack $ y of
       Nothing -> throwError . contentHandlerError $ "Decoding error"
       Just z  -> return z
@@ -367,19 +375,19 @@ getJSONParam param msg = do
 -- Decode multiple values for the given parameter names.
 -- This approach can be used for checkbox contained values.
 -- If no parameter is found in the request, an empty list is returned.
-getJSONParameters :: (Data a, Show a) => String -> String -> ContentHandler [a]
+getJSONParameters :: (Data a, Show a) => Text -> Text -> ContentHandler [a]
 getJSONParameters param msg = do
   params <- lift getParams
-  case Map.lookup (fromString param) params of
+  case Map.lookup (TE.encodeUtf8 param) params of
     Nothing -> return []
     Just [] -> return []
     Just vs -> mapM decodePrm vs
   where
     decodePrm :: Data a => B.ByteString -> ContentHandler a
     decodePrm v =
-      let v' = B.unpack v
-      in case decodeFromFay v' of
-           Nothing -> throwError . contentHandlerError $ concat ["Decoding error:", v', " ", msg]
+      let v' = TE.decodeUtf8 v
+      in case decodeFromFay (B.unpack v) of
+           Nothing -> throwError . contentHandlerErrorText $ T.concat ["Decoding error:", v', " ", msg]
            Just  x -> return x
 
 -- Computes a list that contains language and dictionary info pairs
@@ -407,7 +415,7 @@ userStory story = do
   x <- liftIO $ S.runUserStory context i18n uState story
   case x of
     Left e  ->
-      throwError . contentHandlerError . S.translateUserError i18n $ e
+      throwError . contentHandlerErrorText . S.translateUserError i18n $ e
     Right (y, uState') -> do
       changeUserState (const uState')
       return y

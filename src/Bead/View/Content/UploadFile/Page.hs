@@ -6,12 +6,14 @@ module Bead.View.Content.UploadFile.Page (
 import           Control.Monad (forM)
 import           Control.Monad.Trans (lift)
 import qualified Control.Monad.Except as Except
-import           Data.String (fromString)
+import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.ByteString as B
-import qualified Data.ByteString.UTF8 as BUTF8
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as BSUTF8
 
 import           Snap.Util.FileUploads
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 as H
 import           Text.Blaze.Html5.Attributes as A (enctype)
 
@@ -38,9 +40,9 @@ getUploadFile = do
     uploadFileContent (PageData fs size convertToLocalTime)
 
 data Success a
-  = PolicyFailure String
+  = PolicyFailure Text
   | UnnamedFile
-  | StoryError String
+  | StoryError Text
   | Success a
 
 successCata
@@ -90,17 +92,17 @@ postUploadFile = do
     return $ redirection $ Pages.uploadFile ()
 
   where
-    handlePart :: PartInfo -> Either PolicyViolationException FilePath -> IO (Success (FilePath, B.ByteString))
-    handlePart _partInfo (Left exception) = return . PolicyFailure . T.unpack $ policyViolationExceptionReason exception
+    handlePart :: PartInfo -> Either PolicyViolationException FilePath -> IO (Success (FilePath, BS.ByteString))
+    handlePart _partInfo (Left exception) = return . PolicyFailure $ policyViolationExceptionReason exception
     handlePart partInfo (Right filePath) =
       case (partFileName partInfo) of
-        Just fp | not (B.null fp) -> do
-            contents <- B.readFile filePath
-            return (Success (BUTF8.toString fp, contents))
+        Just fp | not (BS.null fp) -> do
+            contents <- BS.readFile filePath
+            return (Success (BSUTF8.toString fp, contents))
         _                         -> return UnnamedFile
 
                                      
-    saveFile :: FilePath -> B.ByteString -> ContentHandler (Success ())
+    saveFile :: FilePath -> ByteString -> ContentHandler (Success ())
     saveFile name contents =
       (Success () <$ userStory (Story.saveUsersFile name (UsersPublicFile contents))) `Except.catchError` handleError
       where
@@ -112,14 +114,14 @@ uploadFileContent pd = do
   msg <- getI18N
   return $ do
     Bootstrap.rowColMd12 $ do
-      h3 $ fromString $ msg $ msg_UploadFile_FileSelection "File Selection"
+      h3 $ B.toMarkup $ msg $ msg_UploadFile_FileSelection "File Selection"
       p $ do
-        fromString . msg $ msg_UploadFile_Info "Please choose a file to upload.  Note that the maximum file size in kilobytes: "
-        fromString (pageDataCata (\_ s _ -> show s) pd)
+        B.toMarkup . msg $ msg_UploadFile_Info "Please choose a file to upload.  Note that the maximum file size in kilobytes: "
+        B.toMarkup (pageDataCata (\_ s _ -> show s) pd)
 
     postForm (routeOf uploadFile) ! A.enctype "multipart/form-data" $ do
       fileInput (fieldName fileUploadField)
-      Bootstrap.submitButton (fieldName fileUploadSubmit) (msg $ msg_UploadFile_UploadButton "Upload")
+      Bootstrap.submitButton (fieldName fileUploadSubmit :: Text) (msg $ msg_UploadFile_UploadButton "Upload")
 
     Bootstrap.rowColMd12 $ Bootstrap.table $ do
       thead $ headerLine msg
@@ -129,16 +131,16 @@ uploadFileContent pd = do
     uploadFile = Pages.uploadFile ()
 
     headerLine i18n = H.tr $ do
-      td . fromString . i18n $ msg_UploadFile_FileName "File Name"
-      td . fromString . i18n $ msg_UploadFile_FileSize "File Size (bytes)"
-      td . fromString . i18n $ msg_UploadFile_FileDate "File Date"
+      td . B.toMarkup . i18n $ msg_UploadFile_FileName "File Name"
+      td . B.toMarkup . i18n $ msg_UploadFile_FileSize "File Size (bytes)"
+      td . B.toMarkup . i18n $ msg_UploadFile_FileDate "File Date"
 
     numFiles       = pageDataCata (\fs _ _ -> length fs) pd
 
     usersFileLines = pageDataCata (\fs _ converToLocalTime -> (mapM_ (usersFileLine converToLocalTime) fs)) pd
       where
         usersFileLine convertToLocalTime (usersfile, fileInfo) = H.tr $ do
-          td . fromString $ usersFile id id usersfile
+          td . B.toMarkup $ usersFile id id usersfile
           withFileInfo fileInfo $ \size date -> do
-            td . fromString $ show size
-            td . fromString . showDate . convertToLocalTime $ date
+            td . B.toMarkup $ show size
+            td . B.toMarkup . showDate . convertToLocalTime $ date

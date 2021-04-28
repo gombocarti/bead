@@ -1,9 +1,11 @@
-
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.View.Translation.Language.DictionaryHu (dictionaryHu) where
 
 import qualified Bead.View.DictionaryFile as DF
 import           Bead.View.DictionaryFile ((<|))
 import           Bead.View.Translation
+
+import qualified Data.Text as T
 
 dictionaryHu = DF.DictionaryFile {
   DF.langCode = "hu",
@@ -87,7 +89,7 @@ dictionaryHu = DF.DictionaryFile {
     , msg_NewAssignment_StartDate <| "Nyitás"
     , msg_NewAssignment_EndDate <| "Zárás"
     , msg_NewAssignment_Description <| "Szöveges leírás"
-    , msg_NewAssignment_Description_Default <| unlines
+    , msg_NewAssignment_Description_Default <| T.unlines
         [ "Ennek a szövegnek markdown formátumban kell lennie.  Íme egy rövid áttekintés:"
         , ""
         , "  - Ez egy lista egyik eleme, *dőlt betűvel*."
@@ -112,20 +114,20 @@ dictionaryHu = DF.DictionaryFile {
         , ""
         , "Számos nyelv támogatott, többek között `ada`, `agda`, `c`, `cpp`, `erlang`, `java`, `lex`, `python` és `yacc`."
         , ""
-        , unwords
+        , T.unwords
           [ "Képletek és egyenletek pont úgy működnek, mint $\\LaTeX$-ben."
           , "Használható szövegközi és kiemelt mód a matematikai tartalom szép szedésére."
           , "A szövegközi módnál, például $\\sum_{j=0}^n (a + bj)$ esetében, két dollár szimbólum (\\$) közé írjuk a képletet vagy egyenletet."
           , "A nyitó dollár szimbólum után és a záró előtt nincs szóköz. A kiemelt mód nagyobb hangsúlyt ad:"
           ]
-        , unlines
+        , T.unlines
           [ "\\["
           , "\\sum_{j=0}^n (a + bj) = a + (a + b) + \\ldots + (a + nb)"
           , "\\]"
           ]
         , "A támogatott $\\LaTeX$ makrók [ezen az oldalon](https://katex.org/docs/supported.html) vannak felsorolva."
         , ""
-        , unwords
+        , T.unwords
           [ "Emellett még linkek is [illeszthetők](http://haskell.org/) a szövegbe."
           , "És ha más nem, akkor akár <a>sima</a> <b>HTML kódot</b> <i>is be lehet ágyazni</i>."
           ]
@@ -201,15 +203,16 @@ dictionaryHu = DF.DictionaryFile {
     , msg_GetCsv_StudentName <| "Név"
     , msg_GetCsv_Username <| "Neptun-kód"
     , msg_GetCsv_Score <| "Eredmény"
-    , msg_GetCsv_Information <| unlines [ "# A „#”-tel kezdődő sorok figyelmen kívül maradnak."
-                                        , "# Az alábbi eredmények érvényesek:"
-                                        , "#  - Kétértékű értékelés esetén:"
-                                        , "#      Elfogadott írható mint „+”, „1” vagy „Elfogadott”."
-                                        , "#      Elutasított írható mint „-”, „0” vagy „Elutasított”."
-                                        , "#      Kis- és nagybetű között nincs különbség."
-                                        , "#  - Százalékos értékelés esetén: egész szám 0-tól 100-ig."
-                                        , "#  - Szabadformátumú értékelés esetén: szöveg a sor végéig."
-                                        ]
+    , msg_GetCsv_Information <| T.unlines
+      [ "# A „#”-tel kezdődő sorok figyelmen kívül maradnak."
+      , "# Az alábbi eredmények érvényesek:"
+      , "#  - Kétértékű értékelés esetén:"
+      , "#      Elfogadott írható mint „+”, „1” vagy „Elfogadott”."
+      , "#      Elutasított írható mint „-”, „0” vagy „Elutasított”."
+      , "#      Kis- és nagybetű között nincs különbség."
+      , "#  - Százalékos értékelés esetén: egész szám 0-tól 100-ig."
+      , "#  - Szabadformátumú értékelés esetén: szöveg a sor végéig."
+      ]
     , msg_UserDetails_SaveButton <| "Mentés"
     , msg_UserDetails_NonExistingUser <| "Nem létező felhasználó:"
     , msg_Submission_Course <| "Tárgy:"

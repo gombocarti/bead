@@ -27,7 +27,7 @@ getGroupCsv = DataHandler $ do
     Story.loadGroup gk
   maybeAk  <- getOptionalParameter assessmentKeyPrm
   msg <- i18nE
-  let filename = groupName group <.> "csv"
+  let filename = groupName group <> ".csv"
   case maybeAk of
     Just ak -> do
       groupScores <- userStory (Story.scoresOfGroup gk ak)
@@ -46,7 +46,7 @@ getCourseCsv = DataHandler $ do
     fst <$> Story.loadCourse ck
   maybeAk  <- getOptionalParameter assessmentKeyPrm
   msg <- i18nE
-  let filename = courseName course <.> "csv"
+  let filename = courseName course <> ".csv"
   case maybeAk of
     Just ak -> do
       courseScores <- userStory (Story.scoresOfCourse ck ak)      
@@ -58,13 +58,13 @@ getCourseCsv = DataHandler $ do
       downloadText filename (csvEmpty msg users)
 
 csvHeader :: I18N -> Text
-csvHeader msg = information msg `T.append` header `T.append` "\n"
+csvHeader msg = T.concat [information msg, header, "\n"]
   where
     header = T.intercalate "," [name,username,score]
       where
-        name = T.pack . msg . msg_GetCsv_StudentName $ "Name"
-        username = T.pack . msg . msg_GetCsv_Username $ "Username"
-        score = T.pack . msg . msg_GetCsv_Score $ "Score"
+        name = msg . msg_GetCsv_StudentName $ "Name"
+        username = msg . msg_GetCsv_Username $ "Username"
+        score = msg . msg_GetCsv_Score $ "Score"
 
 csvEmpty :: I18N -> [UserDesc] -> Text
 csvEmpty msg users = csvHeader msg `T.append` body
@@ -88,7 +88,7 @@ userLine u t = T.intercalate "," [fullName u, userid u, t]
     fullName = T.pack . ud_fullname
 
 information :: I18N -> Text
-information msg = T.pack . msg . msg_GetCsv_Information $ unlines
+information msg = msg . msg_GetCsv_Information $ T.unlines
               [ "# Lines starting with '#' will be ignored."
               , "# The following scores are valid:"
               , "#  - In case of binary evaluation:"

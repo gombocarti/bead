@@ -58,7 +58,7 @@ exportEvaluationsScoresOfGroups ck gks = do
   convertToLocalTime <- userTimeZoneToLocalTimeConverter
   now <- liftIO $ convertToLocalTime <$> getCurrentTime
   downloadEvaluations
-    (removeAccents (courseName course) <.> "zip")
+    (courseName course <> ".zip")
     now
     (map (first removeAccents) (evaluationsScoresToCsvs msg course groups))
 
@@ -97,11 +97,11 @@ submissionTableToCsv msg course group_ submissionTable = (filename, T.unlines (h
     filename :: FilePath
     filename = concat
                  [ submissionTableInfoCata
-                   (\_ _ _ _ _ -> replaceSlash (E.courseName course))
-                   (\_ _ _ _ _ -> (replaceSlash (E.fullGroupName course group_)))
+                   (\_ _ _ _ _ -> replaceSlash (T.unpack $ E.courseName course))
+                   (\_ _ _ _ _ -> (replaceSlash (T.unpack $ E.fullGroupName course group_)))
                    submissionTable
                  , "_"
-                 , msg (msg_ExportEvaluations_Evaluations "evaluations")
+                 , T.unpack $ msg (msg_ExportEvaluations_Evaluations "evaluations")
                  ] <.> "csv"
 
     as :: [(AssignmentKey, Assignment, HasTestCase)]
@@ -111,7 +111,7 @@ submissionTableToCsv msg course group_ submissionTable = (filename, T.unlines (h
         group _ as _ _ _ = map (cgInfoCata id id) as
 
     header :: Text
-    header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . A.name . snd3) as)
+    header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . A.name . snd3) as)
 
     userLine :: (UserDesc, [Maybe (SubmissionKey, SubmissionState)]) -> Text
     userLine (uDesc, submissions) = T.intercalate "," (T.pack (ud_fullname uDesc) : uid : map formatSubmission submissions)
@@ -128,13 +128,13 @@ scoreBoardToCsv msg course grp board = (fileName, T.unlines (header : userLines 
   where
     fileName :: FilePath
     fileName = concat
-                 [ replaceSlash (E.fullGroupName course grp)
+                 [ replaceSlash (T.unpack $ E.fullGroupName course grp)
                  , "_"
-                 , msg $ msg_ExportEvaluations_Assessments "assessments"
+                 , T.unpack $ msg $ msg_ExportEvaluations_Assessments "assessments"
                  ] <.> "csv"
 
     header :: Text
-    header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . T.pack . Assess.title . snd) (sbAssessments board))
+    header = T.intercalate "," ("" : "" : map (quote . escapeQuotes . Assess.title . snd) (sbAssessments board))
 
     userLines :: ScoreBoard -> [Text]
     userLines board = map userLine (L.sortBy (compareHun `on` (ud_fullname . fst)) (sbUserLines board))
@@ -151,9 +151,9 @@ scoreBoardToCsv msg course grp board = (fileName, T.unlines (header : userLines 
             scores :: [Text]
             scores = map (maybe "" (\info -> SV.formatEvResult SV.toPlainText msg (evaluationOfInfo info))) scoreInfos
 
-downloadEvaluations :: String -> LocalTime -> [(FilePath, Text)] -> ContentHandler File
+downloadEvaluations :: Text -> LocalTime -> [(FilePath, Text)] -> ContentHandler File
 downloadEvaluations _ _ [] = undefined
-downloadEvaluations _ _ [(filename, contents)] = downloadText filename contents
+downloadEvaluations _ _ [(filename, contents)] = downloadText (T.pack filename) contents
 downloadEvaluations filename modificationTime files = downloadLazy filename MimeZip . Zip.fromArchive $ foldr addEntry Zip.emptyArchive files
 
   where

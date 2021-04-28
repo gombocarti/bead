@@ -56,8 +56,8 @@ modifyAssessment :: Domain.AssessmentKey -> Domain.Assessment -> Persist ()
 modifyAssessment key assessment = do
   update (toEntityKey key) $ Domain.withAssessment assessment
     $ \title desc _created cfg visible ->
-        [ AssessmentTitle       =. Text.pack title
-        , AssessmentDescription =. Text.pack desc
+        [ AssessmentTitle       =. title
+        , AssessmentDescription =. desc
         , AssessmentEvalConfig  =. encodeEvalConfig cfg
         , AssessmentVisible     =. visible
         ]

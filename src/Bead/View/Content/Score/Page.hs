@@ -16,6 +16,7 @@ import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
 import           Bead.Domain.Shared.Evaluation hiding (evConfig)
 
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 (Html,Attribute,(!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
@@ -23,8 +24,9 @@ import           Text.Printf
 import           Control.Monad (when)
 import           Data.Either (either)
 import           Data.List (intercalate)
-import           Data.String (fromString)
 import           Data.Monoid ((<>))
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 data PageData
   = PD_NewUserScore {
@@ -84,7 +86,7 @@ newScorePostHandler = do
 
   return $ either failure success evaluation
 
-getEvaluation :: EvConfig -> ContentHandler (Either (Translation String) Evaluation)
+getEvaluation :: EvConfig -> ContentHandler (Either Translation Evaluation)
 getEvaluation evConfig = do
   commentOrResult <-
     evConfigCata
@@ -93,7 +95,7 @@ getEvaluation evConfig = do
       percentage  <- getParameter evaluationPercentagePrm
       return . EvCmtResult $ percentageResult (fromIntegral percentage / 100))
     (do freeForm <- getParameter freeFormEvaluationParam
-        return . EvCmtResult $ freeFormResult freeForm)
+        return . EvCmtResult $ freeFormResult $ T.pack freeForm)
     evConfig
   withEvalOrComment commentOrResult
     (return . Left $ msg_Evaluation_EmptyCommentAndFreeFormResult "Comments are not supported yet.")
@@ -144,7 +146,7 @@ scoreContent pd = do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
       (msg . msg_NewUserScore_Course $ "Course:" )    .|. aCourse
       (msg . msg_NewUserScore_Assessment $ "Assessment:") .|. aTitle
-      when (not . null $ aDesc) $ (msg . msg_NewUserScore_Description $ "Description:") .|. aDesc
+      when (not . T.null $ aDesc) $ (msg . msg_NewUserScore_Description $ "Description:") .|. aDesc
       maybe mempty (\g -> (msg . msg_NewUserScore_Group $ "Group:") .|. g) aGroup
       (msg . msg_NewUserScore_Student $ "Student:")    .|. pdStudent pd
       (msg . msg_NewUserScore_UserName $ "Username:")   .|. (uid id $ pdUid pd)
@@ -153,13 +155,13 @@ scoreContent pd = do
       evaluationInput msg
       submit msg
     where
-      aCourse :: String
+      aCourse :: Text
       aCourse = adCourse . pdAssessmentDesc $ pd
 
-      aGroup :: Maybe String
+      aGroup :: Maybe Text
       aGroup = adGroup . pdAssessmentDesc $ pd
 
-      aTitle,aDesc :: String
+      aTitle,aDesc :: Text
       (aTitle,aDesc) = assessment (\title desc _creation _cfg _visible -> (title,desc)) as
 
       as :: Assessment
@@ -176,7 +178,7 @@ scoreContent pd = do
       view :: I18N -> Html
       view msg = pageDataAlgebra
                  (\_student _uname _uid _aDesc -> mempty)
-                 (\_student _uname _uid _aDesc score -> Bootstrap.rowColMd12 . H.p . H.toMarkup $ formatEvResult toPlainText msg (evaluationOfInfo score))
+                 (\_student _uname _uid _aDesc score -> Bootstrap.rowColMd12 . H.p . B.toMarkup $ formatEvResult toPlainText msg (evaluationOfInfo score))
                  pd
 
       evaluationInput :: I18N -> Html
@@ -202,11 +204,11 @@ viewScoreContent sd = do
     Bootstrap.rowColMd12 . Bootstrap.table . H.tbody $ do
       (msg . msg_ViewUserScore_Course $ "Course:")   .|. maybe (courseName $ scdCourse sd) (fullGroupName (scdCourse sd)) (scdGroup sd)
       (msg . msg_ViewUserScore_Assessment $ "Assessment:") .|. aTitle
-      when (not . null $ aDesc) $
+      when (not . T.null $ aDesc) $
         (msg . msg_ViewUserScore_Description $ "Description:") .|. aDesc
-    Bootstrap.rowColMd12 . H.p . H.toMarkup . (formatEvResultMaybe toPlainText msg) . fmap evaluationOfInfo . scdScoreInfo $ sd
+    Bootstrap.rowColMd12 . H.p . B.toMarkup . (formatEvResultMaybe toPlainText msg) . fmap evaluationOfInfo . scdScoreInfo $ sd
   where 
-    aTitle, aDesc :: String
+    aTitle, aDesc :: Text
     (aTitle, aDesc) = assessment (\title desc _creation _cfg _visible -> (title,desc)) (scdAssessment sd)
 
 evConfig :: Assessment -> EvConfig
@@ -214,7 +216,7 @@ evConfig = assessment (\_title _desc _creation cfg _visible -> cfg)
 
 evaluationFrame :: EvConfig -> I18N -> Html -> Html
 evaluationFrame evConfig msg content = do
-  hiddenInput (fieldName evalConfigParam) (encodeToFay' "inputEvalType" evConfig)
+  hiddenInput (fieldName evalConfigParam) (encodeToFay' "inputEvalType" evConfig :: Text)
   withEvConfig evConfig
     (do content
         binaryInput msg Passed        
@@ -231,7 +233,7 @@ evaluationFrame evConfig msg content = do
 
 evaluationFrameWithDefault :: I18N -> EvConfig -> EvResult -> Html -> Html
 evaluationFrameWithDefault msg evConfig evResult content = do
-  hiddenInput (fieldName evalConfigParam) (encodeToFay' "inputEvalType" evConfig)
+  hiddenInput (fieldName evalConfigParam) (encodeToFay' "inputEvalType" evConfig :: Text)
   withEvResult evResult
     (\binRes ->
         binaryCata (\b -> do
@@ -262,21 +264,21 @@ binaryInput msg res = do
 percentageInput :: I18N -> String -> Html
 percentageInput msg defaultText = do
   Bootstrap.formGroup . evaluationDiv . Bootstrap.rowColMd12 $ do 
-           H.toMarkup . msg $ msg_Evaluation_Percentage "Percentage: "
-           H.input ! A.name (fieldName evaluationPercentagePrm) ! A.type_ "number"
+           B.toMarkup . msg $ msg_Evaluation_Percentage "Percentage: "
+           H.input ! A.name (B.toValue $ fieldName evaluationPercentagePrm) ! A.type_ "number"
                    ! A.min "0" ! A.max "100"
                    ! A.required ""
-                   ! A.value (fromString defaultText)
+                   ! A.value (B.toValue defaultText)
       where
         evaluationDiv :: Html -> Html
-        evaluationDiv = H.div ! A.id (fieldName evaluationPercentageDiv)
+        evaluationDiv = H.div ! A.id (B.toValue $ fieldName evaluationPercentageDiv)
 
-freeFormInput :: I18N -> String -> Html
+freeFormInput :: I18N -> Text -> Html
 freeFormInput msg defaultText = do
   Bootstrap.textInputWithDefault (fieldName freeFormEvaluationParam) (msg $ msg_Evaluation_FreeFormEvaluation "Evaluation") defaultText
-  H.p . fromString $ printf (msg $ msg_Evaluation_FreeForm_Information $ unwords
+  H.p . B.toMarkup $ (printf (T.unpack $ msg $ msg_Evaluation_FreeForm_Information $ T.unwords
     [ "Note that this text will be used everywhere as the evaluation itself.  Hence it is recommended to keep"
-    , "the length of the text under size %d, otherwise it may not be directly shown." ]) displayableFreeFormResultLength
+    , "the length of the text under size %d, otherwise it may not be directly shown." ]) displayableFreeFormResultLength :: String)
              
 evalConfigParam = evalConfigParameter (fieldName evaluationConfigField)
 freeFormEvaluationParam = stringParameter (fieldName evaluationFreeFormField) "Free format evaluation"

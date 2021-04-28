@@ -84,7 +84,7 @@ data Percentage = Percentage (Scores Double)
 
 percentageCata f (Percentage x) = f x
 
-data FreeForm = FreeForm String
+data FreeForm = FreeForm Text
   deriving (Eq, Show, Read, Data, Typeable)
 
 freeForm
@@ -126,7 +126,7 @@ evResultText :: EvResult -> Text
 evResultText = evResultCata
                  (binaryCata (resultCata "Accepted" "Rejected"))
                  percentage
-                 (freeForm T.pack)
+                 (freeForm id)
   where
     percentage :: Percentage -> Text
     percentage (Percentage (Scores [p])) = T.pack . show . round $ p * 100
@@ -142,7 +142,7 @@ percentValue _ = Nothing
 binaryResult :: Result -> EvResult
 binaryResult r = EvResult (BinEval (Binary r))
 
-freeFormResult :: String -> EvResult
+freeFormResult :: Text -> EvResult
 freeFormResult = EvResult . FreeEval . FreeForm
 
 data EvConfig = EvConfig {

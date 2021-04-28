@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE Arrows #-}
 module Bead.View.Routing (
@@ -13,15 +13,19 @@ import           Control.Arrow
 import           Control.Monad (void)
 
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy.Char8 as BC
-
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BC
 import           Control.Monad.State (runStateT)
+
+import qualified Data.CaseInsensitive as CI
 import           Data.Either (either)
 import           Data.Maybe
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.String (fromString)
 import qualified Data.Text as T
+import           Data.Text (Text)
+import qualified Data.Text.Encoding as TE
 import           Prelude hiding (id)
 import qualified Prelude
 import qualified Text.Blaze.Html5 as H
@@ -37,10 +41,12 @@ import qualified Bead.Controller.ServiceContext as SC
 import qualified Bead.Controller.Pages as P
 import qualified Bead.Controller.UserStories as S
 import           Bead.Domain.Entities as E
+import           Bead.Domain.String (porcelainText)
 import qualified Bead.View.AuthToken as Auth
 import           Bead.View.BeadContext
 import           Bead.View.Common
-import           Bead.View.Content hiding (Response, BlazeTemplate, template, withUserState, getDictionaryInfos)
+import           Bead.View.Content hiding (Response, BlazeTemplate, template, withUserState, getDictionaryInfos, redirect)
+import qualified Bead.View.Content as Content
 import           Bead.View.ContentHandler hiding (withUserState, getDictionaryInfos)
 import qualified Bead.View.ContentHandler as ContentHandler
 import           Bead.View.Content.All
@@ -68,7 +74,7 @@ is selected of the path is known otherwise an error page is rendered.
 
 -- * Route table
 
-routes :: Config -> [(ByteString, BeadHandler ())]
+routes :: Config -> [(RoutePath, BeadHandler ())]
 routes config = join
   [ -- Add login handlers
     [ (indexPath,          index)
@@ -79,7 +85,7 @@ routes config = join
   , [ (staticPath,         serveDirectory "static") ]
   ]
 
-registrationRoutes :: Config -> [(ByteString, BeadHandler ())]
+registrationRoutes :: Config -> [(RoutePath, BeadHandler ())]
 #ifdef SSO
 registrationRoutes _ = []
 #else
@@ -96,7 +102,7 @@ pages = do
             ctx <- rqContextPath -< req
             pth <- rqPathInfo    -< req
             returnA -< (BS.append ctx pth)
-  page <- requestToPageHandler path
+  page <- requestToPageHandler (TE.decodeUtf8 path)
   case page of
     -- No Page value is calculated from the request, pass to other handler
     Nothing -> pass
@@ -112,7 +118,7 @@ pages = do
       response <- withUserState $ \state ->
         evalHandlerError
         (\err -> do
-            logMessage ERROR $ "Error happened during log in: " ++ contentHandlerErrorMsg err
+            logMessageText ERROR $ "Error happened during log in: " <> contentHandlerErrorMsg err
             Html <$>
               translationErrorPage
                 (msg_Login_PageTitle "Login")
@@ -132,23 +138,26 @@ serve = blaze
 downloadFile :: File -> BeadHandler ()
 downloadFile (fname, mime, writeContents) = do
   modifyResponse $
-    setHeader "Content-Disposition" (fromString $ concat ["attachment; filename=\"", escapeQuotes fname,"\""])
+    setHeader "Content-Disposition" (CI.foldCase $ BC.concat ["attachment; filename=\"", escapeQuotes . TE.encodeUtf8 . porcelainText $ fname, "\""])
   modifyResponse $
-    setHeader "Content-Type" (fromString contentType)
+    setHeader "Content-Type" contentType
   writeContents
   where
-    contentType :: String
+    contentType :: ByteString
     contentType = ContentHandler.mimeCata
       "application/zip, application/octet-stream"
       "text/plain; charset=\"UTF-8\""
       mime
 
-    escapeQuotes :: String -> String
-    escapeQuotes = concatMap escape
+    escapeQuotes :: ByteString -> ByteString
+    escapeQuotes = BC.concatMap escape
       where
-        escape :: Char -> String
+        escape :: Char -> ByteString
         escape '\"' = "\\\""
-        escape c    = [c]
+        escape c    = BC.singleton c
+
+redirect :: RoutePath -> BeadHandler ()
+redirect = Content.redirect . TE.encodeUtf8
 
 -- * Handlers
 
@@ -192,7 +201,7 @@ changeLanguage = method GET handler <|> method POST (redirect indexPath)
 
     logError :: ContentError -> BeadHandler ()
     logError err = 
-      logMessage ERROR ("Change language: " ++ contentHandlerErrorMsg err)
+      logMessageText ERROR ("Change language: " <> contentHandlerErrorMsg err)
 
 evalHandlerError
   :: (ContentError -> BeadHandler a)
@@ -502,7 +511,8 @@ routeToPageMap = Map.fromList [
 
       -- Returns Just x if only one x corresponds to the key in the request params
       -- otherwise Nothing
-      value key params = Map.lookup key params >>= oneValue
+      value :: Text -> Params -> Maybe ByteString
+      value key params = Map.lookup (TE.encodeUtf8 key) params >>= oneValue
         where
           oneValue [l] = Just l
           oneValue _   = Nothing
@@ -513,7 +523,7 @@ requestToParams :: [ReqParam] -> Params
 requestToParams = foldl insert Map.empty
   where
     insert m (ReqParam (name, value)) =
-      Map.insert (fromString name) [(fromString value)] m
+      Map.insert (TE.encodeUtf8 name) [(TE.encodeUtf8 value)] m
 
 routingTest =
   assertProperty

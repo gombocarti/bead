@@ -49,6 +49,8 @@ import           Data.Maybe (catMaybes)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime(..))
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 import           Bead.Domain.Shared.Evaluation
 
@@ -348,9 +350,9 @@ noOfTriesTests = do
 
 -- | Assignment for the student
 data Assignment = Assignment {
-    name :: String
+    name :: Text
     -- ^ Name of the assignment
-  , desc :: String
+  , desc :: Text
     -- ^ The text of the assignment itself
   , aspects :: Aspects
     -- ^ Aspects that modify the visibility of the assignment, or properties that
@@ -382,8 +384,8 @@ isActive a t = and [start a <= t, t <= end a]
 instance Arbitrary Assignment where
   arbitrary =
     Assignment
-    <$> listOf1 alphaNum
-    <*> listOf1 alphaNum
+    <$> (T.pack <$> listOf1 alphaNum)
+    <*> (T.pack <$> listOf1 alphaNum)
     <*> arbitrary
     <*> (pure (read "2014-12-12 18:56:29.363547 UTC"))
     <*> (pure (read "2015-12-12 18:56:29.363547 UTC"))
@@ -394,8 +396,8 @@ instance Arbitrary Assignment where
 
 assignmentTests =
   let a = Assignment {
-          name = "name"
-        , desc = "desc"
+          name = T.pack "name"
+        , desc = T.pack "desc"
         , aspects = emptyAspects
         , start = read "2010-10-10 12:00:00 UTC"
         , end   = read "2010-11-10 12:00:00 UTC"

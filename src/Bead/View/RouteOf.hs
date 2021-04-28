@@ -8,7 +8,6 @@ module Bead.View.RouteOf (
   , routeWithParams
   , routeWithOptionalParams
   , routeWithAnchor
-  , requestRoute
   , queryString -- Creates a well-formed query string from base path and parameters
   , RoutePath
   , indexPath
@@ -85,11 +84,8 @@ module Bead.View.RouteOf (
 #endif
   ) where
 
-import           Control.Monad (join)
-import           Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as Char8
-import           Data.List (intersperse)
-import           Data.String
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 import           Bead.Controller.Pages
 import           Bead.View.Anchor
@@ -102,7 +98,7 @@ import           Test.QuickCheck.Arbitrary
 
 
 -- Route Path represents the route in the HTTP request
-type RoutePath = ByteString
+type RoutePath = Text
 
 indexPath :: RoutePath
 indexPath = "/"
@@ -443,41 +439,34 @@ pageRequestParams = liftsP
 
 -- Calculates the full path from a page value, including the base path and the
 -- request parameters
-routeOf :: (IsString s) => Page a b c d e f -> s
+routeOf :: Page a b c d e f -> Text
 routeOf p = queryString (pageValue (pageRoutePath p)) (pageValue (pageRequestParams p))
 
 -- Produces a query string for a GET request from the given base name, and the
 -- given parameters
-queryString :: (IsString s) => ByteString -> [ReqParam] -> s
-queryString base []     = fromString $ Char8.unpack base
-queryString base params = fromString . join $ [Char8.unpack base, "?"] ++ (intersperse "&" (map queryStringParam params))
+queryString :: Text -> [ReqParam] -> Text
+queryString base []     = base
+queryString base params = T.concat [base, "?",  T.intercalate "&" (map queryStringParam params)]
 
-routeWithParams :: (IsString s) => Page a b c d e f -> [ReqParam] -> s
-routeWithParams p rs = fromString . join $
-  [routeOf p, "?"] ++ (intersperse "&" (map queryStringParam rs))
+routeWithParams :: Page a b c d e f -> [ReqParam] -> Text
+routeWithParams p rs = T.concat [routeOf p, "?", T.intercalate "&" (map queryStringParam rs)]
 
-routeWithOptionalParams :: (IsString s) => Page a b c d e f -> [ReqParam] -> s
-routeWithOptionalParams p rs = fromString . join $
-  [routeOf p, "&"] ++ (intersperse "&" (map queryStringParam rs))
+routeWithOptionalParams :: Page a b c d e f -> [ReqParam] -> Text
+routeWithOptionalParams p rs = T.concat [routeOf p, "&",  T.intercalate "&" (map queryStringParam rs)]
 
--- Creates a request route from the given route and the given request parameters
-requestRoute :: (IsString s) => String -> [ReqParam] -> s
-requestRoute route rs = fromString . join $
-  [route, "?"] ++ (intersperse "&" (map queryStringParam rs))
-
-routeWithAnchor :: (IsString s, Anchor a) => Page a b c d e f -> a -> s
-routeWithAnchor p a = fromString $ routeOf p ++ "#" ++ anchor a
+routeWithAnchor :: (Anchor a) => Page a b c d e f -> a -> Text
+routeWithAnchor p a = T.concat [routeOf p, "#", anchor a]
 
 #ifdef TEST
 
 routeOfTest =
   assertProperty
     "Non-empty RouteOr path values"
-    (\p -> Char8.length (routeOf' p) > 0)
+    (\p -> T.length (routeOf' p) > 0)
     pageGen
     "RouteOf strings must not be empty"
   where
-    routeOf' :: PageDesc -> ByteString
+    routeOf' :: PageDesc -> Text
     routeOf' = routeOf
 
 #endif

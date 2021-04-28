@@ -7,8 +7,8 @@ module Bead.View.Content.CourseManagement.TestScript (
   ) where
 
 import           Control.Arrow ((***))
+import           Data.Text (Text, replace)
 import           Data.String (fromString)
-import           Data.String.Utils (replace)
 
 import           Text.Blaze (toMarkup)
 import           Text.Blaze.Html5 as H hiding (map)
@@ -54,10 +54,10 @@ newTestScriptPage = do
 postNewTestScript :: POSTContentHandler
 postNewTestScript = do
   script' <- TestScript
-    <$> (getParameter (stringParameter (fieldName testScriptNameField) "Test Script Name"))
-    <*> (getParameter (stringParameter (fieldName testScriptDescField) "Test Script Description"))
-    <*> (getParameter (stringParameter (fieldName testScriptNotesField) "Test Script Notes"))
-    <*> (replaceCrlf <$> getParameter (stringParameter (fieldName testScriptScriptField) "Test Script"))
+    <$> (getParameter (textParameter (fieldName testScriptNameField) "Test Script Name"))
+    <*> (getParameter (textParameter (fieldName testScriptDescField) "Test Script Description"))
+    <*> (getParameter (textParameter (fieldName testScriptNotesField) "Test Script Notes"))
+    <*> (replaceCrlf <$> getParameter (textParameter (fieldName testScriptScriptField) "Test Script"))
   ck <- getParameter (customCourseKeyPrm courseKeyParamName)
   script <- userStory $ do
     (course, _groupkeys) <- Story.loadCourse ck
@@ -78,10 +78,10 @@ modifyTestScriptPage tsk = do
 postModifyTestScript :: POSTContentHandler
 postModifyTestScript = do
   script' <- TestScript
-    <$> (getParameter (stringParameter (fieldName testScriptNameField) "Test Script Name"))
-    <*> (getParameter (stringParameter (fieldName testScriptDescField) "Test Script Description"))
-    <*> (getParameter (stringParameter (fieldName testScriptNotesField) "Test Script Notes"))
-    <*> (replaceCrlf <$> getParameter (stringParameter (fieldName testScriptScriptField) "Test Script"))
+    <$> (getParameter (textParameter (fieldName testScriptNameField) "Test Script Name"))
+    <*> (getParameter (textParameter (fieldName testScriptDescField) "Test Script Description"))
+    <*> (getParameter (textParameter (fieldName testScriptNotesField) "Test Script Notes"))
+    <*> (replaceCrlf <$> getParameter (textParameter (fieldName testScriptScriptField) "Test Script"))
   tsk <- getParameter testScriptKeyPrm
   (script, ck) <- userStory $ do
     (testscript, courseKey) <- Story.loadTestScript tsk
@@ -113,12 +113,12 @@ pageContent pd = do
         description
         help
         script
-        Bootstrap.submitButton (fieldName testScriptSaveButton) (fromString . msg $ msg_NewTestScript_Save "Commit")
+        Bootstrap.submitButton (fieldName testScriptSaveButton) (toMarkup $ msg $ msg_NewTestScript_Save "Commit")
 
   where
     testScriptPage = pageDataCata (\ck -> Pages.createTestScript ck ()) (\ck key _script -> Pages.modifyTestScript ck key ())
 
 -- Helper
 
-replaceCrlf :: String -> String
+replaceCrlf :: Text -> Text
 replaceCrlf = replace "\r\n" "\n"

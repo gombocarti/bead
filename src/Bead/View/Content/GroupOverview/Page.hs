@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.View.Content.GroupOverview.Page
   (
     groupOverview
@@ -28,8 +29,8 @@ import           Control.Monad.IO.Class (liftIO)
 import           Data.Function (on)
 import qualified Data.Map as Map
 import           Data.List (sortBy)
-import           Data.String (fromString)
 import           Data.Time.Clock (getCurrentTime)
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 (Html)
 import qualified Text.Blaze.Html5 as H
 
@@ -77,11 +78,11 @@ assessmentTable board
   | otherwise = do
       msg <- getI18N
       return $ do
-        Bootstrap.rowColMd12 . H.p . fromString . msg $ T.msg_Home_AssessmentTable_Assessments "Assessments"
+        Bootstrap.rowColMd12 . H.p . B.toMarkup . msg $ T.msg_Home_AssessmentTable_Assessments "Assessments"
         Bootstrap.rowColMd12 . Bootstrap.table $ do
           H.tr $ do
-            H.th . fromString . msg $ T.msg_Home_AssessmentTable_StudentName "Name"
-            H.th . fromString . msg $ T.msg_Home_AssessmentTable_Username "Username"
+            H.th . B.toMarkup . msg $ T.msg_Home_AssessmentTable_StudentName "Name"
+            H.th . B.toMarkup . msg $ T.msg_Home_AssessmentTable_Username "Username"
             forM_ (zip assessments [1..]) (assessmentViewButton msg)
           forM_ (sortBy (E.compareHun `on` (E.ud_fullname . fst)) (R.sbUserLines board)) (userLine msg)
       where

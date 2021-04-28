@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.Persistence.Relations (
     submissionDesc
   , submissionDetailsDesc
@@ -54,6 +55,7 @@ import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Data.Text (Text)
 import           Data.Time (UTCTime, getCurrentTime)
 import           Data.Tuple.Utils (fst3, snd3, thd3)
 import           Data.Foldable (traverse_)
@@ -272,7 +274,7 @@ userSubmissionInfos u ak = do
   infos <- mapM submissionInfo  us
   return $ sortSbmDescendingByTime infos
 
-submissionEvalStr :: SubmissionKey -> Persist (Maybe String)
+submissionEvalStr :: SubmissionKey -> Persist (Maybe Text)
 submissionEvalStr sk = do
   mEk <- evaluationOfSubmission sk
   case mEk of

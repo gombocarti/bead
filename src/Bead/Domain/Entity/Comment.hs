@@ -4,6 +4,7 @@ module Bead.Domain.Entity.Comment where
 
 import           Control.Applicative
 import           Data.Data
+import           Data.Text (Text)
 import           Data.Time (UTCTime)
 
 #ifdef TEST
@@ -43,8 +44,8 @@ instance Arbitrary CommentType where
 
 -- | Comment on the text of exercise, on the evaluation
 data Comment = Comment {
-    comment       :: String
-  , commentAuthor :: String
+    comment       :: Text
+  , commentAuthor :: Text
   , commentDate   :: UTCTime
   , commentType   :: CommentType
   } deriving (Eq, Show)

@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances #-}
 module Bead.View.I18N where
 
-import           Data.String
+import           Data.Text (Text)
 import           Control.Monad.Trans.Reader
 
 import           Text.Blaze.Internal (MarkupM)
@@ -24,14 +24,16 @@ html :: H.Html -> IHtml
 html = return
 {-# INLINE html #-}
 
-getI18N :: Reader I18N (Translation String -> String)
-getI18N = asks (\f -> fromString . f)
+getI18N :: Reader I18N I18N
+getI18N = ask
 {-# INLINE getI18N #-}
 
 liftH :: H.Html -> IHtml
 liftH = return
 {-# INLINE liftH #-}
 
+{-
 instance IsString IHtml where
   fromString t = return (fromString t)
   {-# INLINE fromString #-}
+-}

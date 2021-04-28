@@ -11,6 +11,8 @@ import           Data.Data
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
 import           Data.String (IsString(..), fromString)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Time.Clock
 
 import qualified Text.Blaze as B
@@ -39,11 +41,11 @@ import           Bead.View.Translation
 
 -- * Definitions
 
-css :: String -> Html
-css c = H.link ! A.type_ "text/css" ! A.href (fromString c) ! A.rel "stylesheet"
+css :: Text -> Html
+css c = H.link ! A.type_ "text/css" ! A.href (B.toValue c) ! A.rel "stylesheet"
 
-js :: String -> Html
-js j = H.script ! A.src (fromString j) $ mempty
+js :: Text -> Html
+js j = H.script ! A.src (B.toValue j) $ mempty
 
 bootStrapDocument :: Entity.PageSettings -> IHtml -> IHtml
 bootStrapDocument settings body' = do
@@ -69,13 +71,13 @@ bootStrapDocument settings body' = do
         css "/bootstrap-datetimepicker.min.css"
         js "/bootstrap-datetimepicker.min.js"
         when (needsSyntaxHighlight settings) $
-          css ('/' : snd syntaxHighlightCss)
+          css ("/" <> T.pack (snd syntaxHighlightCss))
         when (needsLatex settings) $ do
           css "/katex/katex.min.css"
-          js  "/katex/katex.min.js"
+          js  "/katex/katex.min.js" ! A.defer ""
           css "/katex/contrib/copy-tex.min.css"
-          js  "/katex/contrib/copy-tex.min.js"
-          H.script $ fromString 
+          js  "/katex/contrib/copy-tex.min.js" ! A.defer ""
+          H.script $ B.text
             "document.addEventListener(\"DOMContentLoaded\", function () {\n  var mathElements = document.getElementsByClassName(\"math\");\n  for (var i = 0; i < mathElements.length; i++) {\n    var texText = mathElements[i].firstChild;\n    if (mathElements[i].tagName == \"SPAN\") { katex.render(texText.data, mathElements[i], { displayMode: mathElements[i].classList.contains(\"display\"), throwOnError: false } );\n  }}});"
       H.body $ body
 
@@ -196,20 +198,20 @@ nonEmpty os = conditional (not . null $ os)
 
 -- * Input fields
 
-hiddenInput :: String -> String -> Html
+hiddenInput :: (ToValue a, ToValue b) => a -> b -> Html
 hiddenInput name value =
   H.input ! A.type_ "hidden"
-          ! A.id (fromString name)
-          ! A.name (fromString name)
-          ! A.value (fromString value)
+          ! A.id (B.toValue name)
+          ! A.name (B.toValue name)
+          ! A.value (B.toValue value)
 
-optionalFileInput :: String -> Html
+optionalFileInput :: Text -> Html
 optionalFileInput name =
   H.input ! A.type_ "file"
-          ! A.id (fromString name)
-          ! A.name (fromString name)
+          ! A.id (B.toValue name)
+          ! A.name (B.toValue name)
 
-fileInput :: String -> Html
+fileInput :: Text -> Html
 fileInput name = optionalFileInput name ! A.required ""
 
 copyToClipboardButton :: I18N -> String -> Html
@@ -220,12 +222,12 @@ copyToClipboardButton msg ident = Bootstrap.buttonOnClick "" (msg $ msg_CopyToCl
 
 -- Creates a number input with the given minimum and maximum, if the value is given
 -- set as the default value
-numberInput :: String -> Maybe Int -> Maybe Int -> Maybe Int -> Html
+numberInput :: Text -> Maybe Int -> Maybe Int -> Maybe Int -> Html
 numberInput name min_ max_ val_ = do
   let val x = maybe (! (A.value x)) (\y -> (! (A.value . fromString $ show y))) actValue
   let mn = maybe id (\m -> (! (A.min $ fromString $ show m))) min_
   let mx = maybe id (\m -> (! (A.max $ fromString $ show m))) max_
-  val "" $ mn $ mx $ H.input ! A.type_ "number" ! A.name (fromString name)
+  val "" $ mn $ mx $ H.input ! A.type_ "number" ! A.name (B.toValue name)
   where
     actValue = case (min_, max_, val_) of
       (Just min, Just max, Just val) -> Just $ if and [min <= val, val <= max] then val else min
@@ -238,77 +240,75 @@ numberInput name min_ max_ val_ = do
 submitButton :: String -> String -> Html
 submitButton i t = H.input ! A.id (fromString i) ! A.type_ "submit" ! A.value (fromString t)
 
-submitButtonDanger :: String -> String -> Html
+submitButtonDanger :: (ToValue a, ToValue b) => a -> b -> Html
 submitButtonDanger i t =
-  H.input ! A.id (fromString i)
+  H.input ! A.id (B.toValue i)
           ! A.type_ "submit"
           ! A.class_ "btn btn-danger"
-          ! A.value (fromString t)
+          ! A.value (B.toValue t)
 
-checkBox :: String -> String -> Bool -> Html
+checkBox :: Text -> String -> Bool -> Html
 checkBox n v c =
-  H.input ! A.name (fromString n)
+  H.input ! A.name (B.toValue n)
           ! A.type_ "checkbox"
-          ! A.value (fromString v)
+          ! A.value (B.toValue v)
           !? (c, A.checked "")
 
-checkBox' :: (Show a, Data a) => String -> Bool -> a -> String -> Html
+checkBox' :: (Show a, Data a) => Text -> Bool -> a -> String -> Html
 checkBox' name checked value text = do
   checkBox name (encodeToFay' "checkBox" value) checked
   fromString text
 
-checkBoxRO :: (Show a, Data a) => String -> Bool -> Bool -> a -> String -> Html
+checkBoxRO :: (Show a, Data a) => Text -> Bool -> Bool -> a -> Text -> Html
 checkBoxRO name checked readonly value text = do
   checkBox name (encodeToFay' "checkBox" value) checked
     !? (readonly, A.disabled "")
-  fromString text
+  (B.toMarkup text)
 
 withId :: (Html -> Html) -> String -> (Html -> Html)
 withId f i = (f ! A.id (fromString i))
-
-setHookClass c h = h ! A.class_ (className c)
 
 required h = h ! A.required ""
 
 -- * Form
 
-postForm :: String -> Html -> Html
-postForm action = H.form ! A.method "post" ! A.action (fromString action) ! A.acceptCharset "UTF-8"
+postForm :: Text -> Html -> Html
+postForm action = H.form ! A.method "post" ! A.action (B.toValue action) ! A.acceptCharset "UTF-8"
 
-getForm :: String -> Html -> Html
-getForm action = H.form ! A.method "get" ! A.action (fromString action) ! A.acceptCharset "UTF-8"
+getForm :: Text -> Html -> Html
+getForm action = H.form ! A.method "get" ! A.action (B.toValue action) ! A.acceptCharset "UTF-8"
 
 -- Returns a string which contains only alphanum caracters
-jsFunctionName :: String -> String
-jsFunctionName = filter isAlphaNum
+jsFunctionName :: Text -> Text
+jsFunctionName = T.filter isAlphaNum
 
 -- Creates an HTML div which represents a countdown timer, showing
 -- the time left in days hours:min:secs format from the given
 -- now time beetwen the given until time.
-startEndCountdownDiv :: String -> String -> String -> UTCTime -> UTCTime -> Html
+startEndCountdownDiv :: Text -> Text -> Text -> UTCTime -> UTCTime -> Html
 startEndCountdownDiv divId daystr overstr now until =
   countdownDiv divId daystr overstr True (floor $ diffUTCTime until now)
 
 -- Creates an HTML div which represents a countdown timer, showing
 -- the ETA time in days hours:min:secs format from the given
 -- now time in seconds.
-countdownDiv :: String -> String -> String -> Bool -> Int -> Html
+countdownDiv :: Text -> Text -> Text -> Bool -> Int -> Html
 countdownDiv divId daystr overstr showDays seconds = do
-  H.a ! A.id (fromString divId) $ fromString $
+  H.a ! A.id (B.toValue divId) $ B.toMarkup $
     if showDays
-         then concat ["-", daystr, " --:--:--"]
+         then T.concat ["-", daystr, " --:--:--"]
          else "--:--"
-  H.script $ fromString countdown
+  H.script $ B.toMarkup countdown
   where
-    fname = jsFunctionName (divId ++ "countdown")
+    fname = jsFunctionName (divId <> "countdown")
 
-    countdown = concat
+    countdown = T.concat
       [ fname, "();"
       , "function ", fname, "() {"
       ,    "var minsecs = 60;"
       ,    "var hoursecs = minsecs * 60;"
       ,    "var daysecs = hoursecs* 24;"
-      ,    "var mstime = ", show seconds, " * 1000;"
+      ,    "var mstime = ", T.pack $ show seconds, " * 1000;"
       ,    "var timestamp = new Date;"
       ,    "var interval = setInterval(function() {"
       ,       "var el = document.getElementById(\"", divId, "\");"
@@ -318,7 +318,7 @@ countdownDiv divId daystr overstr showDays seconds = do
       ,       "mstime = mstime - dt;"
       ,       "var time = Math.round( mstime / 1000 );"
       ,       "if(time < 0) {"
-      ,           "el.innerHTML = \"",overstr,"\";"
+      ,           "el.innerHTML = \"", overstr, "\";"
       ,           "clearInterval(interval);"
       ,           "return;"
       ,       "}"
@@ -332,7 +332,7 @@ countdownDiv divId daystr overstr showDays seconds = do
       ,       "var esecs   = emins1 % minsecs;"
       ,       "if (esecs < 10) esecs = \"0\" + esecs;"
       ,       if showDays
-                  then concat
+                  then T.concat
                      [ "var text=\"\";"
                      , "if(edays == 0) {"
                      ,    "if(ehours == 0) {"
@@ -350,25 +350,25 @@ countdownDiv divId daystr overstr showDays seconds = do
       , "}"
       ]
 
-linkToPage :: P.Page' (Translation String) -> IHtml
+linkToPage :: P.Page' Translation -> IHtml
 linkToPage p = do
   msg <- getI18N
-  return $ Bootstrap.link (routeOf p) (msg $ P.pageValue p) ! A.id (fieldName p)
+  return $ Bootstrap.link (routeOf p) (msg $ P.pageValue p) ! A.id (B.toValue $ fieldName p)
 
-linkToPageWithPostfix :: P.Page' (Translation String) -> String -> IHtml
+linkToPageWithPostfix :: P.Page' Translation -> Text -> IHtml
 linkToPageWithPostfix p s = do
   msg <- getI18N
-  return $ Bootstrap.link (routeOf p) (msg (P.pageValue p) ++ s) ! A.id (fieldName p)
+  return $ Bootstrap.link (routeOf p) (msg (P.pageValue p) <> s) ! A.id (B.toValue $ fieldName p)
 
-linkButtonToPageBS :: P.Page' (Translation String) -> IHtml
+linkButtonToPageBS :: P.Page' Translation -> IHtml
 linkButtonToPageBS p = do
   msg <- getI18N
   return $ Bootstrap.buttonLink (routeOf p) (msg $ P.pageValue p)
 
-linkToPageBlank :: P.Page' (Translation String) -> IHtml
+linkToPageBlank :: P.Page' Translation -> IHtml
 linkToPageBlank p = do
   msg <- getI18N
-  return $ Bootstrap.link (routeOf p) (msg $ P.pageValue p) ! A.target "_blank" ! A.id (fieldName p)
+  return $ Bootstrap.link (routeOf p) (msg $ P.pageValue p) ! A.target "_blank" ! A.id (B.toValue $ fieldName p)
 
 -- Produces a HTML-link with the given route text and title
 linkWithTitle :: String -> String -> String -> Html
@@ -409,7 +409,7 @@ bootstrapHeader s newNotifs = do
                         li $ H.a userId
                         li $ do (I18N.i18n msg $
                                     if newNotifs > 0
-                                        then linkToPageWithPostfix notifications (" (" ++ show newNotifs ++ ")")
+                                        then linkToPageWithPostfix notifications (T.concat [" (", T.pack $ show newNotifs, ")"])
                                         else linkToPage notifications)
                         li $ (I18N.i18n msg $ linkToPage profile)
                         li $ (I18N.i18n msg $ linkToPage logout)

@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 #ifdef TEST
 {-# LANGUAGE LambdaCase #-}
 #endif
@@ -32,6 +33,7 @@ module Bead.View.Dictionary (
 
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as Map
+import           Data.Text (Text)
 import           Data.Typeable
 import           Control.Arrow ((&&&))
 import           Control.Lens (over, each)
@@ -227,7 +229,7 @@ patchDictionariesTests = TS.group "Patch dictionaries" $ do
     fine m langShort langFull = languageName di == langFull
       where (_, di) = m ! (Language langShort)
 
-    translation :: Dictionaries -> String -> (String -> Translation String) -> String -> Bool
+    translation :: Dictionaries -> String -> (Text -> Translation) -> Text -> Bool
     translation m langShort tr exp = unDictionary d (tr "") == exp
       where (d, _) = m ! (Language langShort)
 #endif

@@ -51,10 +51,10 @@ modifyTestScript :: Domain.TestScriptKey -> Domain.TestScript -> Persist ()
 modifyTestScript key script = do
   update (toEntityKey key) $ Domain.withTestScript script encodeTestScriptType
     $ \name desc notes script type_ ->
-        [ TestScriptName           =. Text.pack name
-        , TestScriptDescription    =. Text.pack desc
-        , TestScriptNotes          =. Text.pack notes
-        , TestScriptScript         =. Text.pack script
+        [ TestScriptName           =. name
+        , TestScriptDescription    =. desc
+        , TestScriptNotes          =. notes
+        , TestScriptScript         =. script
         , TestScriptTestScriptType =. type_
         ]
 

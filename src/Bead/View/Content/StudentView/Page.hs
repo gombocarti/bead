@@ -25,10 +25,10 @@ import qualified Bead.View.Translation as Tr
 
 import           Control.Monad (when, forM)
 import           Control.Monad.IO.Class (liftIO)
-import           Data.String (fromString)
 import qualified Data.Text as T
 import           Data.Time (UTCTime, getCurrentTime)
 import           Data.Tuple.Utils (snd3)
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 (Html, (!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
@@ -60,7 +60,7 @@ viewAssignmentsAssessments now timeconverter group_ = do
   return $ do
     when (hasAssignments group_) $ do
       H.p
-        $ fromString . msg $ Tr.msg_Home_Assignments_Info $ concat
+        $ B.toMarkup . msg $ Tr.msg_Home_Assignments_Info $ T.concat
           [ "Submissions and their evaluations may be accessed by clicking on each assignment's link. "
           , "The table shows only the last evaluation per assignment."
           ]
@@ -75,7 +75,7 @@ availableAssignmentsAssessments :: I18N -> UTCTime -> UserTimeConverter -> (Cour
 availableAssignmentsAssessments msg now timeconverter g@(_, _, assignments, assessments) = do
   if (not (hasAssignments g || hasAssessments g))
     then H.p
-         $ fromString
+         $ B.toMarkup
          $ msg $ Tr.msg_Home_HasNoAssignments "There are no available assignments yet."
     else do
       when (hasAssignments g) $ do
@@ -84,10 +84,8 @@ availableAssignmentsAssessments msg now timeconverter g@(_, _, assignments, asse
               isLimited = isLimitedAssignments visibleAsgs
           when areIsolateds $
             Bootstrap.alert Bootstrap.Warning $
-              markdownToHtml msg . msg $ Tr.msg_Home_ThereIsIsolatedAssignment $ concat
-                [ "**Isolated mode**: There is at least one assignment which hides the normal assignments for "
-                , "this course."
-                ]
+              markdownToHtml msg . msg $ Tr.msg_Home_ThereIsIsolatedAssignment
+                "**Isolated mode**: There is at least one assignment which hides the normal assignments for this course."
           Bootstrap.table $ do
             H.thead $ headerLine msg isLimited
             H.tbody $ mapM_ (assignmentLine msg isLimited) visibleAsgs
@@ -107,10 +105,10 @@ availableAssignmentsAssessments msg now timeconverter g@(_, _, assignments, asse
     headerLine :: I18N -> Bool -> H.Html
     headerLine msg isLimited = H.tr $ do
       H.th mempty
-      H.th (fromString $ msg $ Tr.msg_Home_Assignment "Assignment")
-      when isLimited $ H.th (fromString $ msg $ Tr.msg_Home_Limit "Limit")
-      H.th (fromString $ msg $ Tr.msg_Home_Deadline "Deadline")
-      H.th (fromString $ msg $ Tr.msg_Home_Evaluation "Evaluation")
+      H.th (B.toMarkup $ msg $ Tr.msg_Home_Assignment "Assignment")
+      when isLimited $ H.th (B.toMarkup $ msg $ Tr.msg_Home_Limit "Limit")
+      H.th (B.toMarkup $ msg $ Tr.msg_Home_Deadline "Deadline")
+      H.th (B.toMarkup $ msg $ Tr.msg_Home_Evaluation "Evaluation")
 
     assignmentLine :: I18N -> Bool -> ActiveAssignment -> H.Html
     assignmentLine msg isLimited (ak, asg, subm, limit) = H.tr $ do
@@ -125,13 +123,13 @@ availableAssignmentsAssessments msg now timeconverter g@(_, _, assignments, asse
                  ! A.class_ "glyphicon glyphicon-lock"
                  $ mempty
       H.td $ Bootstrap.link (routeOf (Pages.submission ak ())) (Assignment.name asg)
-      when isLimited $ H.td (fromString . showLimit $ limit)
-      H.td (fromString . C.showDate . timeconverter $ Assignment.end asg)
+      when isLimited $ H.td (B.toMarkup . showLimit $ limit)
+      H.td (B.toMarkup . C.showDate . timeconverter $ Assignment.end asg)
       H.td submissionStateLabel
       where
         noLimitIsReached = R.submissionLimit (const True) (\n _ -> n > 0) (const False)
-        showLimit = fromString . R.submissionLimit
-          (const "") (\n _ -> unwords [msg $ Tr.msg_Home_Remains "Remains:", show n]) (const $ msg $ Tr.msg_Home_Reached "Reached")
+        showLimit = B.toMarkup . R.submissionLimit
+          (const "") (\n _ -> T.unwords [msg $ Tr.msg_Home_Remains "Remains:", T.pack $ show n]) (const $ msg $ Tr.msg_Home_Reached "Reached")
 
         submissionDetails :: SubmissionKey -> Pages.PageDesc
         submissionDetails key = Pages.submissionDetails ak key ()
@@ -139,7 +137,7 @@ availableAssignmentsAssessments msg now timeconverter g@(_, _, assignments, asse
         submissionStateLabel :: Html
         submissionStateLabel =
           maybe
-          (Bootstrap.grayLabel $ T.pack $ msg $ Tr.msg_Home_SubmissionCell_NoSubmission "No submission")
+          (Bootstrap.grayLabel $ msg $ Tr.msg_Home_SubmissionCell_NoSubmission "No submission")
           (\(key, state) ->
              Bootstrap.link (routeOf (submissionDetails key)) (SV.formatSubmissionState SV.toLabel msg state))
           subm
@@ -148,7 +146,7 @@ availableAssignmentsAssessments msg now timeconverter g@(_, _, assignments, asse
 availableAssessments :: I18N -> (Course, Group, [ActiveAssignment], [ActiveAssessment]) -> Html
 availableAssessments msg (_, _, _, assessments) | null assessments = mempty
                                                 | otherwise = do
-  H.p . fromString . msg $ Tr.msg_Home_AssessmentTable_Assessments "Assessments"
+  H.p . B.toMarkup . msg $ Tr.msg_Home_AssessmentTable_Assessments "Assessments"
   Bootstrap.table $ do
     H.tr header
     H.tr $ mapM_ (H.td . evaluationViewButton) [si | (_,_,si) <- assessments]
@@ -158,7 +156,7 @@ availableAssessments msg (_, _, _, assessments) | null assessments = mempty
           assessmentLabel :: (Assessment, Int) -> Html
           assessmentLabel (as, n) = Bootstrap.grayLabel (T.pack $ show n) ! tooltip
             where aTitle = E.assessment (\title _desc _creation _cfg _visible -> title) as
-                  tooltip = A.title . fromString $ aTitle
+                  tooltip = A.title . B.toValue $ aTitle
 
       evaluationViewButton :: Maybe ScoreInfo -> Html
       evaluationViewButton i = case i of

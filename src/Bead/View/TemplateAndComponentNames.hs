@@ -5,45 +5,36 @@ module Bead.View.TemplateAndComponentNames where
 -- This module contains information about templates and
 -- fields in the type safe manner.
 
-import           Control.Monad (join)
-import qualified Data.Set as Set
-import           Data.String
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 import           Bead.View.Fay.HookIds
 import qualified Bead.Controller.Pages as P
 
 #ifdef TEST
+import qualified Data.Set as Set
 import           Test.Tasty.TestSet
 #endif
 
 -- * Type safe declarations
 
 class SnapFieldName f where
-  fieldName :: (IsString s) => f -> s
+  fieldName :: f -> Text
 
-class SnapClassName c where
-  className :: (IsString s) => c -> s
-
-class SnapFormId f where
-  formId :: (IsString s) => f -> s
-
-instance SnapFormId FormId where
-  formId = fromString . rFormId
-
-newtype SubmitButton = SubmitButton { sbFieldName :: String }
+newtype SubmitButton = SubmitButton { sbFieldName :: Text }
 
 instance SnapFieldName SubmitButton where
-  fieldName = fromString . sbFieldName
+  fieldName = sbFieldName
 
-newtype FieldName = FieldName String
+newtype FieldName = FieldName Text
 
 instance SnapFieldName FieldName where
-  fieldName (FieldName f) = fromString f
+  fieldName (FieldName f) = f
 
 -- * Component names
 
 instance SnapFieldName LoginField where
-  fieldName = fromString . lcFieldName
+  fieldName = T.pack . lcFieldName
 
 loginSubmitBtn = SubmitButton "login-submit"
 regSubmitBtn   = SubmitButton "reg-submit"
@@ -64,27 +55,17 @@ changePasswordBtn = SubmitButton "change-password"
 unsubscribeFromCourseSubmitBtn = SubmitButton "unsubscribe-from-course"
 
 instance SnapFieldName RegistrationComp where
-  fieldName = fromString . rFieldName
+  fieldName = T.pack . rFieldName
 
 data ExerciseForm
   = ExerciseForm     { eFieldName :: String }
   | ExerciseKeyField { eFieldName :: String }
 
 instance SnapFieldName ExerciseForm where
-  fieldName = fromString . eFieldName
+  fieldName = T.pack . eFieldName
 
 exerciseForm = ExerciseForm "exercise"
 exerciseKey  = ExerciseKeyField "exercise-key"
-
-data CoursesForm
-  = CoursesKey  { csFieldName :: String }
-  | CoursesForm { csFieldName :: String }
-
-instance SnapFieldName CoursesForm where
-  fieldName = fromString . csFieldName
-
-coursesForm = CoursesForm "courses"
-coursesKey  = CoursesKey "courses-key"
 
 data CourseFormInfo
   = CourseKeyInfo   { cFieldName :: String }
@@ -94,7 +75,7 @@ data CourseFormInfo
   | CourseDescField { cFieldName :: String }
 
 instance SnapFieldName CourseFormInfo where
-  fieldName = fromString . cFieldName
+  fieldName = T.pack . cFieldName
 
 courseKeyInfo  = CourseKeyInfo  "course-key"
 courseFormInfo = CourseFormInfo "course"
@@ -106,7 +87,7 @@ newtype GroupKeyName
   = GroupKeyName { gkFieldName :: String }
 
 instance SnapFieldName GroupKeyName where
-  fieldName = fromString . gkFieldName
+  fieldName = T.pack . gkFieldName
 
 groupKeyName = GroupKeyName "group-key"
 
@@ -117,7 +98,7 @@ data GroupField
   | GroupEvalField { gFieldName :: String }
 
 instance SnapFieldName GroupField where
-  fieldName = fromString . gFieldName
+  fieldName = T.pack . gFieldName
 
 groupCodeField = GroupCodeField "group-code"
 groupNameField = GroupNameField "group-name"
@@ -127,7 +108,7 @@ groupEvalField = GroupEvalField "group-eval"
 newtype UserField = UserField  { uFieldName :: String }
 
 instance SnapFieldName UserField where
-  fieldName = fromString . uFieldName
+  fieldName = T.pack . uFieldName
 
 usernameField  = UserField "username"
 userEmailField = UserField "useremail"
@@ -137,7 +118,7 @@ userTimeZoneField = UserField "usertimezone"
 userUidField = UserField "useruid"
 
 instance SnapFieldName ChangePwdField where
-  fieldName = fromString . cpf
+  fieldName = T.pack . cpf
 
 menuId :: P.Page a b c d e f -> String
 menuId = P.pageCata
@@ -210,7 +191,7 @@ menuId = P.pageCata
       c3 = c2 . const
 
 instance SnapFieldName (P.Page a b c d e f) where
-  fieldName = fromString . menuId
+  fieldName = T.pack . menuId
 
 newtype AssignmentField = AssignmentField { aFieldName :: String }
 
@@ -228,7 +209,7 @@ assignmentSubmissionTypeField = AssignmentField "asg-subt"
 assignmentNoOfTriesField = AssignmentField "asg-no-of-tries"
 
 instance SnapFieldName AssignmentField where
-  fieldName = fromString . aFieldName
+  fieldName = T.pack . aFieldName
 
 newtype AssessmentField = AssessmentField { assessFieldName :: String }
 
@@ -237,12 +218,12 @@ assessmentKeyField = AssessmentField "assess-key"
 newtype ScoreField = ScoreField { scoreFieldName :: String }
 
 instance SnapFieldName ScoreField where
-    fieldName = fromString . scoreFieldName
+    fieldName = T.pack . scoreFieldName
 
 scoreKeyField = ScoreField "score-key"
 
 instance SnapFieldName AssessmentField where
-  fieldName = fromString . assessFieldName
+  fieldName = T.pack . assessFieldName
 
 data AssignCourseAdminField
   = SelectedCourse { acFieldName :: String }
@@ -252,7 +233,7 @@ selectedCourse = SelectedCourse "selected-course"
 selectedCourseAdmin = SelectedCourseAdmin "selected-course-admin"
 
 instance SnapFieldName AssignCourseAdminField where
-  fieldName = fromString . acFieldName
+  fieldName = T.pack . acFieldName
 
 data AssignCourseGroupAdminField
   = SelectedGroupAdmin { cpFieldName :: String }
@@ -262,7 +243,7 @@ selectedGroup = SelectedGroup "selected-group"
 selectedGroupAdmin = SelectedGroupAdmin "selected-group-admin"
 
 instance SnapFieldName AssignCourseGroupAdminField where
-  fieldName = fromString . cpFieldName
+  fieldName = T.pack . cpFieldName
 
 data GroupRegistrationField
   = GroupRegistrationField { grFieldName :: String }
@@ -270,10 +251,10 @@ data GroupRegistrationField
 groupRegistrationField = GroupRegistrationField "group-registration"
 
 instance SnapFieldName GroupRegistrationField where
-  fieldName = fromString . grFieldName
+  fieldName = T.pack . grFieldName
 
 instance SnapFieldName SubmissionField where
-  fieldName = fromString . sfFieldName
+  fieldName = T.pack . sfFieldName
 
 newtype EvaluationField = EvaluationField { evFieldName :: String }
 
@@ -285,7 +266,7 @@ evaluationCommentOnlyField = EvaluationField "evaluation-comment-only"
 evaluationFreeFormField = EvaluationField "evaluation-freeformat-text"
 
 instance SnapFieldName EvaluationField where
-  fieldName = fromString . evFieldName
+  fieldName = T.pack . evFieldName
 
 data CommentField
   = CommentKeyField   { ckFieldName :: String }
@@ -295,7 +276,7 @@ commentKeyField = CommentKeyField "comment-key"
 commentValueField = CommentValueField "comment-value"
 
 instance SnapFieldName CommentField where
-  fieldName = fromString . ckFieldName
+  fieldName = T.pack . ckFieldName
 
 newtype ChangeLanguageField = ChangeLanguageField { clgFieldName :: String }
 
@@ -303,14 +284,14 @@ changeLanguageField = ChangeLanguageField "change-language"
 userLanguageField = ChangeLanguageField "user-change-language"
 
 instance SnapFieldName ChangeLanguageField where
-  fieldName = fromString . clgFieldName
+  fieldName = T.pack . clgFieldName
 
 data TableName = TableName {
     tName :: String
   }
 
 instance SnapFieldName TableName where
-  fieldName = fromString . tName
+  fieldName = T.pack . tName
 
 availableAssignmentsTable = TableName "available-assignments"
 submissionTableName = TableName "submission-table"
@@ -324,7 +305,7 @@ groupAdministratorsTableName = TableName "group-administrators-table"
 newtype HomeField = HomeField { hfFieldName :: String }
 
 instance SnapFieldName HomeField where
-  fieldName = fromString . hfFieldName
+  fieldName = T.pack . hfFieldName
 
 delUserFromCourseField = HomeField "del-user-form-course"
 delUserFromGroupField  = HomeField "del-user-from-group"
@@ -334,10 +315,7 @@ newtype UploadFileField = UploadFileField { ufFieldName :: String }
 newtype UploadFileClass = UploadFileClass { ufClassName :: String }
 
 instance SnapFieldName UploadFileField where
-  fieldName = fromString . ufFieldName
-
-instance SnapClassName UploadFileClass where
-  className = fromString . ufClassName
+  fieldName = T.pack . ufFieldName
 
 fileUploadField = UploadFileField "upload-file"
 fileUploadSubmit = UploadFileField "upload-file-submit"
@@ -347,21 +325,21 @@ usersFileTableClass = UploadFileClass "upload-file-table-class"
 newtype CourseKeyField = CourseKeyField { ckfFieldName :: String }
 
 instance SnapFieldName CourseKeyField where
-  fieldName = fromString . ckfFieldName
+  fieldName = T.pack . ckfFieldName
 
 courseKeyField = CourseKeyField "course-key-field"
 
 newtype GroupKeyField = GroupKeyField { gkfFieldName :: String }
 
 instance SnapFieldName GroupKeyField where
-  fieldName = fromString . gkfFieldName
+  fieldName = T.pack . gkfFieldName
 
 groupKeyField = GroupKeyField "group-key-field"
 
 newtype TestScriptField = TestScriptField { tscFieldName :: String }
 
 instance SnapFieldName TestScriptField where
-  fieldName = fromString . tscFieldName
+  fieldName = T.pack . tscFieldName
 
 testScriptNameField = TestScriptField "test-script-name"
 testScriptTypeField = TestScriptField "test-script-type"
@@ -384,8 +362,6 @@ data TableClassName = TableClassName {
     tcName :: String
   }
 
-instance SnapClassName TableClassName where
-  className = fromString . tcName
 
 evaluationClassTable = TableClassName "evaluation-table"
 submissionListTable = TableClassName "submission-list-table"
@@ -396,37 +372,24 @@ data DivClassName = DivClassName {
     divClass :: String
   }
 
-instance SnapClassName DivClassName where
-  className = fromString . divClass
-
 submissionListDiv = DivClassName "submission-list-div"
 
 instance SnapFieldName HookId where
-  fieldName = fromString . hookId
-
-instance SnapClassName HookClass where
-  className = fromString . hookClass
+  fieldName = T.pack . hookId
 
 #ifdef TEST
 
 -- * Unit tests
 
 data SFN = forall n . SnapFieldName n => SFN n
-         | forall n . SnapFormId n    => SFI n
 
 instance SnapFieldName SFN where
   fieldName (SFN n) = fieldName n
-  fieldName (SFI n) = formId n
 
-data SCN = forall n . SnapClassName n => SCN n
-
-instance SnapClassName SCN where
-  className (SCN n) = className n
-
-fieldList :: [String]
-fieldList = map fieldName $ join [
+fieldList :: [Text]
+fieldList = map fieldName $ concat [
   [ SFN loginUsername,  SFN loginPassword,   SFN regFullName, SFN regEmailAddress, SFN regTimeZoneField
-  , SFN exerciseForm,   SFN exerciseKey,     SFN coursesForm,            SFN coursesKey
+  , SFN exerciseForm,   SFN exerciseKey
   , SFN courseFormInfo, SFN courseCodeField, SFN courseNameField,        SFN courseDescField
   , SFN groupKeyName,   SFN groupCodeField,  SFN groupNameField,         SFN groupDescField
   , SFN usernameField,  SFN courseKeyInfo,   SFN userEmailField,         SFN userFamilyNameField, SFN userUidField
@@ -463,22 +426,12 @@ fieldList = map fieldName $ join [
   , SFN evalTypeSelectionDiv, SFN registrationTable, SFN createGroupForm, SFN endDateDivId
   , SFN evaluationPercentageDiv, SFN regUserRegKey, SFN regToken, SFN regLanguage, SFN pwdSubmitBtn
   , SFN resetPasswordTable, SFN regPasswordAgain, SFN changeProfileBtn, SFN changePasswordBtn
-  , SFN userTimeZoneField, SFN assignmentForm, SFI changePwdForm, SFI setStudentPwdForm
-
-  , SFI regForm, SFI loginForm, SFI regFinalForm, SFN courseAdministratorsTableName
-  , SFN groupAdministratorsTableName, SFN evCommentOnlyText, SFI submissionForm
+  , SFN userTimeZoneField, SFN assignmentForm, SFN courseAdministratorsTableName
+  , SFN groupAdministratorsTableName, SFN evCommentOnlyText
   ]
   ]
 
-classList :: [String]
-classList = map className [
-    SCN evaluationClassTable, SCN groupSubmissionTable, SCN assignmentTable
-  , SCN submissionListTable, SCN submissionListDiv, SCN datePickerClass, SCN minuteSpinnerClass
-  , SCN hourSpinnerClass, SCN usersFileTableClass, SCN seeMoreClass, SCN seeLessClass, SCN moreClass
-  , SCN moreButtonClass, SCN lessButtonClass
-  ]
-
-names = fieldList ++ classList
+names = fieldList
 
 fieldNameTest =
   assertEquals

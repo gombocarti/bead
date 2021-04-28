@@ -1,7 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.View.Logger where
 
 import Data.Time
-import Data.ByteString.Char8 (pack)
+import Data.ByteString.Char8 (ByteString, pack)
+import qualified Data.ByteString as BS
+import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
 
 import System.FilePath (dropFileName)
 import System.Directory (createDirectoryIfMissing)
@@ -23,7 +27,7 @@ createSnapLogger logFile = do
   createDirectoryIfMissing True $ dropFileName logFile
   l <- S.newLogger logFile
 
-  let logger lvl msg = (logMessage lvl msg) >>= (S.logMsg l . pack)
+  let logger lvl msg = logMessage lvl msg >>= S.logMsg l
 
   return $ SnapLogger {
       snapLogger = L.Logger logger
@@ -31,6 +35,7 @@ createSnapLogger logFile = do
     }
 
   where
+    logMessage :: L.LogLevel -> Text -> IO ByteString
     logMessage lvl msg = do
       now <- getCurrentTime
-      return $ concat ["[", formatTime defaultTimeLocale "%c" now, "] ", show lvl, " - ", msg]
+      return $ BS.concat ["[", pack (formatTime defaultTimeLocale "%c" now), "] ", pack (show lvl), " - ", encodeUtf8 msg]

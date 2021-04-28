@@ -1,23 +1,24 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Bead.View.Translation.Base where
 
+import Data.Text (Text)
 import Language.Haskell.TH
 
 -- Translation is an enumeration of all the possible messages that could be rendered
 -- on every page with the associated value.
-newtype Translation a = T { unT :: (Int, a) }
+newtype Translation = T { unT :: (Int, Text) }
   deriving (Show,Ord,Eq)
 
-trans :: Translation a -> a
+trans :: Translation -> Text
 trans (T (_,x)) = x
 
-t :: Int -> a -> Translation a
+t :: Int -> Text -> Translation
 t = curry T
 
-tid :: Translation a -> Int
+tid :: Translation -> Int
 tid (T (x,_)) = x
 
-tlabel :: Translation a -> String
+tlabel :: Translation -> String
 tlabel t = labels !! (tid t)
 
 generateTranslationEntries :: [String] -> Q [Dec]

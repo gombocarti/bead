@@ -6,7 +6,6 @@ import           Control.Applicative
 import           Control.Arrow ((&&&))
 import           Control.Monad.IO.Class
 import           Data.Maybe
-import qualified Data.Text as Text
 import           Data.Time hiding (TimeZone)
 
 import           Database.Esqueleto (select, from, on, where_, InnerJoin(InnerJoin), val, (^.), Value(unValue))
@@ -35,8 +34,8 @@ import           Test.Tasty.TestSet (ioTest, shrink, equals)
 -- * Assignment
 
 toDomainAssignmentValue ent = Domain.Assignment
-  (Text.unpack $ assignmentName ent)
-  (Text.unpack $ assignmentDescription ent)
+  (assignmentName ent)
+  (assignmentDescription ent)
   (decodeAssignmentType $ assignmentType ent)
   (assignmentStart ent)
   (assignmentEnd ent)
@@ -44,8 +43,8 @@ toDomainAssignmentValue ent = Domain.Assignment
 
 fromDomainAssignmentValue createdTime = Domain.assignmentCata
   $ \name desc type_ start end cfg -> Assignment
-      (Text.pack name)
-      (Text.pack desc)
+      name
+      desc
       (encodeAssignmentType type_)
       start
       end
@@ -80,8 +79,8 @@ modifyAssignment :: Domain.AssignmentKey -> Domain.Assignment -> Persist ()
 modifyAssignment key assignment = do
   update (toEntityKey key) $ Domain.withAssignment assignment
     $ \name desc type_ start end cfg ->
-        [ AssignmentName        =. Text.pack name
-        , AssignmentDescription =. Text.pack desc
+        [ AssignmentName        =. name
+        , AssignmentDescription =. desc
         , AssignmentType        =. encodeAssignmentType type_
         , AssignmentStart       =. start
         , AssignmentEnd         =. end

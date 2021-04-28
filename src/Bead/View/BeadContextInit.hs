@@ -10,9 +10,11 @@ module Bead.View.BeadContextInit (
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Bifunctor (first)
 import           Data.Char (toUpper)
 import qualified Data.HashMap.Strict as Map
 import qualified Data.Set as Set
+import qualified Data.Text.Encoding as TE
 
 import           Snap hiding (Config(..))
 import           System.FilePath ((</>))
@@ -85,7 +87,7 @@ beadContextInit config s daemons tempDir = makeSnaplet "bead" description dataDi
             createLDAPContext (LDAP $ ldapDaemon daemons)
 #endif
 
-  addRoutes (routes config)
+  addRoutes (map (first TE.encodeUtf8) $ routes config)
 
   wrapSite (<|> pages)
 

@@ -4,9 +4,10 @@ module Bead.Domain.Entity.TestCase where
 import           Control.Applicative
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Data
+import           Data.Text (Text)
 
 data TestCaseValue
-  = SimpleTestCase String
+  = SimpleTestCase Text
   | ZippedTestCase ByteString
   deriving (Eq, Show, Read)
 
@@ -23,10 +24,10 @@ withTestCaseValue t simple zipped = testCaseValue simple zipped t
 -- has name, description and a piece of code that will be subsctituated
 -- during the evaluation of a submission
 data TestCase = TestCase {
-    tcName :: String -- The name of the test case
-  , tcDescription :: String -- The short description of the test case
+    tcName :: Text -- The name of the test case
+  , tcDescription :: Text -- The short description of the test case
   , tcValue :: TestCaseValue -- ByteString -- The stored value of test cases
-  , tcInfo  :: String -- Additional information which interpretation could change depending on the
+  , tcInfo  :: Text -- Additional information which interpretation could change depending on the
                       -- type of the test case
   } deriving (Eq, Show, Read)
 

@@ -92,12 +92,12 @@ calcSubLimitTests = group "calcSubLimit" $ do
 #endif
 
 data SubmissionDesc = SubmissionDesc {
-    eCourse   :: String
-  , eGroup    :: Maybe String
+    eCourse   :: Text
+  , eGroup    :: Maybe Text
   , eStudent  :: String
   , eUsername :: Username
   , eUid      :: Uid
-  , eSolution :: String
+  , eSolution :: Text
   , eSubmissionInfo :: SubmissionInfo
   , eAssignmentKey   :: AssignmentKey
   , eAssignment      :: Assignment
@@ -138,8 +138,8 @@ data SubmissionDetailsDesc = SubmissionDetailsDesc {
     sdCourse :: Course
   , sdGroup :: Maybe Group
   , sdAssignment :: Assignment
-  , sdStatus :: Maybe String
-  , sdSubmission :: String
+  , sdStatus :: Maybe Text
+  , sdSubmission :: Text
   , sdComments :: Map CommentKey Comment
   , sdFeedbacks :: [Feedback]
   }
@@ -215,8 +215,8 @@ siEvaluationKey = submissionStateCata
 
 -- Information to display on the UI
 data TestScriptInfo = TestScriptInfo {
-    tsiName :: String
-  , tsiDescription :: String
+    tsiName :: Text
+  , tsiDescription :: Text
   , tsiType :: TestScriptType
   }
 
@@ -256,7 +256,7 @@ submissionTableInfoPermissions = ObjectPermissions [
 data TCCreation
   = NoCreation
   | FileCreation TestScriptKey (UsersFile FilePath)
-  | TextCreation TestScriptKey String
+  | TextCreation TestScriptKey Text
   deriving (Eq)
 
 tcCreationCata
@@ -271,7 +271,7 @@ tcCreationCata
 data TCModification
   = NoModification
   | FileOverwrite TestScriptKey (UsersFile FilePath)
-  | TextOverwrite TestScriptKey String
+  | TextOverwrite TestScriptKey Text
   | TCDelete
   deriving (Eq)
 
@@ -411,8 +411,8 @@ scoreBoardPermissions = ObjectPermissions
   [ (P_Open, P_Group), (P_Open, P_Assessment) ]
 
 data AssessmentDesc = AssessmentDesc {
-    adCourse        :: String
-  , adGroup         :: Maybe String
+    adCourse        :: Text
+  , adGroup         :: Maybe Text
   , adTeacher       :: [String]
   , adAssessmentKey :: AssessmentKey
   , adAssessment    :: Assessment

@@ -16,8 +16,11 @@ module Bead.View.Content.Comments (
 import           Data.List (sortOn)
 import           Data.String
 import           Data.Map as Map (toList)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Control.Monad
 
+import qualified Text.Blaze as B
 import           Text.Blaze.Html5 (Html, (!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
@@ -97,7 +100,7 @@ commentsDiv id_ t cs = do
 seeMoreComment :: I18N -> String -> UserTimeConverter -> (Int, CommentOrFeedback) -> Html
 seeMoreComment i18n id_ t (n, c) =
   let comment = commentOrFeedbackText i18n c
-      badge = concat [showDate . t $ commentOrFeedbackTime c, " ", commentOrFeedbackAuthor i18n c]
+      badge = T.concat [T.pack . showDate . t $ commentOrFeedbackTime c, " ", commentOrFeedbackAuthor i18n c]
       commentId = fromString $ id_ ++ show n
   in seeMoreComment commentId i18n badge (commentOrFeedbackText i18n c)
   where
@@ -110,7 +113,7 @@ seeMoreComment i18n id_ t (n, c) =
     maxLength = 100
     maxLines = 5
 
-    seeMoreComment :: String -> I18N -> String -> String -> Html
+    seeMoreComment :: String -> I18N -> Text -> Text -> Html
     seeMoreComment id_ i18n badgeText content =
       let heading = do
             maybe mempty (\ac -> H.div ! A.id (anchor ac) $ mempty) (anchorValue c)
@@ -119,12 +122,12 @@ seeMoreComment i18n id_ t (n, c) =
         Bootstrap.panel Nothing $ do
           heading
           H.pre ! A.class_ "comment" $ do
-            fromString preview
+            B.toMarkup preview
             when isLargeContent $ do
               H.span ! A.id (fromString dotsId) $ fromString " ..."
               H.span ! A.style "display: none"
                      ! A.id (fromString moreId)
-                     $ fromString rest
+                     $ B.toMarkup rest
           when isLargeContent $
             Bootstrap.buttonOnClick
             ""
@@ -132,9 +135,9 @@ seeMoreComment i18n id_ t (n, c) =
             (printf "seemore(['%s', '%s'], ['%s'])" dotsId buttonId moreId)
             ! A.id (fromString buttonId)
       where
-        (cmtShort, rest) = splitAt maxLength content
+        (cmtShort, rest) = T.splitAt maxLength content
         preview = if isLargeContent then cmtShort else content
-        isLargeContent = (not . null) rest || (not . null . drop maxLines . lines) content
+        isLargeContent = (not . T.null) rest || (not . null . drop maxLines . T.lines) content
 
         dotsId, moreId, buttonId :: String
         dotsId = id_ ++ "-dots"
@@ -142,7 +145,7 @@ seeMoreComment i18n id_ t (n, c) =
         buttonId = id_ ++ "-button"
 
 
-commentOrFeedbackText :: I18N -> CommentOrFeedback -> String
+commentOrFeedbackText :: I18N -> CommentOrFeedback -> Text
 commentOrFeedbackText i18n =
   commentOrFeedback
     ((commentCata $ \comment _author _date _type -> comment) . snd)
@@ -156,15 +159,15 @@ commentOrFeedbackText i18n =
        p_1_2)
   where
      queuedForTest = i18n $ msg_Comments_QueuedForTest "The submission is queued for test."
-    
+
      testsPassed = i18n $ msg_Comments_TestPassed "The submission has passed the tests."
      testsFailed = i18n $ msg_Comments_TestFailed "The submission has failed the tests."
 
      bool true false x = if x then true else false
 
      evaluationText result comment _author =
-       let text res | null comment = res
-                    | otherwise    = unlines [comment, "", res]
+       let text res | T.null comment = res
+                    | otherwise      = T.unlines [comment, "", res]
        in withEvResult result
             (\b -> text (translateMessage i18n (binaryResult b)))
             (const $ text (translateMessage i18n (pctResult result)))
@@ -180,9 +183,9 @@ commentOrFeedbackText i18n =
       (maybe "ERROR: Invalid percentage value! Please contact with the administrations"
              doubleToPercentageStr $ percentValue p)
       where
-        doubleToPercentageStr = printf "%.0f%%" . (100 *)
+        doubleToPercentageStr = T.pack . show . round . (100 *)
 
-commentOrFeedbackAuthor :: I18N -> CommentOrFeedback -> String
+commentOrFeedbackAuthor :: I18N -> CommentOrFeedback -> Text
 commentOrFeedbackAuthor i18n =
   commentOrFeedback
     ((commentCata $ \_comment author _date ->

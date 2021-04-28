@@ -17,7 +17,6 @@ import           Bead.View.Content.StateVisualization (formatEvResultMaybe, toLa
 import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
 import           Bead.Domain.Shared.Evaluation
-import           Data.String (fromString)
 import           Bead.Config (maxUploadSizeInKb)
 import           Bead.Domain.Types (readMaybe)
 
@@ -31,7 +30,8 @@ import qualified Data.ByteString.UTF8 as BsUTF8 (toString)
 import           Data.Function (on)
 import qualified Data.Map as M
 import           Data.List (sortBy,intercalate)
-import           Data.String.Utils as S (strip)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Time (getCurrentTime)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
@@ -50,8 +50,8 @@ modifyAssessment = ViewModifyHandler modifyAssessmentPage postModifyAssessment
 modifyAssessmentPreview = UserViewHandler modifyAssessmentPreviewPage
 viewAssessment = ViewHandler viewAssessmentPage
 
-type Title = String
-type Description = String
+type Title = Text
+type Description = Text
 
 data PageData = PD_NewCourseAssessment CourseKey
               | PD_NewGroupAssessment GroupKey
@@ -181,7 +181,7 @@ parseEvaluation _msg _evalConfig "" = Nothing
 parseEvaluation msg evalConfig s = evConfigCata 
                                  (mkEval <$> readBinary)
                                  (\_ -> mkEval <$> readPercentage)
-                                 (Just . mkEval . freeFormResult $ s)
+                                 (Just . mkEval . freeFormResult . T.pack $ s)
                                  evalConfig
     where mkEval :: EvResult -> Evaluation
           mkEval result = Evaluation result ""
@@ -193,9 +193,9 @@ parseEvaluation msg evalConfig s = evConfigCata
               where
                 isAccepted = normalized `elem` [accepted,"+","1"]
                 isRejected = normalized `elem` [rejected,"-","0"]
-                normalized = map toUpper (S.strip s)
-                accepted   = map toUpper (msg . msg_NewAssessment_Accepted $ "Accepted")
-                rejected   = map toUpper (msg . msg_NewAssessment_Rejected $ "Rejected")
+                normalized = T.map toUpper (T.strip . T.pack $ s)
+                accepted   = T.map toUpper (msg . msg_NewAssessment_Accepted $ "Accepted")
+                rejected   = T.map toUpper (msg . msg_NewAssessment_Rejected $ "Rejected")
 
           readPercentage :: Maybe EvResult
           readPercentage = case readMaybe s :: Maybe Int of
@@ -204,8 +204,8 @@ parseEvaluation msg evalConfig s = evConfigCata
                                        else Nothing
                              Nothing -> Nothing
 
-titleParam = stringParameter "n1" "Title"
-descriptionParam = stringParameter "n2" "Description"
+titleParam = textParameter "n1" "Title"
+descriptionParam = textParameter "n2" "Description"
 evaluationsParam = stringParameter "evaluations" "Evaluations"
 evConfigParam = evalConfigParameter "evConfig"
 
@@ -275,10 +275,11 @@ fillAssessmentTemplate pdata = do
           Bootstrap.colMd4 (previewButton msg ! A.disabled "")
           Bootstrap.colMd4 (downloadCsvButton msg)
           Bootstrap.colMd4 (commitButton msg)
-        let csvTable users evaluations = do
+        let evaluationsName = "evaluations" :: Text
+            csvTable users evaluations = do
               previewTable msg users evaluations
-              hiddenInput "evaluations" (show (fromUserDescKey evaluations))
-            noPreview = hiddenInput "evaluations" (show (M.empty :: M.Map Username Evaluation))
+              hiddenInput evaluationsName (show (fromUserDescKey evaluations))
+            noPreview = hiddenInput evaluationsName (show (M.empty :: M.Map Username Evaluation))
             
         pageDataAlgebra
           (\_ -> noPreview)
@@ -294,8 +295,8 @@ fillAssessmentTemplate pdata = do
     titleLabel msg = msg . msg_NewAssessment_Title $ "Title"
     descriptionLabel msg = msg . msg_NewAssessment_Description $ "Description"
 
-    formAction :: Pages.PageDesc -> String -> H.Attribute
-    formAction page encType = A.onclick (fromString $ concat ["javascript: form.action='", routeOf page, "'; form.enctype='", encType, "';"])
+    formAction :: Pages.PageDesc -> Text -> H.Attribute
+    formAction page encType = A.onclick (H.toValue $ T.concat ["javascript: form.action='", routeOf page, "'; form.enctype='", encType, "';"])
                               
     previewButton msg = Bootstrap.submitButtonWithAttr
                     (formAction preview "multipart/form-data" <> A.id "preview")
@@ -307,13 +308,13 @@ fillAssessmentTemplate pdata = do
                    (formAction commit "multipart/form-data")
                    (msg . msg_NewAssessment_SaveButton $ "Commit")
 
-    enablePreviewButton = H.script . fromString $ unwords
+    enablePreviewButton = H.script . H.toMarkup $ T.unwords
                             [ "document.getElementById('csv').onchange = function() {"
                             , "  document.getElementById('preview').disabled = false;"
                             , "};"
                             ]
 
-    title, description :: String
+    title, description :: Text
     (title,description) = pageDataAlgebra
                             (\_ -> ("",""))
                             (\_ -> ("",""))
@@ -370,12 +371,13 @@ fillAssessmentTemplate pdata = do
         Bootstrap.readOnlyTextInputWithDefault ""
           (msg $ msg_NewAssessment_EvaluationType "Evaluation Type")
           (evConfigCata
-            (fromString . msg $ msg_NewAssessment_BinaryEvaluation "Binary")
-            (const . fromString . msg $ msg_NewAssessment_PercentageEvaluation "Percentage")
-            (fromString . msg $ msg_NewAssessment_FreeFormEvaluation "Free form textual")
+            (msg $ msg_NewAssessment_BinaryEvaluation "Binary")
+            (const . msg $ msg_NewAssessment_PercentageEvaluation "Percentage")
+            (msg $ msg_NewAssessment_FreeFormEvaluation "Free form textual")
             eType)
-        hiddenInput "evConfig" (Bootstrap.encode "Evaluation type" eType)
-        fromString . msg $ msg_NewAssessment_EvalTypeWarn "The evaluation type can not be modified, there is a score for the assessment."
+        let evConfigName = "evConfig" :: Text
+        hiddenInput evConfigName (Bootstrap.encode "Evaluation type" eType)
+        H.toMarkup . msg $ msg_NewAssessment_EvalTypeWarn "The evaluation type can not be modified, there is a score for the assessment."
 
     selectedEvType = pageDataAlgebra
                        (\_ -> defaultEvType)
@@ -394,17 +396,17 @@ previewTable msg users evaluations = Bootstrap.table $ do
     where 
       header = H.tr $ H.th studentName >> H.th username >> H.th score
           where 
-            studentName = fromString . msg . msg_NewAssessment_StudentName $ "Name"
-            username = fromString . msg . msg_NewAssessment_UserName $ "Username"
-            score = fromString . msg . msg_NewAssessment_Score $ "Score"
+            studentName = H.toMarkup . msg . msg_NewAssessment_StudentName $ "Name"
+            username = H.toMarkup . msg . msg_NewAssessment_UserName $ "Username"
+            score = H.toMarkup . msg . msg_NewAssessment_Score $ "Score"
              
       tableData :: H.Html
       tableData = mapM_ tableRow (sortBy (compareHun `on` ud_fullname) users)
 
       tableRow :: UserDesc -> H.Html
       tableRow user = H.tr $ do
-        H.td $ fromString fullname
-        H.td $ fromString user_uid
+        H.td $ H.toMarkup fullname
+        H.td $ H.toMarkup user_uid
         H.td $ formatEvResultMaybe toLargeIcon msg (evaluationResult <$> M.lookup user evaluations)
           where fullname = ud_fullname user
                 user_uid = uid id . ud_uid $ user
@@ -449,10 +451,10 @@ viewAssessmentContent aDesc = do
       maybe mempty (\g -> (msg . msg_ViewAssessment_Group $ "Group:") .|. g) (adGroup aDesc)
       (msg . msg_ViewAssessment_Teacher $ "Teacher:") .|. (intercalate ", " . sortHun . adTeacher) aDesc
       (msg . msg_ViewAssessment_Assessment $ "Assessment:") .|. title
-      when (not . null $ description) $
+      when (not . T.null $ description) $
         (msg . msg_ViewAssessment_Description $ "Description:") .|. description
     where
-      title, description :: String
+      title, description :: Text
       (title, description) = let assessment = adAssessment aDesc
                              in withAssessment assessment (\title description _ _ _ -> (title, description))
 

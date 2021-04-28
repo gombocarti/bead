@@ -13,6 +13,7 @@ import           Control.Monad.Except (throwError)
 import           Control.Monad.Trans (lift, liftIO)
 import           Control.Monad (when)
 import qualified Data.Map as Map
+import           Data.Text (Text)
 import           Data.Time (getCurrentTime)
 
 import qualified Bead.Controller.UserStories as Story
@@ -92,10 +93,10 @@ readTCCreationParameters :: ContentHandler TCCreationParameters
 readTCCreationParameters = do
   mTestScript         <- getOptionalParameter (jsonParameter (fieldName assignmentTestScriptField) "Test Script")
   mZippedTestCaseName <- getOptionalOrNonEmptyParameter (jsonParameter (fieldName assignmentUsersFileField) "Test Script File")
-  mPlainTestCase      <- getOptionalParameter (stringParameter (fieldName assignmentTestCaseField) "Test Script")
+  mPlainTestCase      <- getOptionalParameter (textParameter (fieldName assignmentTestCaseField) "Test Script")
   return (mTestScript, mZippedTestCaseName, mPlainTestCase)
 
-tcCreation :: Maybe (Maybe TestScriptKey) -> Maybe (UsersFile FilePath) -> Maybe String -> Either String TCCreation
+tcCreation :: Maybe (Maybe TestScriptKey) -> Maybe (UsersFile FilePath) -> Maybe Text -> Either String TCCreation
 tcCreation Nothing        _ _ = Right NoCreation
 tcCreation (Just Nothing) _ _ = Right NoCreation
 tcCreation (Just (Just tsk)) (Just uf) _ = Right $ FileCreation tsk uf
@@ -106,7 +107,7 @@ readTCModificationParameters :: ContentHandler TCModificationParameters
 readTCModificationParameters = do
   mTestScript         <- getOptionalParameter (jsonParameter (fieldName assignmentTestScriptField) "Test Script")
   mZippedTestCaseName <- getOptionalOrNonEmptyParameter (jsonParameter (fieldName assignmentUsersFileField) "Test Script File")
-  mPlainTestCase      <- getOptionalParameter (stringParameter (fieldName assignmentTestCaseField) "Test Script")
+  mPlainTestCase      <- getOptionalParameter (textParameter (fieldName assignmentTestCaseField) "Test Script")
   return (mTestScript,mZippedTestCaseName,mPlainTestCase)
 
 readTCModification :: ContentHandler TCModification
@@ -116,7 +117,7 @@ readTCModification = do
     Nothing -> throwError . contentHandlerError $ "Some error in test case parameters"
     Just tm -> return tm
 
-tcModification :: Maybe (Maybe TestScriptKey) -> Maybe (Either () (UsersFile FilePath)) -> Maybe String -> Maybe TCModification
+tcModification :: Maybe (Maybe TestScriptKey) -> Maybe (Either () (UsersFile FilePath)) -> Maybe Text -> Maybe TCModification
 tcModification Nothing        _ _                    = Just NoModification
 tcModification (Just Nothing) _ _                    = Just TCDelete
 tcModification (Just (Just _tsk)) (Just (Left ())) _  = Just NoModification
@@ -253,8 +254,8 @@ getAssignment = do
                then Assignment.setNoOfTries (read noOfTries) asp2
                else asp2
   Assignment.assignmentAna
-    (getParameter (stringParameter (fieldName assignmentNameField) "Name"))
-    (getParameter (stringParameter (fieldName assignmentDescField) "Description"))
+    (getParameter (textParameter (fieldName assignmentNameField) "Name"))
+    (getParameter (textParameter (fieldName assignmentDescField) "Description"))
     (return asp3)
     (return startDate)
     (return endDate)

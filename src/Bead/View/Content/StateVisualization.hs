@@ -15,6 +15,7 @@ module Bead.View.Content.StateVisualization
   , toPlainText
   ) where
 
+import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Text.Blaze.Html5 as H
 import           Text.Blaze.Html5 ((!))
@@ -33,21 +34,21 @@ data Style a = Style {
   , testsFailed :: I18N -> a
   , accepted :: I18N -> a
   , rejected :: I18N -> a
-  , percentageTag :: String -> a
-  , freeFormTag :: String -> Maybe String -> a
-  , freeFormPlaceholder :: Maybe (I18N -> String)
+  , percentageTag :: Text -> a
+  , freeFormTag :: Text -> Maybe Text -> a
+  , freeFormPlaceholder :: Maybe (I18N -> Text)
 }
 
 toPlainText :: Style T.Text
 toPlainText = Style {
-    nonEvaluated = \msg -> T.pack $ msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
-  , queuedForTest = \msg -> T.pack $ msg $ msg_SubmissionState_QueuedForTest "Queued for test"
-  , testsPassed = \msg -> T.pack $ msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
-  , testsFailed = \msg -> T.pack $ msg $ msg_SubmissionState_Tests_Failed "Tests are failed"
-  , accepted = \msg -> T.pack $ msg $ msg_SubmissionState_Accepted "Accepted"
-  , rejected = \msg -> T.pack $ msg $ msg_SubmissionState_Rejected "Rejected"
-  , percentageTag = T.pack
-  , freeFormTag = \text _mTooltip -> T.pack text
+    nonEvaluated = \msg -> msg $ msg_SubmissionState_NonEvaluated "Non-evaluated"
+  , queuedForTest = \msg -> msg $ msg_SubmissionState_QueuedForTest "Queued for test"
+  , testsPassed = \msg -> msg $ msg_SubmissionState_Tests_Passed "Tests are passed"
+  , testsFailed = \msg -> msg $ msg_SubmissionState_Tests_Failed "Tests are failed"
+  , accepted = \msg -> msg $ msg_SubmissionState_Accepted "Accepted"
+  , rejected = \msg -> msg $ msg_SubmissionState_Rejected "Rejected"
+  , percentageTag = id
+  , freeFormTag = \text _mTooltip -> text
   , freeFormPlaceholder = Nothing
   }
 
@@ -61,8 +62,8 @@ toLabel = Style {
   , testsFailed = \msg -> Bootstrap.grayLabel $ testsFailed toPlainText msg
   , accepted = \msg -> Bootstrap.greenLabel $ accepted toPlainText msg
   , rejected = \msg -> Bootstrap.redLabel $ rejected toPlainText msg
-  , percentageTag = Bootstrap.blueLabel . T.pack
-  , freeFormTag = \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel (T.pack text))
+  , percentageTag = Bootstrap.blueLabel
+  , freeFormTag = \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel text)
   , freeFormPlaceholder = Just $ const "..."
   }
 
@@ -114,9 +115,9 @@ toIcon size = Style {
         ! tooltip (rejected toPlainText msg)
         $ mempty
   , percentageTag =
-      Bootstrap.blueLabel . T.pack
+      Bootstrap.blueLabel
   , freeFormTag =
-      \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel (T.pack text))
+      \text mTooltip -> maybe id (\tooltip -> (! A.title (H.toValue tooltip))) mTooltip (Bootstrap.blueLabel text)
   , freeFormPlaceholder =
       Just $ const "..."
   }
@@ -186,12 +187,12 @@ formatEvResult style msg =
     (Eval.freeForm $ \text ->
         case freeFormPlaceholder style of
           Just placeHolder ->
-            let cell = if length text < displayableFreeFormResultLength then text else placeHolder msg in
+            let cell = if T.length text < displayableFreeFormResultLength then text else placeHolder msg in
               freeFormTag style cell (Just text)
           Nothing ->
             freeFormTag style text Nothing)
 
   where
     percentage :: Eval.Percentage -> a
-    percentage (Eval.Percentage (Eval.Scores [p])) = percentageTag style $ concat [show . round $ (100 * p), "%"]
+    percentage (Eval.Percentage (Eval.Scores [p])) = percentageTag style $ T.concat [T.pack . show . round $ (100 * p), "%"]
     percentage _ = percentageTag style "???%"

@@ -20,7 +20,8 @@ import           Bead.View.Dictionary (idDictionary, unDictionary)
 import           Bead.View.Logger (createSnapLogger, snapLogger)
 import           Bead.View.Markdown (markdownToHtml, headersToDiv, minHeaderLevel)
 import           Bead.View.RequestParams (ReqParam(ReqParam))
-import           Bead.View.RouteOf (pageRoutePath, pageRequestParams, routeOf)
+import           Bead.View.RouteOf (pageRoutePath, pageRequestParams)
+import qualified Bead.View.RouteOf as Route
 import           Bead.View.Routing (pages)
 import           Bead.Persistence.Persist (Persist)
 import qualified Bead.Persistence.Persist as P
@@ -43,6 +44,7 @@ import           Data.Ord (Down(Down))
 import           Data.UUID (UUID)
 import           Data.UUID.V4 (nextRandom)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import           Snap.Core (Response)
 import qualified Snap.Core as Snap
 import           Snap.Test (addHeader, assertRedirectTo, assertBodyContains, assertSuccess)
@@ -493,14 +495,17 @@ queueSubmissionsForTest = testCase "Test queuing submissions for test" $ do
 
     get page auth mCookie = maybe id (\c -> (>> addCookie auth c)) mCookie (Snap.get path (Map.fromList params))
       where
-        path = Pages.pageValue (pageRoutePath page)
-        params = [(B.pack k, [B.pack v]) | ReqParam (k, v) <- Pages.pageValue (pageRequestParams page)]
+        path = TE.encodeUtf8 $ Pages.pageValue (pageRoutePath page)
+        params = [(TE.encodeUtf8 k, [TE.encodeUtf8 v]) | ReqParam (k, v) <- Pages.pageValue (pageRequestParams page)]
                                                                      
     lastSubmissions :: AssignmentKey -> Persist [SubmissionKey]
     lastSubmissions ak = do
       ckGk <- P.courseOrGroupOfAssignment ak
       users <- either P.subscribedToCourse P.subscribedToGroup ckGk
       catMaybes <$> mapM (P.lastSubmission ak) users
+
+    routeOf :: Pages.PageDesc -> ByteString
+    routeOf = TE.encodeUtf8 . Route.routeOf
 
 markdown :: TestTree
 markdown = testGroup "Markdown conversion and transformation tests"
@@ -562,18 +567,19 @@ markdown = testGroup "Markdown conversion and transformation tests"
       where
         msg = unDictionary idDictionary
 
-    md = unlines [ "# h1 header"
-                 , "paragraph 1"
-                 , ""
-                 , "## h2 header"
-                 , ""
-                 , "paragraph 2"
-                 , ""
-                 , "##### h5 header"
-                 , ""
-                 , "[a link](http://example.com)"
-                 , ""
-                 , "  - list item 1"
-                 , "  - list item 2"
-                 , ""
-                 ]
+    md = T.unlines
+           [ "# h1 header"
+           , "paragraph 1"
+           , ""
+           , "## h2 header"
+           , ""
+           , "paragraph 2"
+           , ""
+           , "##### h5 header"
+           , ""
+           , "[a link](http://example.com)"
+           , ""
+           , "  - list item 1"
+           , "  - list item 2"
+           , ""
+           ]

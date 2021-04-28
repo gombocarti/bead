@@ -3,6 +3,7 @@ module Test.Model.UserStory where
 import           Control.Monad (when)
 import           Control.Monad.Trans (lift)
 import           Control.Monad.Trans.Reader
+import qualified Data.Text as T
 import qualified Data.UUID as UUID
 import           Prelude hiding (log)
 
@@ -27,7 +28,7 @@ context = do
   where
     errorLogger = Logger {
         log = \e msg -> case e of
-          ERROR -> error msg
+          ERROR -> error (T.unpack msg)
           _     -> return ()
       }
 

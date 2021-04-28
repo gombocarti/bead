@@ -8,7 +8,7 @@ module Bead.View.ErrorPage (
   , translationErrorPage
   ) where
 
-import           Data.String
+import qualified Text.Blaze as B
 import qualified Text.Blaze.Html5 as H
 
 import           Snap
@@ -22,12 +22,12 @@ import           Bead.View.Pagelets (bootstrapPublicPage)
 import           Bead.View.Translation
 
 class ErrorPage e where
-  errorPage :: Translation String -> e -> BeadHandler' b H.Html
+  errorPage :: Translation -> e -> BeadHandler' b H.Html
 
 instance ErrorPage String where
   errorPage title msg = publicPage $ page title (Just msg)
 
-instance ErrorPage (Translation String) where
+instance ErrorPage Translation where
   errorPage title msg = do
     i18n <- i18nH
     publicPage . (pageTranslation i18n title) $ Just msg
@@ -48,14 +48,14 @@ defErrorPage = errorPage (msg_ErrorPage_Title "Oh snap!")
 
 -- Produces a handler that renders the error page, with the
 -- given title and message for the user
-translationErrorPage :: Translation String -> Translation String -> BeadHandler' b H.Html
+translationErrorPage :: Translation -> Translation -> BeadHandler' b H.Html
 translationErrorPage = errorPage
 
-page :: Translation String -> (Maybe String) -> HtmlPage
-page = View.template fromString
+page :: B.ToMarkup a => Translation -> (Maybe a) -> HtmlPage
+page = View.template B.toMarkup
 
-pageTranslation :: I18N -> Translation String -> (Maybe (Translation String)) -> HtmlPage
-pageTranslation msg title err = View.template (fromString . msg) title err
+pageTranslation :: I18N -> Translation -> (Maybe Translation) -> HtmlPage
+pageTranslation msg title err = View.template (B.text . msg) title err
 
 publicPage :: HtmlPage -> BeadHandler' b H.Html
 publicPage = bootstrapPublicPage defaultPageSettings

@@ -49,7 +49,7 @@ data UserState
     , role :: Role     -- User's role
     , uuid :: UUID     -- Token for the active user session
     , _timeZone :: TimeZoneName -- Timezone of the user
-    , _status :: Maybe (StatusMessage (Translation String)) -- The last status message
+    , _status :: Maybe (StatusMessage Translation) -- The last status message
     , _homePage :: R.HomePageContents -- Last set default page to show when URL path is "/"
     } deriving Eq
 
@@ -91,13 +91,13 @@ userRole = userStateCata
 
 -- Produces a new user state from the old one, setting
 -- the status message to the given one
-setStatus :: StatusMessage (Translation String)
+setStatus :: StatusMessage Translation
           -> UserState
           -> UserState
 setStatus msg = Lens.set status (Just msg)
 
 -- Produces the status message of the UserState, otherwise Nothing
-getStatus :: UserState -> Maybe (StatusMessage (Translation String))
+getStatus :: UserState -> Maybe (StatusMessage Translation)
 getStatus = userStateCata
               (const Nothing)  -- UserNotLoggedIn
               Nothing          -- Registration

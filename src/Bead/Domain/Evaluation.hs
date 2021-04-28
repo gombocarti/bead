@@ -8,6 +8,8 @@ module Bead.Domain.Evaluation (
 
 import Bead.Domain.Shared.Evaluation
 
+import qualified Data.Text as T
+
 #ifdef TEST
 import Control.Applicative
 import Test.Tasty.Arbitrary
@@ -39,8 +41,8 @@ instance Arbitrary Percentage where
   shrink = percentageCata (fmap (Percentage . Scores) . shrink . unScores)
 
 instance Arbitrary FreeForm where
-  arbitrary = FreeForm <$> arbitrary
-  shrink (FreeForm xs) = map FreeForm (shrink xs)
+  arbitrary = FreeForm . T.pack <$> arbitrary
+  shrink (FreeForm xs) = map (FreeForm . T.pack) (shrink . T.unpack $ xs)
 
 instance Arbitrary EvResult where
   arbitrary = EvResult <$> oneof [

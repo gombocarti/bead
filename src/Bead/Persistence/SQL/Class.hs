@@ -119,14 +119,14 @@ instance DomainValue Domain.Course where
   type EntityValue Domain.Course = Course
 
   toDomainValue ent = Domain.Course
-    (Text.unpack $ courseName ent)
-    (Text.unpack $ courseDescription ent)
+    (courseName ent)
+    (courseDescription ent)
     (decodeTestScriptType $ courseTestScriptType ent)
 
   fromDomainValue = Domain.courseCata encodeTestScriptType
     $ \name description testScriptType ->
-         Course (Text.pack name)
-                (Text.pack description)
+         Course name
+                description
                 testScriptType
 
 instance DomainKey Domain.GroupKey where
@@ -138,13 +138,13 @@ instance DomainValue Domain.Group where
   type EntityValue Domain.Group = Group
 
   toDomainValue ent = Domain.Group
-    (Text.unpack $ groupName ent)
-    (Text.unpack $ groupDescription ent)
+    (groupName ent)
+    (groupDescription ent)
 
   fromDomainValue = Domain.groupCata
         $ \name description ->
-            Group (Text.pack name)
-                  (Text.pack description)
+            Group name
+                  description
 
 instance DomainKey Domain.TestScriptKey where
   type EntityForKey Domain.TestScriptKey = TestScript
@@ -155,18 +155,18 @@ instance DomainValue Domain.TestScript where
   type EntityValue Domain.TestScript = TestScript
 
   toDomainValue ent = Domain.TestScript
-    (Text.unpack $ testScriptName ent)
-    (Text.unpack $ testScriptDescription ent)
-    (Text.unpack $ testScriptNotes ent)
-    (Text.unpack $ testScriptScript ent)
+    (testScriptName ent)
+    (testScriptDescription ent)
+    (testScriptNotes ent)
+    (testScriptScript ent)
     (decodeTestScriptType $ testScriptTestScriptType ent)
 
   fromDomainValue = Domain.testScriptCata encodeTestScriptType
     $ \name desc notes script type_ ->
-        TestScript (Text.pack name)
-                   (Text.pack desc)
-                   (Text.pack notes)
-                   (Text.pack script)
+        TestScript name
+                   desc
+                   notes
+                   script
                    (type_)
 
 
@@ -179,29 +179,26 @@ instance DomainValue Domain.TestCase where
   type EntityValue Domain.TestCase = TestCase
 
   toDomainValue ent = Domain.TestCase
-    (Text.unpack $ testCaseName ent)
-    (Text.unpack $ testCaseDescription ent)
+    (testCaseName ent)
+    (testCaseDescription ent)
     (case (testCaseSimpleValue ent, testCaseZippedValue ent) of
-       (Just simple, Nothing) -> Domain.SimpleTestCase $ Text.unpack simple
+       (Just simple, Nothing) -> Domain.SimpleTestCase simple
        (Nothing, Just zipped) -> Domain.ZippedTestCase zipped
        (Just _, Just _)   -> error "toDomainTestCase: simple and zipped value were given"
        (Nothing, Nothing) -> error "toDomainTestCase: simple or zipped value were given")
-    (Text.unpack $ testCaseInfo ent)
+    (testCaseInfo ent)
 
   fromDomainValue = Domain.testCaseCata id -- encodeTestCaseType
     $ \name desc value {-type_-} info ->
         let (simple, zipped) = Domain.withTestCaseValue
                                  value
-                                 (fstNothing Text.pack)
-                                 (nothingSnd id)
-        in TestCase (Text.pack name)
-                    (Text.pack desc)
+                                 (\simple -> (Just simple, Nothing))
+                                 (\zipped -> (Nothing, Just zipped))
+        in TestCase name
+                    desc
                     simple
                     zipped
-                    (Text.pack info)
-
-fstNothing f s = (Just $ f s, Nothing)
-nothingSnd f s = (Nothing, Just $ f s)
+                    info
 
 instance DomainKey Domain.AssignmentKey where
   type EntityForKey Domain.AssignmentKey = Assignment
@@ -219,8 +216,8 @@ instance DomainValue Domain.Submission where
 
   fromDomainValue = Domain.submissionCata $ \submission postDate ->
     let (simple, zipped) = Domain.submissionValue
-                             (fstNothing Text.pack)
-                             (nothingSnd id)
+                             (\simple -> (Just simple, Nothing))
+                             (\zipped -> (Nothing, Just zipped))
                              submission
     in Submission simple
                   zipped
@@ -229,7 +226,7 @@ instance DomainValue Domain.Submission where
   toDomainValue ent =
     Domain.Submission
       (case (submissionSimple ent, submissionZipped ent) of
-         (Just simple, Nothing) -> Domain.SimpleSubmission $ Text.unpack simple
+         (Just simple, Nothing) -> Domain.SimpleSubmission simple
          (Nothing, Just zipped) -> Domain.ZippedSubmission zipped
          (Nothing, Nothing) -> error "toDomainSubmission: no simple or zipped solution was given."
          (Just _, Just _)   -> error "toDomainSubmission: simple and zipped solution were given.")
@@ -245,12 +242,12 @@ instance DomainValue Domain.Evaluation where
 
   fromDomainValue = Domain.evaluationCata $ \result written ->
     Evaluation (encodeEvaluationResult result)
-               (Text.pack written)
+               written
 
   toDomainValue ent =
     Domain.Evaluation
       (decodeEvaluationResult $ evaluationResult ent)
-      (Text.unpack $ evaluationWritten ent)
+      (evaluationWritten ent)
 
 instance DomainKey Domain.CommentKey where
   type EntityForKey Domain.CommentKey = Comment
@@ -261,15 +258,15 @@ instance DomainValue Domain.Comment where
   type EntityValue Domain.Comment = Comment
 
   fromDomainValue = Domain.commentCata $ \cmt author date type_ ->
-    Comment (Text.pack cmt)
-            (Text.pack author)
+    Comment cmt
+            author
             date
             (encodeCommentType type_)
 
   toDomainValue ent =
     Domain.Comment
-      (Text.unpack $ commentText ent)
-      (Text.unpack $ commentAuthor ent)
+      (commentText ent)
+      (commentAuthor ent)
       (commentDate ent)
       (decodeCommentType $ commentType ent)
 
@@ -298,16 +295,16 @@ instance DomainValue Domain.Assessment where
 
   fromDomainValue = Domain.assessment $
     \title desc createdTime cfg visible -> Assessment
-      (Text.pack title)
-      (Text.pack desc)
+      title
+      desc
       createdTime
       (encodeEvalConfig cfg)
       visible
 
   toDomainValue ent = Domain.Assessment title description createdTime evalConfig visible
       where
-        title = Text.unpack $ assessmentTitle ent
-        description = Text.unpack $ assessmentDescription ent
+        title = assessmentTitle ent
+        description = assessmentDescription ent
         createdTime = assessmentCreated ent
         evalConfig = decodeEvalConfig $ assessmentEvalConfig ent
         visible = assessmentVisible ent

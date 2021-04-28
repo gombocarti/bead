@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Bead.Persistence.SQL.FileSystem where
 
 import           Control.Applicative ((<$>))
@@ -12,6 +13,9 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
 import           Data.List (sortOn, isSuffixOf)
 import           Data.Maybe
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import           Data.Time (UTCTime)
 import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           Data.UUID.V4 (nextRandom)
@@ -78,6 +82,9 @@ fileSaveBS fname s = liftIO $ do
   hSetEncoding handler utf8
   BC.hPutStr handler s
   hClose handler
+
+fileSaveText :: (MonadIO io) => FilePath -> Text -> io ()
+fileSaveText fname s = liftIO $ TIO.writeFile fname s
 
 filterDirContents :: (MonadIO io) => (FilePath -> IO Bool) -> FilePath -> io [FilePath]
 filterDirContents f p = liftIO $ do
@@ -174,11 +181,11 @@ saveTestJob sk submission testScript testCase = liftIO $ do
   d <- (testOutgoing </>) . show <$> nextRandom
   createDirectoryLocked d $ \d' -> do
     withSubmissionKey sk (fileSave (d' </> "id"))
-    fileSave (d' </> "script") (tsScript testScript)
+    fileSaveText (d' </> "script") (tsScript testScript)
     -- Save Simple or Zipped Submission
-    withSubmissionValue (solution submission) (flip fileSave) (flip fileSaveBS) (d' </> "submission")
+    withSubmissionValue (solution submission) (flip fileSaveText) (flip fileSaveBS) (d' </> "submission")
     -- Save Simple or Zipped Test Case
-    withTestCaseValue (tcValue testCase) (flip fileSave) (flip fileSaveBS) (d' </> "tests")
+    withTestCaseValue (tcValue testCase) (flip fileSaveText) (flip fileSaveBS) (d' </> "tests")
   return d
 
 -- Insert the feedback info for the file system part of the database. This method is
@@ -188,8 +195,8 @@ insertTestFeedback sk feedbacks = liftIO $ do
   let sDir = submissionKeyMap (testIncoming </>) sk <.> "locked"
   createDirectoryIfMissing True sDir
   fileSave (sDir </> "id") (submissionKeyMap id sk)
-  let student comment = fileSave (sDir </> "public") comment
-      admin   comment = fileSave (sDir </> "private") comment
+  let student comment = fileSaveText (sDir </> "public") comment
+      admin   comment = fileSaveText (sDir </> "private") comment
       result  bool    = fileSave (sDir </> "result") (show bool)
   mapM_ (feedbackInfo queued result student admin evaluated) feedbacks
   where
@@ -234,8 +241,8 @@ testFeedbacks = liftIO (createFeedbacks =<< sortOnModificationTime =<< processab
     createFeedback :: FilePath -> IO (SubmissionKey, [Feedback])
     createFeedback path = do
       sk <- SubmissionKey <$> fileLoad (path </> "id")
-      msgForAdmin <- optional $ getFeedback (Right . MessageForAdmin) "private"
-      msgForStudent <- optional $ getFeedback (Right . MessageForStudent) "public"
+      msgForAdmin <- optional $ getFeedback (Right . MessageForAdmin . T.pack) "private"
+      msgForStudent <- optional $ getFeedback (Right . MessageForStudent . T.pack) "public"
       testResult <- getFeedback (fmap TestResult . readEither) "result"
       return (sk, testResult : catMaybes [msgForAdmin, msgForStudent])
         where

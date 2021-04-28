@@ -8,6 +8,8 @@ module Bead.View.Content.Profile.Page (
 import           Control.Monad.Trans.Class
 import           Control.Arrow ((&&&))
 import           Data.String
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 import qualified Bead.Controller.Pages as Pages
 import           Bead.Controller.UserStories (currentUser)
@@ -70,10 +72,10 @@ profileContent ts user ls = do
       passwordSection msg
 
   where
-    regFullNameField  = fromString $ B.name regFullNamePrm
-    userLanguageField = fromString $ B.name userLanguagePrm
-    userTimeZoneField = fromString $ B.name userTimeZonePrm
-    fullName          = fromString $ u_name user
+    regFullNameField  = B.name regFullNamePrm
+    userLanguageField = B.name userLanguagePrm
+    userTimeZoneField = B.name userTimeZonePrm
+    fullName          = T.pack $ u_name user
 
     userDetailsCol =
 #ifdef SSO
@@ -112,9 +114,9 @@ profileContent ts user ls = do
       Bootstrap.selectionWithLabel userTimeZoneField (msg $ msg_Profile_TimeZone "Time zone") (== u_timezone user) timeZones
 #endif
 
-    timeZones = map (Prelude.id &&& timeZoneName Prelude.id) ts
+    timeZones = map (Prelude.id &&& timeZoneName T.pack) ts
     languages = map langValue ls
     profile = Pages.profile ()
     changePassword = Pages.changePassword ()
 
-    langValue (lang,info)  = (lang, languageName info)
+    langValue (lang,info)  = (lang, T.pack $ languageName info)

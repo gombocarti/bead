@@ -32,6 +32,8 @@ import Data.List ((\\), intersperse, nub, find, sort, sortOn, maximumBy, delete)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.IORef
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Data.Time
 import Data.Tuple.Utils (fst3, thd3)
 import System.Directory hiding (copyFile)
@@ -835,11 +837,11 @@ submissionDescTest = test $ testCase "Every submission has some kind of descript
   quick 500 $ do
     sk <- pick $ elements ss
     desc <- runPersistCmd $ submissionDesc sk
-    assertNonEmpty (eCourse desc) "Course name was empty"
-    maybe (return ()) (flip assertNonEmpty "Group name was empty") $ eGroup desc
+    assertFalse (T.null $ eCourse desc) "Course name was empty"
+    maybe (return ()) (flip assertFalse "Group name was empty" . T.null) $ eGroup desc
     assertNonEmpty (eStudent desc) "Student name was empty"
-    assertNonEmpty (eSolution desc) "Solution was empty"
-    assertNonEmpty (Assignment.name . eAssignment $ desc) "Assignment title was empty"
+    assertFalse (T.null $ eSolution desc) "Solution was empty"
+    assertFalse (T.null . Assignment.name . eAssignment $ desc) "Assignment title was empty"
     assertEmpty (Map.toList $ eComments desc) "The comment list was not empty"
 
 -- Allways the last evaluation is valid for the submission.
@@ -897,10 +899,10 @@ submissionDetailsDescTest = test $ testCase "Every submission has a description"
         course <- runPersistCmd $ courseOfGroup gk >>= loadCourse
         assertTrue (isJust (sdGroup desc)) "Group assignment has no group"
         assertEquals (Just grp) (sdGroup desc) "Group was different"
-    assertNonEmpty (Assignment.desc $ sdAssignment desc) "Description was empty"
-    when (isJust (sdStatus desc)) $ assertNonEmpty (fromJust $ sdStatus desc) "Status was empty"
-    assertNonEmpty (sdSubmission desc) "Submission text was empty"
-    forM_ (Map.toList $ sdComments desc) $ \(_,c) -> assertNonEmpty (comment c) "Comment was empty"
+    assertFalse (T.null $ Assignment.desc $ sdAssignment desc) "Description was empty"
+    when (isJust (sdStatus desc)) $ assertFalse (T.null $ fromJust $ sdStatus desc) "Status was empty"
+    assertFalse (T.null $ sdSubmission desc) "Submission text was empty"
+    forM_ (Map.toList $ sdComments desc) $ \(_,c) -> assertFalse (T.null $ comment c) "Comment was empty"
 
 -- If the user administrates courses or groups, submission information about the
 -- submission of the group or course attendees. The number of the tables are same as
@@ -1351,10 +1353,10 @@ testJobCreationTest = test $ testCase "Test job creation" $ do
       entries <- liftIO $ listDirectory testOutgoing
       let [job] = map (testOutgoing </>) $ sort entries \\ sort entriesBeforeSave
       sk' <- liftIO $ SubmissionKey <$> readFile (job </> "id")
-      script     <- liftIO $ readFile $ job </> "script"
+      script     <- liftIO $ TIO.readFile $ job </> "script"
       submission2 <- loadSubmission sk
       assertSubmissions <- withSubmissionValue (solution submission2)
-        (\sol -> do testSolution <- liftIO $ readFile $ job </> "submission"
+        (\sol -> do testSolution <- liftIO $ TIO.readFile $ job </> "submission"
                     return $ assertEquals sol testSolution "Solutions are different")
         (\sol -> do testSolution <- liftIO $ BS.readFile $ job </> "submission"
                     return $ assertEquals sol testSolution "Solutions are different")
@@ -1363,7 +1365,7 @@ testJobCreationTest = test $ testCase "Test job creation" $ do
       case2       <- loadTestCase   tck
       assertTests <- withTestCaseValue
         (tcValue case2)
-        (\testValue -> do tests <- liftIO $ readFile $ job </> "tests"
+        (\testValue -> do tests <- liftIO $ TIO.readFile $ job </> "tests"
                           return $ assertEquals tests testValue "Tests are different")
         (\testValue -> do tests <- liftIO $ BS.readFile $ job </> "tests"
                           return $ assertEquals tests testValue "Tests are different")
