@@ -10,7 +10,7 @@ import           Bead.Domain.Entities (Uid)
 import qualified Bead.Domain.Entities      as E
 import           Bead.Domain.Relationships ( GroupKey, CourseKey, AssignmentKey
                                            , AssessmentKey, ScoreKey, EvaluationKey, SubmissionKey
-                                           , TestScriptKey, HomePageContents)
+                                           , TestScriptKey, HomePageContents, MossScriptInvocationKey)
 import qualified Bead.Domain.Relationships as R
 
 #ifdef TEST
@@ -64,6 +64,7 @@ data ViewPage a
   | ViewAssessment AssessmentKey a
   | ViewUserScore ScoreKey a
   | Notifications a
+  | ViewMossScriptOutput MossScriptInvocationKey a
   deriving (Eq, Show, Functor)
 
 viewPageCata
@@ -81,6 +82,7 @@ viewPageCata
   viewAssessment
   viewUserScore
   notifications
+  viewMossScriptOutput
   p = case p of
     Index a -> index a
     Login a -> login a
@@ -96,6 +98,7 @@ viewPageCata
     ViewAssessment ak a -> viewAssessment ak a
     ViewUserScore sk a -> viewUserScore sk a
     Notifications a -> notifications a
+    ViewMossScriptOutput mk a -> viewMossScriptOutput mk a
 
 viewPageValue :: ViewPage a -> a
 viewPageValue = viewPageCata
@@ -113,6 +116,7 @@ viewPageValue = viewPageCata
   cid -- viewAssessment
   cid -- viewUserScore
   id -- notifications
+  cid -- viewMossScriptOutput
   where
     cid :: a -> b -> b
     cid = const id
@@ -239,6 +243,7 @@ data ViewModifyPage a
   | ModifyUserScore ScoreKey a
   | NewGroupAssessment GroupKey a
   | NewCourseAssessment CourseKey a
+  | SimilarityCheckMoss AssignmentKey a
   deriving (Eq, Show, Functor)
 
 viewModifyPageCata
@@ -261,6 +266,7 @@ viewModifyPageCata
   modifyUserScore
   newGroupAssessment
   newCourseAssessment
+  similarityCheckMoss
   p = case p of
     Profile a -> profile a
     Evaluation sk a -> evaluation sk a
@@ -281,6 +287,7 @@ viewModifyPageCata
     ModifyUserScore sk a -> modifyUserScore sk a
     NewGroupAssessment gk a -> newGroupAssessment gk a
     NewCourseAssessment ck a -> newCourseAssessment ck a
+    SimilarityCheckMoss ak a -> similarityCheckMoss ak a
 
 viewModifyPageValue :: ViewModifyPage a -> a
 viewModifyPageValue = viewModifyPageCata
@@ -303,6 +310,7 @@ viewModifyPageValue = viewModifyPageCata
   cid -- modifyUserScore
   cid -- newGroupAssessment
   cid -- newCourseAssessment
+  cid -- similarityCheckMoss
   where
     cid = const id
     c2id = const . cid
@@ -318,11 +326,11 @@ data ModifyPage a
   | CreateTestScript CourseKey a
   | ModifyTestScript CourseKey TestScriptKey a  -- CourseKey is needed for parentPage.
   | ChangePassword a
-  | DeleteUsersFromCourse R.CourseKey a
-  | DeleteUsersFromGroup R.GroupKey a
+  | DeleteUsersFromCourse CourseKey a
+  | DeleteUsersFromGroup GroupKey a
   | QueueSubmissionForTest SubmissionKey a
   | QueueAllSubmissionsForTest AssignmentKey a
-  | UnsubscribeFromCourse R.GroupKey a
+  | UnsubscribeFromCourse GroupKey a
   deriving (Eq, Show, Functor)
 
 modifyPageCata :: (a -> b)
@@ -486,6 +494,9 @@ viewAssessment ak         = View . ViewAssessment ak
 viewUserScore sk          = View . ViewUserScore sk
 notifications             = View . Notifications
 notificationsWithText     = notifications $ Trans.msg_LinkText_Notifications "Notifications"
+viewMossScriptOutput mk   = View . ViewMossScriptOutput mk
+viewMossScriptOutputWithText mk = viewMossScriptOutput mk $ Trans.msg_LinkText_ViewMossScriptOutput "View Similarity Check Report"
+
 
 exportEvaluationsScoresAdminedGroups ck          = Data . ExportEvaluationsScoresAdminedGroups ck
 exportEvaluationsScoresAdminedGroupsWithText ck = exportEvaluationsScoresAdminedGroups ck $ Trans.msg_LinkText_ExportEvaluations "Export Evaluations of Admined Groups of this Course"
@@ -537,6 +548,8 @@ modifyUserScore sk      = ViewModify . ModifyUserScore sk
 newCourseAssessment ck  = ViewModify . NewCourseAssessment ck
 newGroupAssessment gk   = ViewModify . NewGroupAssessment gk
 newGroupAssessmentWithText gk = newGroupAssessment gk $ Trans.msg_LinkText_NewGroupAssessment "New Group Assessment"
+similarityCheckMoss ak  = ViewModify . SimilarityCheckMoss ak
+similarityCheckMossWithText ak = similarityCheckMoss ak $ Trans.msg_LinkText_SimilarityCheckMoss "Similarity Check of Submissions"
 
 createCourse         = Modify . CreateCourse
 createGroup ck       = Modify . CreateGroup ck
@@ -619,6 +632,8 @@ pageCata
   modifyAssessmentPreview
   viewAssessment
   notifications
+  viewMossScriptOutput
+  similarityCheckMoss
   submissionTable
   usersInGroup
   p = case p of
@@ -683,6 +698,8 @@ pageCata
     (UserView (ModifyAssessmentPreview ak a)) -> modifyAssessmentPreview ak a
     (View (ViewAssessment ak a)) -> viewAssessment ak a
     (View (Notifications a)) -> notifications a
+    (View (ViewMossScriptOutput mk a)) -> viewMossScriptOutput mk a
+    (ViewModify (SimilarityCheckMoss ak a)) -> similarityCheckMoss ak a
     (RestView (SubmissionTable gk a)) -> submissionTable gk a
     (RestView (UsersInGroup gk a)) -> usersInGroup gk a
 
@@ -749,6 +766,8 @@ constantsP
   modifyAssessmentPreview_
   viewAssessment_
   notifications_
+  viewMossScriptOutput_
+  similarityCheckMoss_
   submissionTable_
   usersInGroup_
   = pageCata
@@ -813,6 +832,8 @@ constantsP
       (\ak _ -> modifyAssessmentPreview ak modifyAssessmentPreview_)
       (\ak _ -> viewAssessment ak viewAssessment_)
       (c $ notifications notifications_)
+      (\mk _ -> viewMossScriptOutput mk viewMossScriptOutput_)
+      (\ak _ -> similarityCheckMoss ak similarityCheckMoss_)
       (\gk _ -> submissionTable gk submissionTable_)
       (\gk _ -> usersInGroup gk usersInGroup_)
   where
@@ -881,6 +902,8 @@ liftsP
   modifyAssessmentPreview_
   viewAssessment_
   notifications_
+  viewMossScriptOutput_
+  similarityCheckMoss_
   submissionTable_
   usersInGroup_
   = pageCata
@@ -945,6 +968,8 @@ liftsP
       (\ak a -> modifyAssessmentPreview ak (modifyAssessmentPreview_ ak a))
       (\ak a -> viewAssessment ak (viewAssessment_ ak a))
       (notifications . notifications_)
+      (\mk a -> viewMossScriptOutput mk (viewMossScriptOutput_ mk a))
+      (\ak a -> similarityCheckMoss ak (similarityCheckMoss_ ak a))
       (\gk a -> submissionTable gk (submissionTable_ gk a))
       (\gk a -> usersInGroup gk (usersInGroup_ gk a))
 
@@ -1130,6 +1155,12 @@ isViewAssessment _ = False
 isNotifications (View (Notifications _)) = True
 isNotifications _ = False
 
+isViewMossScriptOutput (View (ViewMossScriptOutput _ _)) = True
+isViewMossScriptOutput _ = False
+
+isSimilarityCheckMoss (ViewModify (SimilarityCheckMoss _ _)) = True
+isSimilarityCheckMoss _ = False
+
 isSubmissionTable (RestView (SubmissionTable _ _)) = True
 isSubmissionTable _ = False
 
@@ -1200,6 +1231,8 @@ groupAdminPages = [
   , isGetSubmissionsOfUserInGroup
   , isGetSubmissionsOfAssignmentInGroup
   , isUsersInGroup
+  , isViewMossScriptOutput
+  , isSimilarityCheckMoss
   ]
 
 courseAdminPages = [
@@ -1249,6 +1282,8 @@ courseAdminPages = [
   , isGetSubmissionsOfUserInGroup
   , isGetSubmissionsOfAssignmentInGroup
   , isUsersInGroup
+  , isViewMossScriptOutput
+  , isSimilarityCheckMoss
   ]
 
 adminPages = [
@@ -1326,6 +1361,7 @@ pageGen = oneof [
       username      = E.Username <$> vectorOf 6 alphaNum
       uid           = E.Uid <$> vectorOf 6 alphaNum
       courseManagementContents = oneof ((ModifyTestScriptContents <$> testScriptKey) : map pure [GroupManagementContents, TestScriptsContents, AssignmentsContents, NewTestScriptContents])
+      mossScriptInvocationKey = R.MossScriptInvocationKey . showInt <$> choose (1,5000)
 
       nonParametricPages = elements [
           index ()
@@ -1394,6 +1430,8 @@ pageGen = oneof [
         , getSubmissionsOfUserInGroup <$> groupKey <*> uid <*> unit
         , getSubmissionsOfAssignmentInGroup <$> groupKey <*> assignmentKey <*> unit
         , usersInGroup <$> groupKey <*> unit
+        , viewMossScriptOutput <$> mossScriptInvocationKey <*> unit
+        , similarityCheckMoss <$> assignmentKey <*> unit
         ]
 
       unit = return ()

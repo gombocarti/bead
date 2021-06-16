@@ -12,28 +12,22 @@ import qualified Data.Text as T
 import           System.FilePath ((<.>))
 
 import qualified Bead.Controller.UserStories as Story
-import qualified Bead.Domain.Entity.Assignment as Assignment
 import           Bead.View.Content
 import qualified Bead.View.ContentHandler as CH
 
 getSubmission :: DataHandler
 getSubmission = DataHandler $ do
   sk <- getParameter submissionKeyPrm
-  (s, description) <- userStory $ do
+  (s, user) <- userStory $ do
     Story.doesBlockSubmissionView sk
     Story.isAccessibleBallotBoxSubmission sk
-    Story.getSubmission sk
+    subm <- Story.getSubmission sk
+    u <- Story.userOfSubmission sk
+    return (subm, u)
   let submission = solution s
-      (fname, ext) = submissionFilename description
+      (fname, ext) = submissionFilename user s
       fileName = (T.pack $ fname <.> ext)
   submissionValue
     (downloadText fileName)
     (downloadStrict fileName CH.MimeZip)
     submission
-
--- | Returns a pair of filename and extension from a `SubmissionDesc`.
-submissionFilename :: SubmissionDesc -> (String, String)
-submissionFilename desc = (basename, ext)
-    where
-      basename = concat [eStudent desc, " (", uid id $ eUid desc, ")"]
-      ext = if (Assignment.isZippedSubmissions . Assignment.aspects . eAssignment $ desc) then "zip" else "txt"

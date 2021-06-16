@@ -118,6 +118,7 @@ module Bead.Persistence.Persist (
   , saveSubmission
   , loadSubmission
   , assignmentOfSubmission
+  , userOfSubmission
   , usernameOfSubmission
   , submissionKeys
   , evaluationOfSubmission
@@ -130,6 +131,12 @@ module Bead.Persistence.Persist (
   , openedSubmissions
   , openedSubmissionSubset
   , usersOpenedSubmissions
+
+  -- Similarity check
+  , newMossScriptInvocationKey
+  , saveMossScriptInvocation
+  , loadMossScriptInvocation
+  , uploadForMoss
 
   -- Feedback
   , saveFeedbacks
@@ -193,6 +200,7 @@ import           Data.ByteString (ByteString)
 import           Data.Maybe (isJust)
 import           Data.Time (UTCTime, getCurrentTime)
 import           Data.Set (Set)
+import           System.Exit (ExitCode)
 import           System.FilePath (FilePath)
 
 import qualified Bead.Config as Config
@@ -586,6 +594,10 @@ loadSubmission = PersistImpl.loadSubmission
 assignmentOfSubmission :: SubmissionKey -> Persist AssignmentKey
 assignmentOfSubmission = PersistImpl.assignmentOfSubmission
 
+-- Returns the user for the submission
+userOfSubmission :: SubmissionKey -> Persist User
+userOfSubmission = PersistImpl.userOfSubmission
+
 -- Returns the username for the submission
 usernameOfSubmission :: SubmissionKey -> Persist Username
 usernameOfSubmission = PersistImpl.usernameOfSubmission
@@ -630,6 +642,20 @@ openedSubmissionSubset = PersistImpl.openedSubmissionSubset
 -- Calculates all the opened submisison for a given user and a given assignment
 usersOpenedSubmissions :: AssignmentKey -> Username -> Persist [SubmissionKey]
 usersOpenedSubmissions = PersistImpl.usersOpenedSubmissions
+
+-- * Similarity check
+
+newMossScriptInvocationKey :: AssignmentKey -> Persist MossScriptInvocationKey
+newMossScriptInvocationKey = PersistImpl.newMossScriptInvocationKey
+
+saveMossScriptInvocation :: MossScriptInvocationKey -> MossScriptInvocation -> Persist ()
+saveMossScriptInvocation = PersistImpl.saveMossScriptInvocation
+
+loadMossScriptInvocation :: MossScriptInvocationKey -> Persist (Maybe MossScriptInvocation, AssignmentKey)
+loadMossScriptInvocation = PersistImpl.loadMossScriptInvocation
+
+uploadForMoss :: FilePath -> ProgrammingLanguage -> [(User, Submission)] -> IO (ExitCode, String)
+uploadForMoss = PersistImpl.uploadForMoss
 
 -- * Feedback
 

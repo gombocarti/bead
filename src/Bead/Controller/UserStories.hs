@@ -1233,6 +1233,18 @@ queueAllSubmissionsForTest ak = logAction INFO (unwords ["queues all submissions
   sks <- lastSubmissions ak
   persistence $ mapM_ Persist.queueSubmissionForTest sks
 
+checkSimilarityMoss :: FilePath -> ProgrammingLanguage -> AssignmentKey -> UserStory MossScriptInvocationKey
+checkSimilarityMoss mossScriptPath prLang ak = logAction INFO (unwords ["check similarity of submissions of", show ak, "with MOSS"]) $ do
+  isAdministratedAssignment ak
+  interpreter <- asksPersistInterpreter
+  persistence $ Persist.checkSimilarityMoss mossScriptPath prLang ak interpreter
+
+loadMossScriptInvocationResult :: MossScriptInvocationKey -> UserStory (Maybe MossScriptInvocation)
+loadMossScriptInvocationResult mk = logAction INFO ("loads the result of MOSS script invocation " ++ show mk) $ do
+  (invocationResult, ak) <- persistence $ Persist.loadMossScriptInvocation mk
+  isAdministratedAssignment ak
+  return invocationResult
+
 -- Returns all groups with admins for which the user have not submitted
 -- a solution already
 availableGroups :: UserStory [(Course, GroupKey, Group, [User])]
@@ -1306,14 +1318,15 @@ loadSubmission sk = logAction INFO ("loads submission " ++ show sk) $ do
 
 -- Checks if the submission is accessible for the user and loads it,
 -- otherwise throws an exception.
-getSubmission :: SubmissionKey -> UserStory (Submission, SubmissionDesc)
+getSubmission :: SubmissionKey -> UserStory Submission
 getSubmission sk = logAction INFO ("downloads submission " ++ show sk) $ do
   authorize P_Open P_Submission
   isAccessibleBallotBoxSubmission sk
-  persistence $ do
-    s <- Persist.loadSubmission sk
-    d <- Persist.submissionDesc sk
-    return (s,d)
+  persistence $ Persist.loadSubmission sk
+
+userOfSubmission :: SubmissionKey -> UserStory User
+userOfSubmission sk = logAction INFO ("queries the user of submission " ++ show sk) $ do
+  persistence $ Persist.userOfSubmission sk
 
 -- Creates a submission limit for the given assignment
 assignmentSubmissionLimit :: AssignmentKey -> UserStory SubmissionLimit

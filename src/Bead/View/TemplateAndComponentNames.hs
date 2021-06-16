@@ -183,6 +183,8 @@ menuId = P.pageCata
   (c2 "link-modify-assessment-preview")
   (c2 "link-view-asssessment")
   (c "link-notifications")
+  (c2 "link-view-moss-script-output")
+  (c2 "link-similarity-check-moss")
   (c2 "link-rest-submission-table")
   (c2 "link-rest-users-in-group")
     where

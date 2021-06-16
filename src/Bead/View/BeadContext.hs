@@ -23,6 +23,7 @@ import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import           Network.Mail.Mime
+import           System.FilePath ((</>))
 import           System.Random
 import           Text.Regex.TDFA
 
@@ -355,6 +356,14 @@ sendEmail address sub body value = withTop sendEmailContext . snapContextHandler
 -- Returns the bead temp directory
 getTempDirectory :: BeadHandler' b FilePath
 getTempDirectory = withTop tempDirContext $ snapContextCata id
+
+-- Returns the bead static directory
+getStaticDirectory :: (Monad (m b v), MonadSnaplet m) => m b v FilePath
+getStaticDirectory = (</> "static") <$> getSnapletFilePath
+
+-- Returns the path to the MOSS script
+getMossScriptPath :: BeadHandler' b FilePath
+getMossScriptPath = (\top -> top </> "moss" </> "moss.perl") <$> getSnapletFilePath
 
 #ifndef SSO
 -- Returns True, if the username pass the check otherwise False

@@ -268,7 +268,7 @@ newAssignmentContent pd = do
                 let assignmentPreview a = do
                       Bootstrap.formGroup $ do
                         H.label $ B.toMarkup $ msg $ msg_NewAssignment_AssignmentPreview "Assignment Preview"
-                        Bootstrap.panel Nothing (headersToDiv . minHeaderLevel 2 . markdownToHtml msg $ Assignment.desc a)
+                        Bootstrap.panel Nothing Nothing (headersToDiv . minHeaderLevel 2 . markdownToHtml msg $ Assignment.desc a)
 
                 pageDataCata
                   (const5 mempty)

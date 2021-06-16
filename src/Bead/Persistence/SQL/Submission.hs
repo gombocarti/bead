@@ -72,20 +72,20 @@ assignmentOfSubmission key = do
       (toDomainKey . userSubmissionOfAssignmentAssignment . entityVal)
       (listToMaybe assignments)
 
+userOfSubmission :: Domain.SubmissionKey -> Persist Domain.User
+userOfSubmission key = do
+  us <- select $ from $ \(usa `InnerJoin` u) -> do
+    on (usa ^. UserSubmissionOfAssignmentUser Esq.==. u ^. UserId)
+    where_ (usa ^. UserSubmissionOfAssignmentSubmission Esq.==. val (toEntityKey key))
+    limit 1
+    return u
+  case us of
+    (u : _) -> return $! toDomainValue . entityVal $ u
+    [] -> persistError "userOfSubmission" $ "Impossible: user of submission " ++ show key ++ " was not found"
+
 -- Returns the username for the submission
 usernameOfSubmission :: Domain.SubmissionKey -> Persist Domain.Username
-usernameOfSubmission key = do
-  usersOfSub <- selectList [UserSubmissionOfAssignmentSubmission ==. toEntityKey key] []
-  maybe
-    (persistError "usernameOfSubmission" $ "No submission was found " ++ show key)
-    (\userOfSub -> do
-        let userId = userSubmissionOfAssignmentUser $ entityVal userOfSub
-        mUser <- get userId
-        maybe
-          (persistError "usernameOfSubmission" $ "No user us found " ++ show userId)
-          (\user -> return $! Domain.Username . Text.unpack $ userUsername user)
-          mUser)
-    (listToMaybe usersOfSub)
+usernameOfSubmission key = Domain.u_username <$> userOfSubmission key
 
 -- Lists all the submissions stored in the database
 submissionKeys :: Persist [Domain.SubmissionKey]

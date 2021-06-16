@@ -177,8 +177,9 @@ submissionTablePart tableId now ctx s = do
                        hasTest = case hasTestCase of
                                    HasTestCase -> Nothing
                                    DoesNotHaveTestCase -> Just (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
+                       similarityCheck = enableIf [hasSolutions] (Pages.similarityCheckMossWithText ak)
                        queueAllSubmissions = enableIf [hasTest, hasSolutions] (Pages.queueAllSubmissionsForTestWithText ak)
-                       dropdownItems = queueAllSubmissions : Bootstrap.Separator : exportLinks
+                       dropdownItems = queueAllSubmissions : Bootstrap.Separator : similarityCheck : Bootstrap.Separator : exportLinks
                    in if courseIsAdmined
                       then modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems
                       else viewAssignmentLink msg courseButtonStyle (i, info) dropdownItems)
@@ -202,18 +203,19 @@ submissionTablePart tableId now ctx s = do
                   hasTest = case hasTestCase of
                               HasTestCase -> Nothing
                               DoesNotHaveTestCase -> Just (msg $ msg_AssignmentDoesntHaveTestCase "The assignment does not have test case.")
+                  similarityCheck = enableIf [hasSolutions] (Pages.similarityCheckMossWithText ak)
                   queueAllSubmissions = enableIf [hasTest, hasSolutions] (Pages.queueAllSubmissionsForTestWithText ak)
              in cgInfoCata
                   (\_ -> -- course assignment
                      if courseIsAdmined
                      then let exportLinks = map (enableIf [hasSolutions]) [exportOneGroup, exportAdminedGroups, exportAll]
-                              dropdownItems = queueAllSubmissions : Bootstrap.Separator : exportLinks
+                              dropdownItems = queueAllSubmissions : Bootstrap.Separator : similarityCheck : Bootstrap.Separator : exportLinks
                           in modifyAssignmentLink msg courseButtonStyle (i, info) dropdownItems
                      else let exportLinks = map (enableIf [hasSolutions]) [exportOneGroup, exportAdminedGroups]
-                              dropdownItems = queueAllSubmissions : Bootstrap.Separator : exportLinks
+                              dropdownItems = queueAllSubmissions : Bootstrap.Separator : similarityCheck : Bootstrap.Separator : exportLinks
                           in viewAssignmentLink msg courseButtonStyle (i, info) dropdownItems)
                   (\_ -> -- group assignment
-                     let dropdownItems = [queueAllSubmissions, Bootstrap.Separator, enableIf [hasSolutions] exportAll]
+                     let dropdownItems = [queueAllSubmissions, Bootstrap.Separator, similarityCheck, Bootstrap.Separator, enableIf [hasSolutions] exportAll]
                      in modifyAssignmentLink msg groupButtonStyle (i, info) dropdownItems)
                   cga
 

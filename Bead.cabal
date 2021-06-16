@@ -144,6 +144,7 @@ Library
       Bead.Persistence.SQL.Group
       Bead.Persistence.SQL.MySQL
       Bead.Persistence.SQL.MySQLTestRunner
+      Bead.Persistence.SQL.Moss
       Bead.Persistence.SQL.JSON
       Bead.Persistence.SQL.Notification
       Bead.Persistence.SQL.Registration
@@ -274,6 +275,7 @@ Library
     Bead.View.Content.Assignment.Data
     Bead.View.Content.Assignment.Page
     Bead.View.Content.Assignment.View
+    Bead.View.Content.CheckSimilarity.Moss
     Bead.View.Content.CourseManagement.GroupManagement
     Bead.View.Content.CourseManagement.Page
     Bead.View.Content.CourseManagement.TestScript
@@ -386,6 +388,8 @@ Executable BeadTest
 
   Other-modules:
     Test.Model.UserStory
+    Test.Property.Common
+    Test.Property.Domain
     Test.Property.EntityGen
     Test.Property.Persistence
     Test.Regression.UserStory
