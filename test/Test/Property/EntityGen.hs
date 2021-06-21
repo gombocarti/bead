@@ -243,7 +243,7 @@ passwords :: IsString s => Gen s
 passwords = word
 
 solutionValues = oneof [
-    SimpleSubmission <$> solutionTexts
+    TextSubmission <$> solutionTexts
   , ZippedSubmission . TE.encodeUtf8 <$> solutionTexts
   ]
 

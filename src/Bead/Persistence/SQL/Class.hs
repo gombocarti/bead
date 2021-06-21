@@ -225,7 +225,7 @@ instance DomainValue Domain.Submission where
   toDomainValue ent =
     Domain.Submission
       (case (submissionSimple ent, submissionZipped ent) of
-         (Just simple, Nothing) -> Domain.SimpleSubmission simple
+         (Just simple, Nothing) -> Domain.TextSubmission simple
          (Nothing, Just zipped) -> Domain.ZippedSubmission zipped
          (Nothing, Nothing) -> error "toDomainSubmission: no simple or zipped solution was given."
          (Just _, Just _)   -> error "toDomainSubmission: simple and zipped solution were given.")

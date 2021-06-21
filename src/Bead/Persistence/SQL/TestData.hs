@@ -21,7 +21,7 @@ times = map (\sec -> addUTCTime (fromIntegral sec) t) ([0..] :: [Int])
     t :: UTCTime
     t = read "2019-04-19 18:55:32.151280 UTC"
 
-sbm     = Submission (SimpleSubmission "submission") time
+sbm     = Submission (TextSubmission "submission") time
 sbm2    = Submission (ZippedSubmission "submission2") time2
 
 ballot  = aspectsFromList [BallotBox]

@@ -649,7 +649,7 @@ newAssignmentContent pd = do
             (msg $ msg_NewAssignment_FreeFormEvaluation "Free Form Evaluation")
             e)
 
-      [txtSubmission, zipSubmission] = [Assignment.TextSubmission, Assignment.ZipSubmission]
+      [txtSubmission, zipSubmission] = [Assignment.TextSubmission (), Assignment.ZippedSubmission ()]
 
       currentSubmissionType =
         if Assignment.isZippedSubmissions aas

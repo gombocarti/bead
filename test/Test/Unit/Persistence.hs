@@ -330,7 +330,7 @@ testOpenSubmissions = testCase "Users separated correctly in open submission tab
       cAssignment = Assignment "CourseAssignment" "Assignment" ballot str end binaryConfig
       gAssignment1 = Assignment "GroupAssignment" "Assignment" normal str end binaryConfig
       gAssignment2 = Assignment "GroupAssignment" "Assignment" normal str end binaryConfig
-      sbsm = Submission (SimpleSubmission "submission") str
+      sbsm = Submission (TextSubmission "submission") str
   join $ liftE interp $ do
     ck  <- saveCourse (Course "name" "desc" TestScriptSimple)
     gk1 <- saveGroup ck (Group "gname1" "gdesc1")
@@ -416,7 +416,7 @@ test_create_group_user = testCase "Create Course and Group with a user" $ do
   testHasNoLastSubmission gak username
 
   -- Submission
-  let sbsm = Submission (SimpleSubmission "submission") str
+  let sbsm = Submission (TextSubmission "submission") str
   sk <- liftE interp $ saveSubmission gak username sbsm
   sk_user <- liftE interp $ usernameOfSubmission sk
   assertBool

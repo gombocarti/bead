@@ -7,10 +7,13 @@ module Bead.Domain.Entities (
   , Submission(..)
   , submissionCata
   , withSubmission
-  , SubmissionValue(..)
+  , isTextSubmission
+  , SubmissionValue
   , submissionValue
   , withSubmissionValue
   , submissionValueToByteString
+  , MossIncompatibilityReason(..)
+  , mossIncompatibilityReason
   , MossScriptInvocation(..)
   , mossScriptInvocationCata
   , outputToMossScriptInvocation
@@ -142,19 +145,20 @@ import           Test.Tasty.Arbitrary
 import           Test.Tasty.TestSet hiding (shrink)
 #endif
 
-data SubmissionValue
-  = SimpleSubmission Text
-  | ZippedSubmission ByteString
-  deriving (Eq, Show)
+isTextSubmission :: SubmissionFormat a b -> Bool
+isTextSubmission = submissionType True False
 
+type SubmissionValue = SubmissionFormat Text ByteString
+
+submissionValue :: (Text -> a) -> (ByteString -> a) -> SubmissionValue -> a
 submissionValue
-  simple
+  text
   zipped
   v = case v of
-    SimpleSubmission s -> simple s
+    TextSubmission s -> text s
     ZippedSubmission z -> zipped z
 
-withSubmissionValue v simple zipped = submissionValue simple zipped v
+withSubmissionValue v text zipped = submissionValue text zipped v
 
 -- | Solution for one exercise
 data Submission = Submission {
@@ -170,6 +174,20 @@ withSubmission s f = submissionCata f s
 
 submissionValueToByteString :: SubmissionValue -> BL.ByteString
 submissionValueToByteString = submissionValue (BL.fromStrict . TE.encodeUtf8) BL.fromStrict
+
+-- | Indicates whether why submissions of an assignment cannot be sent to Moss.
+-- At least one submission must be textual.
+data MossIncompatibilityReason
+  = MossNoTextSubmission -- | No, there is no textual submission.
+  | MossNoSubmissions -- | No, there are no submissions for the assignment.
+  | MossOnlyOneTextualSubmission -- | No, there is only one textual submission for the assignment.
+
+mossIncompatibilityReason :: a -> a -> a -> MossIncompatibilityReason -> a
+mossIncompatibilityReason noTextSubmission noSubmissions onlyOneTextualSubmission reason =
+  case reason of
+    MossNoTextSubmission -> noTextSubmission
+    MossNoSubmissions -> noSubmissions
+    MossOnlyOneTextualSubmission -> onlyOneTextualSubmission
 
 data MossScriptInvocation
   = MossScriptInvocationSuccess {

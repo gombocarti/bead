@@ -120,6 +120,8 @@ module Bead.Persistence.Persist (
   , assignmentOfSubmission
   , userOfSubmission
   , usernameOfSubmission
+  , postDateOfSubmission
+  , filterTextSubmission
   , submissionKeys
   , evaluationOfSubmission
   , stateOfSubmission
@@ -601,6 +603,12 @@ userOfSubmission = PersistImpl.userOfSubmission
 -- Returns the username for the submission
 usernameOfSubmission :: SubmissionKey -> Persist Username
 usernameOfSubmission = PersistImpl.usernameOfSubmission
+
+postDateOfSubmission :: SubmissionKey -> Persist UTCTime
+postDateOfSubmission = PersistImpl.postDateOfSubmission
+
+filterTextSubmission :: [SubmissionKey] -> Persist [SubmissionKey]
+filterTextSubmission = PersistImpl.filterTextSubmission
 
 -- Lists all the submissions stored in the database
 submissionKeys :: Persist [SubmissionKey]

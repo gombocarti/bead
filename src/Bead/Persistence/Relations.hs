@@ -12,6 +12,8 @@ module Bead.Persistence.Relations (
   , allAssignmentsOfGroup
   , userSubmissionInfos
   , userLastSubmission
+  , lastSubmissions
+  , isEligibleForMoss
   , checkSimilarityMoss
   , courseAndGroupOfAssignment
   , courseOrGroupOfAssignment
@@ -266,32 +268,36 @@ openedSubmissionInfo u = do
 userSubmissionInfos :: Username -> AssignmentKey -> Persist [SubmissionInfo]
 userSubmissionInfos u ak = do
   us <- userSubmissions u ak
-  infos <- mapM submissionInfo  us
+  infos <- mapM submissionInfo us
   return $ sortSbmDescendingByTime infos
 
 -- * Similarity check
 
-checkSimilarityMoss :: FilePath -> ProgrammingLanguage -> AssignmentKey -> Interpreter -> Persist MossScriptInvocationKey
-checkSimilarityMoss mossScriptPath prLang ak interpreter = do
-  ckOrGk <- courseOrGroupOfAssignment ak
-  us <- either subscribedToCourse subscribedToGroup ckOrGk
-  submissions <- foldM loadUserAndSubmission [] us
-  invocationKey <- newMossScriptInvocationKey ak
-  liftIO $ forkIO $ do
-    (exitCode, output) <- uploadForMoss mossScriptPath prLang submissions
-    void $ runPersist interpreter $ saveMossScriptInvocation invocationKey (outputToMossScriptInvocation exitCode output)
-  return invocationKey
+-- Check whether any submission is a text submission.
+isEligibleForMoss :: [SubmissionKey] -> Persist (Maybe MossIncompatibilityReason)
+isEligibleForMoss [] = return $ Just MossNoSubmissions
+isEligibleForMoss sks = do
+  textSubmissions <- filterTextSubmission sks
+  return $
+    case textSubmissions of
+      [] -> Just MossNoTextSubmission
+      [_] -> Just MossOnlyOneTextualSubmission
+      _ -> Nothing
 
-  where
-    loadUserAndSubmission :: [(User, Submission)] -> Username -> Persist [(User, Submission)]
-    loadUserAndSubmission submissions u = do
-      user <- loadUser u
-      mSk <- lastSubmission ak u
-      case mSk of
-        Nothing -> return submissions
-        Just sk -> do
-          s <- loadSubmission sk
-          return $ (user, s) : submissions
+checkSimilarityMoss :: FilePath -> ProgrammingLanguage -> AssignmentKey -> Interpreter -> Persist (Either MossIncompatibilityReason MossScriptInvocationKey)
+checkSimilarityMoss mossScriptPath prLang ak interpreter = do
+  lasts <- lastSubmissions ak
+  let skus = [ (u, sk) | (u, Just sk) <- lasts ]
+  compatibility <- isEligibleForMoss (map snd skus)
+  case compatibility of
+    Nothing -> do
+      submissions <- mapM (\(u, sk) -> (,) <$> loadUser u <*> loadSubmission sk) skus
+      invocationKey <- newMossScriptInvocationKey ak
+      liftIO $ forkIO $ do
+        (exitCode, output) <- uploadForMoss mossScriptPath prLang submissions
+        void $ runPersist interpreter $ saveMossScriptInvocation invocationKey (outputToMossScriptInvocation exitCode output)
+      return $ Right invocationKey
+    Just incompatibilityReason -> return $ Left incompatibilityReason
 
 submissionEvalStr :: SubmissionKey -> Persist (Maybe Text)
 submissionEvalStr sk = do
@@ -472,12 +478,11 @@ mkGroupSubmissionTableInfo us cas gas ckey gkey = do
       (assignmentCreatedTime . fst3)
 
 -- |Loads information on a 'Submission'.
--- It loads a 'Submission' exactly once from the database, to get the time of upload.
 submissionInfo :: SubmissionKey -> Persist SubmissionInfo
 submissionInfo sk = do
   state <- stateOfSubmission sk
-  submission <- loadSubmission sk
-  return $ (sk, state, (solutionPostDate submission))
+  postDate <- postDateOfSubmission sk
+  return $ (sk, state, postDate)
 
 -- Produces the score key, score info for the specific user and assessment.
 -- Returns Nothing if there are multiple scoreinfos available.
@@ -500,6 +505,12 @@ scoreInfo sk = do
 userLastSubmission :: Username -> AssignmentKey -> Persist (Maybe SubmissionInfo)
 userLastSubmission u ak =
   (maybe (return Nothing) ((Just <$>) . submissionInfo)) =<< lastSubmission ak u
+
+lastSubmissions :: AssignmentKey -> Persist [(Username, Maybe SubmissionKey)]
+lastSubmissions ak = do
+  ckOrGk <- courseOrGroupOfAssignment ak
+  us <- either subscribedToCourse subscribedToGroup ckOrGk
+  mapM (\u -> (,) u <$> lastSubmission ak u) us
 
 -- Helper computation which removes the given submission from
 -- the opened submission directory, which is optimized by

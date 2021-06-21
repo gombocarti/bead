@@ -32,8 +32,12 @@ programmingLanguage = programmingLanguagePrm "programming-language"
 checkSimilarityPage :: GETContentHandler
 checkSimilarityPage = do
   ak <- getParameter assignmentKeyPrm
-  userStory $ Story.isAdministratedAssignment ak
-  setPageContents $ htmlPage (Pages.pageValue $ Pages.similarityCheckMossWithText ak) $ similarityCheckContents ak
+  compatibility <- userStory $ do
+    Story.isAdministratedAssignment ak
+    Story.isEligibleForMoss ak
+  case compatibility of
+    Nothing -> setPageContents $ htmlPage (Pages.pageValue $ Pages.similarityCheckMossWithText ak) $ similarityCheckContents ak
+    Just incompatibilityReason -> setPageContents $ incompatibilityPage ak incompatibilityReason
 
 postCheckSimilarity :: POSTContentHandler
 postCheckSimilarity = do
@@ -41,8 +45,10 @@ postCheckSimilarity = do
   prLang <- getParameter programmingLanguage
   moss <- beadHandler $ getMossScriptPath
   return $ Action $ do
-    invocationKey <- Story.checkSimilarityMoss moss prLang ak
-    return $ redirection $ Pages.viewMossScriptOutput invocationKey ()
+    result <- Story.checkSimilarityMoss moss prLang ak
+    case result of
+      Right invocationKey -> return $ redirection $ Pages.viewMossScriptOutput invocationKey ()
+      Left incompatibilityReason -> return $ htmlPageContents $ incompatibilityPage ak incompatibilityReason
 
 viewMossReportPage :: GETContentHandler
 viewMossReportPage = do
@@ -120,4 +126,21 @@ viewMossReportContents result = do
           (Just Bootstrap.Danger)
           (Just . H.text . msg $ msg_Moss_ErrorDuringSending "An error happened during sending submissions for similarity check. The following log is generated during the process.")
           (H.pre $ H.toMarkup output)
+
+incompatibilityPage :: AssignmentKey -> MossIncompatibilityReason -> HtmlPage
+incompatibilityPage ak reason =
+  htmlPage (Pages.pageValue $ Pages.similarityCheckMossWithText ak) $ do
+    msg <- getI18N
+    return $ Bootstrap.rowColMd12 $ Bootstrap.alert Bootstrap.Danger $ H.text $ msg $ mossIncompatibilityReason noTextualSubmission noSubmissions onlyOneTextualSubmission reason
+
+  where
+    noTextualSubmission :: Translation
+    noTextualSubmission = msg_Moss_NoTextualSubmission "We could not find textual submissions for the assignment. Similarity check supports textual submissions only."
+
+    noSubmissions :: Translation
+    noSubmissions = msg_Moss_NoSubmissions "Currently, there are no submissions for the assignment. There is nothing that can be subjected to similarity check."
+
+    onlyOneTextualSubmission :: Translation
+    onlyOneTextualSubmission = msg_Moss_OnlyOneTextualSubmission "There is only one textual submission for the assignment. There must be at least two in order to check similarity."
+
 

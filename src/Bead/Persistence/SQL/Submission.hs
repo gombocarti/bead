@@ -8,11 +8,13 @@ import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
+import           Data.Time (UTCTime)
 
 import           Database.Persist.Sql
 import           Database.Esqueleto ( select, from, where_, on, like
                                     , limit, orderBy, desc, InnerJoin(InnerJoin)
-                                    , val, (&&.), (^.), unValue
+                                    , val, (&&.), not_, (^.), unValue
+                                    , valList, in_, distinct
                                     )
 import qualified Database.Esqueleto as Esq
 
@@ -61,6 +63,24 @@ loadSubmission key = do
       (persistError "loadSubmission" $ "submission is not found." ++ show key)
       toDomainValue
       mSub
+
+postDateOfSubmission :: Domain.SubmissionKey -> Persist UTCTime
+postDateOfSubmission key = do
+  dates <- select $ from $ \subm -> do
+    where_ (subm ^. SubmissionId Esq.==. val (fromDomainKey key))
+    limit 1
+    return (subm ^. SubmissionPostDate)
+  case dates of
+    [] -> persistError "postDateOfSubmission" $ "no submission was found " ++ show key
+    (d:_) -> return $ unValue d
+
+filterTextSubmission :: [Domain.SubmissionKey] -> Persist [Domain.SubmissionKey]
+filterTextSubmission keys = do
+  result <- select $ from $ \subm -> do
+    where_ (not_ (Esq.isNothing (subm ^. SubmissionSimple)) &&.
+            subm ^. SubmissionId `in_` valList (map fromDomainKey keys))
+    return (subm ^. SubmissionId)
+  return $ map (toDomainKey . unValue) result
 
 -- Returns the assignment for the submission
 assignmentOfSubmission :: Domain.SubmissionKey -> Persist Domain.AssignmentKey

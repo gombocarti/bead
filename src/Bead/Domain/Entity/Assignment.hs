@@ -1,10 +1,12 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Bead.Domain.Entity.Assignment (
     Aspect(..)
   , aspect
-  , SubmissionType(..)
+  , SubmissionType
   , submissionType
+  , SubmissionFormat(..)
   , Aspects
   , createAspects
   , fromAspects
@@ -103,21 +105,23 @@ instance Arbitrary Aspect where
 
 -- Submission Type of the assignment, this information
 -- will be stored as an aspect
-data SubmissionType
-  = TextSubmission
-  | ZipSubmission
+data SubmissionFormat text zip
+  = TextSubmission text
+  | ZippedSubmission zip
   deriving (Data, Eq, Show, Read, Ord, Typeable)
+
+type SubmissionType = SubmissionFormat () ()
 
 submissionType
   text
   zip
   s = case s of
-    TextSubmission -> text
-    ZipSubmission -> zip
+    TextSubmission _ -> text
+    ZippedSubmission _ -> zip
 
 #ifdef TEST
 instance Arbitrary SubmissionType where
-  arbitrary = elements [TextSubmission, ZipSubmission]
+  arbitrary = elements [TextSubmission (), ZippedSubmission ()]
 #endif
 
 -- An assignment can have several aspects, which is a list represented
@@ -252,14 +256,14 @@ isIsolated = fromAspects (not . Set.null . Set.filter isIsolatedAspect)
 
 -- Extract the submission type from the aspects set
 aspectsToSubmissionType :: Aspects -> SubmissionType
-aspectsToSubmissionType x = if isZippedSubmissions x then ZipSubmission else TextSubmission
+aspectsToSubmissionType x = if isZippedSubmissions x then (ZippedSubmission ()) else (TextSubmission ())
 
 #ifdef TEST
 aspectsToSubmissionTypeTests = group "aspectsToSubmissionType" $
   eqPartitions aspectsToSubmissionType
-    [ Partition "Zipped Submission" (fromList [ZippedSubmissions]) ZipSubmission "Zipped submission should be found"
-    , Partition "Emtpy aspect set" emptyAspects TextSubmission "Empty set should not contain zipped submissions"
-    , Partition "Password aspect" (fromList [Password ""]) TextSubmission "Password aspect should be rejected"
+    [ Partition "Zipped Submission" (fromList [ZippedSubmissions]) (ZippedSubmission ()) "Zipped submission should be found"
+    , Partition "Emtpy aspect set" emptyAspects (TextSubmission ()) "Empty set should not contain zipped submissions"
+    , Partition "Password aspect" (fromList [Password ""]) (TextSubmission ()) "Password aspect should be rejected"
     ]
 #endif
 

@@ -30,6 +30,7 @@ module Bead.View.Content (
   , withUserState
   , PageContents
   , redirection
+  , htmlPageContents
   , HtmlPage(..)
   , htmlPage
   , Action(..)

@@ -130,7 +130,7 @@ submissionPostHandler = do
       if (not $ Assignment.isZippedSubmissions as)
         then do
            subm <- getParameter (textParameter (fieldName submissionTextField) "Submission text")
-           return $ void $ submit $ SimpleSubmission subm
+           return $ void $ submit $ TextSubmission subm
         else
           case uploadedFile of
             Just (File name contents) -> do

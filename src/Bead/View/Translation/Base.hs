@@ -609,6 +609,9 @@ labels =
  , "msg_Moss_WeAreRefreshingThePage"
  , "msg_Moss_EveryNSeconds"
  , "msg_Moss_PleaseBePatient"
+ , "msg_Moss_NoTextualSubmission"
+ , "msg_Moss_NoSubmissions"
+ , "msg_Moss_OnlyOneTextualSubmission"
 
  , "msg_Notifications_NoNotifications"
 

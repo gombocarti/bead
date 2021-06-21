@@ -28,7 +28,7 @@ import Data.Function (on)
 import qualified Data.Set as Set
 import qualified Data.HashSet as HashSet
 
-import Data.List ((\\), intersperse, nub, find, sort, sortOn, maximumBy, delete)
+import Data.List ((\\), intersperse, nub, find, sort, sortOn, maximumBy, delete, partition)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.IORef
@@ -1020,6 +1020,35 @@ filterSubmissionsTest = test $ testCase "All the saved submissions must have a k
   assertTrue (Set.isSubsetOf loaded loaded2) "Not all submission keys were in the loaded set"
   assertTrue (Set.isSubsetOf saved2 loaded2) "New submission keys were not in the loaded set"
 
+-- filterTextualSubmission should correctly return the list of textual submissions.
+filterTextualSubmissionTest = test $ testCase "filterTextualSubmission test" $ do
+  reinitPersistence
+  cs <- courses 100
+  gs <- groups 300 cs
+  as <- courseAndGroupAssignments 200 200 cs gs
+  us <- users 400
+  sks <- infoListToSubmissionKeys <$> submissions 500 us as
+  subms <- runPersistIOCmd $ mapM loadSubmission sks
+  let (textual, zipped) = partition (isTextSubmission . solution . snd) (zip sks subms)
+  quick 100 $ do
+    textual' <- pick $ listOf $ elements $ map fst textual
+    zipped' <- pick $ listOf $ elements $ map fst zipped
+    sks' <- pick $ shuffle (textual' ++ zipped')
+    output <- runPersistCmd $ filterTextSubmission sks'
+    assertEquals (sort output) (Set.toAscList . Set.fromList $ textual') $ "filterTextSubmission returned a different list of submissions.\n" ++ show (sort output) ++ "\n" ++ show (sort textual')
+
+submissionsTest = test $ testCase "Submission related tests" $ do
+  reinitPersistence
+  cs <- courses 100
+  gs <- groups 300 cs
+  as <- courseAndGroupAssignments 200 200 cs gs
+  us <- users 400
+  subms <- submissions 500 us as
+  quick 100 $ do
+    ((_, _), (sk, time)) <- pick $ elements subms
+    postDate <- runPersistCmd $ postDateOfSubmission sk
+    assertEquals postDate time "postDateOfSubmission reports different post date than expected."
+
 -- Modified assignments must be untouched after loading them
 modifyAssignmentsTest = test $ testCase "Modified assignments must be untouched after loading them" $ do
   cs <- courses 100
@@ -1880,6 +1909,8 @@ complexTests = group "Persistence Layer Complex tests" $ do
   userGroupsTest
   assignmentKeyTest
   filterSubmissionsTest
+  filterTextualSubmissionTest
+  submissionsTest
   modifyAssignmentsTest
   modifyEvaluationTest
   deleteUsersFromCourseTest

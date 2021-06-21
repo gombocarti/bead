@@ -61,9 +61,9 @@ submissionTestInfoChanges = testCase "Submission test information changes correc
     
     sk1 <- userStory studentUsername $ do
       subscribeToGroup gk1
-      sk1 <- submitSolution ak1 (Submission (SimpleSubmission "Blah") now)
+      sk1 <- submitSolution ak1 (Submission (TextSubmission "Blah") now)
       return sk1
-    
+
     testAgentStory $ do
       U.insertTestFeedback sk1 [TestResult False]
       testAgentFeedbacks

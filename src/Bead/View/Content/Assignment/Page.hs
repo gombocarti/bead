@@ -244,7 +244,7 @@ getAssignment = do
   noOfTries <- getParameter (stringParameter (fieldName assignmentNoOfTriesField) "Number of tries")
   asp <- Assignment.aspectsFromList <$> getJSONParameters (fieldName assignmentAspectField) "Aspect parameter"
   stype <- getJSONParam (fieldName assignmentSubmissionTypeField) "Submission type"
-  let asp1 = if stype == Assignment.TextSubmission
+  let asp1 = if (stype :: Assignment.SubmissionType) == Assignment.TextSubmission ()
                then Assignment.clearZippedSubmissions asp
                else Assignment.setZippedSubmissions asp
   let asp2 = if Assignment.isPasswordProtected asp1

@@ -6,6 +6,7 @@ module Bead.View.ContentHandler (
   , setPageContents
   , RedirectionTarget
   , redirection
+  , htmlPageContents
   , redirectTo
   , HtmlPage(..)
   , htmlPage
@@ -172,6 +173,9 @@ type PageContents = Either RedirectionTarget HtmlPage
 
 redirection :: RedirectionTarget -> PageContents
 redirection = Left
+
+htmlPageContents :: HtmlPage -> PageContents
+htmlPageContents = Right
 
 setPageContents :: HtmlPage -> ContentHandler PageContents
 setPageContents = return . Right

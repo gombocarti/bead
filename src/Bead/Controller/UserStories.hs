@@ -1233,7 +1233,13 @@ queueAllSubmissionsForTest ak = logAction INFO (unwords ["queues all submissions
   sks <- lastSubmissions ak
   persistence $ mapM_ Persist.queueSubmissionForTest sks
 
-checkSimilarityMoss :: FilePath -> ProgrammingLanguage -> AssignmentKey -> UserStory MossScriptInvocationKey
+isEligibleForMoss :: AssignmentKey -> UserStory (Maybe MossIncompatibilityReason)
+isEligibleForMoss ak = logAction INFO (unwords ["checks whether submissions of", show ak, "are compatible with MOSS"]) $
+  persistence $ do
+    lasts <- Persist.lastSubmissions ak
+    Persist.isEligibleForMoss (catMaybes $ map snd lasts)
+
+checkSimilarityMoss :: FilePath -> ProgrammingLanguage -> AssignmentKey -> UserStory (Either MossIncompatibilityReason MossScriptInvocationKey)
 checkSimilarityMoss mossScriptPath prLang ak = logAction INFO (unwords ["check similarity of submissions of", show ak, "with MOSS"]) $ do
   isAdministratedAssignment ak
   interpreter <- asksPersistInterpreter
