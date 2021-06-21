@@ -18,7 +18,6 @@ import qualified Bead.Controller.Pages as Pages
 import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
-import qualified Bead.View.UserActions as UA (UserAction(..))
 
 import           Text.Blaze (toMarkup)
 import           Text.Blaze.Html5 as H hiding (map)

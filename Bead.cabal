@@ -334,7 +334,6 @@ Library
     Bead.View.Translation.I18N
     Bead.View.Translation.Language.DictionaryEn
     Bead.View.Translation.Language.DictionaryHu
-    Bead.View.UserActions
     Bead.View.Validators
     Test.Tasty.Arbitrary
     Test.Tasty.RandomData

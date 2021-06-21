@@ -18,7 +18,6 @@ import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.RequestParams (courseKeyParamName)
-import qualified Bead.View.UserActions as UA
 
 -- * Content Handlers
 

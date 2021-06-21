@@ -18,7 +18,6 @@ import qualified Bead.Controller.UserStories as Story
 import           Bead.View.Content hiding (table, option)
 import qualified Bead.View.Content.Bootstrap as Bootstrap
 import           Bead.View.RequestParams (courseKeyParamName)
-import qualified Bead.View.UserActions as UA (UserAction(..))
 
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A

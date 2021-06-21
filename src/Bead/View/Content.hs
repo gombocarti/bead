@@ -71,7 +71,6 @@ module Bead.View.Content (
   , module Bead.Domain.Func
   , module Bead.Domain.Relationships
   , module Bead.View.Anchor
-  , module Bead.View.UserActions
   , module Bead.View.I18N
   , module Bead.View.Translation
   , module Bead.View.BeadContext
@@ -97,7 +96,6 @@ import Bead.Domain.Entity.Comment
 import Bead.Domain.Func
 import Bead.Domain.Relationships
 import Bead.View.Anchor
-import Bead.View.UserActions
 import Bead.View.BeadContext hiding (getDictionaryInfos)
 import Bead.View.ContentHandler
 import Bead.View.DataBridge hiding (name)
